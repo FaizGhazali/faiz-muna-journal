@@ -4,6 +4,8 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, terminate, clearIndexedDbPersistence,
   collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { fitnessSeries, perBeat, paceOf, clock, toSecs } from "./fitness.js";
+import { readCoros, parseCoros } from "./coros.js";
 import { initActivities, startActivities, stopActivities, refresh as refreshActivities } from "./activities.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
@@ -38,6 +40,7 @@ if (LOCAL) {
 }
 
 let PEOPLE = [], entries = [], editingId = null, confirmDelete = null, unsubs = [];
+let runExtra = null; // numbers from the picture that have no box in the form (cadence, power, ...)
 const entriesCol = collection(db, "entries");
 
 // Offline, Firestore keeps a write and sends it later, so its promise waits. Don't hold the form for that.
@@ -54,6 +57,26 @@ function weekMinutes(p) {
   const t = new Date(), mon = new Date(t.getFullYear(), t.getMonth(), t.getDate() - ((t.getDay() + 6) % 7));
   const from = iso(mon);
   return entries.filter((e) => e.person === p.id && e.date >= from && e.date <= today() && typeof e.minutes === "number").reduce((a, e) => a + e.minutes, 0);
+}
+
+// One point per run that has enough numbers for a score, oldest first.
+function fitness(p) {
+  return fitnessSeries(entries.filter((e) => e.person === p.id && e.run).map((e) => ({ ...e.run, date: e.date })), p.age);
+}
+function fitHtml(p) {
+  const s = fitness(p), last = s[s.length - 1], prev = s[s.length - 2];
+  if (!last) return `<div class="fit"><h3>Fitness</h3><p class="note">Add a COROS run picture to start your fitness line.</p></div>`;
+  const d = prev ? r1(last.trend) - r1(prev.trend) : 0;
+  const delta = !prev ? `<span class="delta">First run. The line starts here.</span>`
+    : Math.abs(d) < 0.05 ? `<span class="delta">Same as last run</span>`
+    : `<span class="delta ${d > 0 ? "up" : "down"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(1)} since last run</span>`;
+  const facts = [`This run ${last.score.toFixed(1)}`, `${perBeat(last.run).toFixed(2)} m per heartbeat`];
+  if (last.run.hrr) facts.push(`recovery ${last.run.hrr} bpm`);
+  return `<div class="fit">
+    <div class="fithead"><div class="stat"><small>Fitness score</small><b>${last.trend.toFixed(1)}</b></div>${delta}</div>
+    <div class="chart" id="fit-${p.id}"></div>
+    <p class="week">${esc(facts.join(" · "))}</p>
+  </div>`;
 }
 
 function goalHtml(p, w) {
@@ -90,12 +113,66 @@ function renderPeople() {
       <div class="goal">${goalHtml(p, w)}</div>
       <div class="chart" id="chart-${p.id}"></div>
       <p class="week"><b>${weekMinutes(p)}</b> of ${WEEKLY_MINUTES} exercise minutes this week</p>
+      ${fitHtml(p)}
     </article>`;
   }).join("");
   drawCharts();
 }
 
-function drawCharts() { PEOPLE.forEach((p) => { const el = $("chart-" + p.id); if (el) drawChart(el, p); }); }
+function drawCharts() {
+  PEOPLE.forEach((p) => {
+    const el = $("chart-" + p.id), fit = $("fit-" + p.id);
+    if (el) drawChart(el, p);
+    if (fit) drawFit(fit, p);
+  });
+}
+
+// Touch or hover a chart to read the nearest point.
+function hover(host, W, pts, X, label) {
+  const svg = host.querySelector("svg"), cross = host.querySelector(".cross"), tip = host.querySelector(".tip");
+  const showTip = (ev) => {
+    const px = ev.clientX - svg.getBoundingClientRect().left;
+    let best = pts[0];
+    pts.forEach((e) => { if (Math.abs(X(e.date) - px) < Math.abs(X(best.date) - px)) best = e; });
+    const bx = X(best.date);
+    cross.setAttribute("x1", bx); cross.setAttribute("x2", bx); cross.setAttribute("visibility", "visible");
+    tip.hidden = false;
+    tip.textContent = `${fmt(best.date, { day: "numeric", month: "short", year: "numeric" })}: ${label(best)}`;
+    tip.style.left = Math.max(0, Math.min(W - tip.offsetWidth, bx - tip.offsetWidth / 2)) + "px";
+  };
+  svg.addEventListener("pointermove", showTip);
+  svg.addEventListener("pointerdown", showTip);
+  svg.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+}
+
+// Fitness: a ring for each run's own score, and the line for the moving average. The scale hugs the data so small gains show.
+function drawFit(host, p) {
+  const s = fitness(p), W = host.clientWidth || 320, H = 170, m = { l: 34, r: 12, t: 22, b: 24 };
+  if (!s.length) return;
+  const vals = s.flatMap((x) => [x.score, x.trend]), lo = Math.min(...vals), hi = Math.max(...vals);
+  const room = Math.max(0.6, (hi - lo) * 0.2);
+  const step = [0.2, 0.5, 1, 2, 5, 10].find((n) => (hi - lo + 2 * room) / n <= 4) || 20;
+  const yMin = Math.floor((lo - room) / step) * step, yMax = Math.ceil((hi + room) / step) * step;
+  const x0 = dayNum(s[0].date), x1 = Math.max(dayNum(s[s.length - 1].date), x0 + 14);
+  const X = (d) => m.l + ((dayNum(d) - x0) / (x1 - x0)) * (W - m.l - m.r);
+  const Y = (v) => m.t + ((yMax - v) / (yMax - yMin)) * (H - m.t - m.b);
+  let g = "";
+  for (let i = 0; yMin + i * step <= yMax + 1e-9; i++) { const v = yMin + i * step; g += `<line class="grid" x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${m.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v.toFixed(step < 1 ? 1 : 0)}</text>`; }
+  const path = s.map((e, i) => `${i ? "L" : "M"}${X(e.date).toFixed(1)} ${Y(e.trend).toFixed(1)}`).join("");
+  const rings = s.slice(-60).map((e) => `<circle class="run" cx="${X(e.date)}" cy="${Y(e.score)}" r="3.5"/>`).join("");
+  const last = s[s.length - 1], lx = X(last.date), ly = Y(last.trend);
+  const xl = (n) => new Date(n * 864e5).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+  host.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(p.name)}'s fitness score over time. Now ${last.trend.toFixed(1)}.">
+    ${g}${rings}
+    <path class="ln" d="${path}"/>
+    <circle class="pt" cx="${lx}" cy="${ly}" r="5"/>
+    <text class="val" x="${lx}" y="${ly - 10}" text-anchor="${lx > W / 2 ? "end" : "start"}">${last.trend.toFixed(1)}</text>
+    <text x="${m.l}" y="${H - 6}">${esc(xl(x0))}</text>
+    <text x="${W - m.r}" y="${H - 6}" text-anchor="end">${esc(xl(x1))}</text>
+    <line class="cross" y1="${m.t}" y2="${H - m.b}" visibility="hidden"/>
+  </svg><div class="tip" hidden></div>`;
+  hover(host, W, s, X, (e) => `fitness ${e.trend.toFixed(1)}. This run ${e.score.toFixed(1)}, ${e.run.km} km at ${clock(paceOf(e.run))} per km, ${e.run.hr} bpm`);
+}
 
 function drawChart(host, p) {
   const pts = weighIns(p), W = host.clientWidth || 320, H = 170;
@@ -128,20 +205,7 @@ function drawChart(host, p) {
     <text x="${W - m.r}" y="${H - 6}" text-anchor="end">${esc(xl(x1))}</text>
     <line class="cross" y1="${m.t}" y2="${H - m.b}" visibility="hidden"/>
   </svg><div class="tip" hidden></div>`;
-  const svg = host.querySelector("svg"), cross = host.querySelector(".cross"), tip = host.querySelector(".tip");
-  const showTip = (ev) => {
-    const px = ev.clientX - svg.getBoundingClientRect().left;
-    let best = pts[0];
-    pts.forEach((e) => { if (Math.abs(X(e.date) - px) < Math.abs(X(best.date) - px)) best = e; });
-    const bx = X(best.date);
-    cross.setAttribute("x1", bx); cross.setAttribute("x2", bx); cross.setAttribute("visibility", "visible");
-    tip.hidden = false;
-    tip.textContent = `${fmt(best.date, { day: "numeric", month: "short", year: "numeric" })}: ${best.weight.toFixed(1)} kg, BMI ${bmiOf(p, best.weight).toFixed(1)}`;
-    tip.style.left = Math.max(0, Math.min(W - tip.offsetWidth, bx - tip.offsetWidth / 2)) + "px";
-  };
-  svg.addEventListener("pointermove", showTip);
-  svg.addEventListener("pointerdown", showTip);
-  svg.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+  hover(host, W, pts, X, (e) => `${e.weight.toFixed(1)} kg, BMI ${bmiOf(p, e.weight).toFixed(1)}`);
 }
 
 function renderFeed() {
@@ -154,7 +218,8 @@ function renderFeed() {
 function entryHtml(e) {
   const p = PEOPLE.find((x) => x.id === e.person), facts = [];
   if (typeof e.weight === "number") facts.push(`${e.weight.toFixed(1)} kg, BMI ${bmiOf(p, e.weight).toFixed(1)}`);
-  if (typeof e.minutes === "number") facts.push(`${e.minutes} min exercise`);
+  if (e.run) facts.push(`${e.run.km} km run in ${clock(e.run.secs)}${e.run.hr ? `, ${e.run.hr} bpm` : ""}`);
+  else if (typeof e.minutes === "number") facts.push(`${e.minutes} min exercise`);
   const btns = confirmDelete === e.id
     ? `<button class="mini danger" data-act="del-yes" data-id="${esc(e.id)}">Delete</button><button class="mini" data-act="del-no">Keep</button>`
     : `<button class="mini" data-act="edit" data-id="${esc(e.id)}">Edit</button><button class="mini" data-act="del" data-id="${esc(e.id)}">Delete</button>`;
@@ -164,15 +229,70 @@ function entryHtml(e) {
 }
 function renderFoot() {
   $("foot").innerHTML = `<p>BMI is weight in kg divided by height in metres squared. Ranges follow the WHO adult cut-offs. Many Asian guidelines, including Malaysia's, put the top of normal lower at 22.9, which is ${PEOPLE.map((p) => `${range(p).asian.toFixed(1)} kg for ${esc(p.name)}`).join(" and ")}.</p>
+    <p>The fitness score compares how fast a run was with how hard the heart worked for it, with a small bonus for quick heart rate recovery. Faster at the same heart rate, or the same pace at a lower one, moves it up. It's an estimate for watching your own trend, not a medical measure.</p>
     <p>BMI doesn't separate muscle from fat, so read it alongside how you feel and what a doctor tells you.</p>`;
 }
 function render() { renderPeople(); renderFeed(); }
 function banner(text) { $("banner").textContent = text || ""; $("banner").hidden = !text; }
 
+// The run boxes in the form. Paces and time are typed as 9:29 and 40:37.
+const RUN_NUMS = ["km", "hr", "hrMax", "hrr", "load"], RUN_TIMES = ["secs", "pace", "effort"];
+function showRun(run) {
+  $("runFields").hidden = !run;
+  $("runPick").textContent = run ? "Use another picture" : "Add run picture";
+  runExtra = null;
+  if (!run) return;
+  RUN_NUMS.forEach((k) => { $("run-" + k).value = run[k] ?? ""; });
+  RUN_TIMES.forEach((k) => { $("run-" + k).value = run[k] ? clock(run[k]) : ""; });
+  const { cadence, stride, power, ground, kcal } = run;
+  runExtra = { cadence, stride, power, ground, kcal };
+}
+// Returns { run } from the boxes, or { error } with what to fix.
+function readRun() {
+  const run = { source: "coros" }, lim = { km: [0.1, 100], hr: [60, 220], hrMax: [100, 220], hrr: [1, 120], load: [1, 2000] };
+  for (const k of RUN_NUMS) {
+    const v = $("run-" + k).value.trim(); if (v === "") continue;
+    const n = Number(v);
+    if (!(n >= lim[k][0] && n <= lim[k][1])) return { error: `Check the run's ${$("run-" + k).labels[0].firstChild.textContent.toLowerCase()}.` };
+    run[k] = k === "km" ? Math.round(n * 100) / 100 : Math.round(n);
+  }
+  for (const k of RUN_TIMES) {
+    const v = $("run-" + k).value.trim(); if (v === "") continue;
+    const n = toSecs(v);
+    if (!n) return { error: k === "secs" ? "Write the run time like 40:37." : "Write the pace like 9:29." };
+    run[k] = n;
+  }
+  if (!run.km || !run.secs || !run.hr) return { error: "The run needs a distance, a time and an average heart rate." };
+  Object.entries(runExtra || {}).forEach(([k, v]) => { if (typeof v === "number") run[k] = v; });
+  return { run };
+}
+$("runPick").addEventListener("click", () => $("runFile").click());
+$("runRemove").addEventListener("click", () => { showRun(null); $("runMsg").textContent = ""; });
+$("runFile").addEventListener("change", async () => {
+  const file = $("runFile").files[0], msg = $("runMsg"), bar = $("runBar");
+  if (!file) return;
+  msg.textContent = "Reading the picture. This can take a minute…";
+  bar.value = 0; bar.hidden = false; $("runPick").disabled = true;
+  try {
+    const found = parseCoros(await readCoros(file, (v) => { bar.value = v; }));
+    if (!found.km && !found.secs && !found.hr) { msg.textContent = "That doesn't look like a COROS run picture. Share the run from the COROS app and try again."; return; }
+    const { date, ...run } = found;
+    showRun(run);
+    if (date && date <= today() && !editingId) $("date").value = date;
+    const missing = !run.km || !run.secs || !run.hr;
+    msg.textContent = `${missing ? "Some numbers couldn't be read. Fill them in below" : "Done. Check the numbers below"}, then save. The picture wasn't kept.`;
+  } catch (e) {
+    msg.textContent = e.message === "small" ? "That picture is too small to read. Use the full picture shared from the COROS app."
+      : navigator.onLine ? "That picture couldn't be read. Try again." : "The picture reader needs the internet the first time. Try again when you're online.";
+  } finally { $("runFile").value = ""; bar.hidden = true; $("runPick").disabled = false; } // nothing of the picture is kept once it's read
+});
+
 function selectedPerson() { return document.querySelector("input[name=person]:checked")?.value; }
 function resetForm() {
   editingId = null;
   $("form").reset();
+  showRun(null);
+  $("runMsg").textContent = "";
   $("date").value = today();
   try { const last = localStorage.getItem("journal-person"); if (last && $("person-" + last)) $("person-" + last).checked = true; } catch (_) {}
   $("formTitle").textContent = "Write today's entry";
@@ -185,7 +305,8 @@ function startEdit(id) {
   $("person-" + e.person).checked = true;
   $("date").value = e.date;
   $("weight").value = typeof e.weight === "number" ? e.weight : "";
-  $("minutes").value = typeof e.minutes === "number" ? e.minutes : "";
+  showRun(e.run || null);
+  $("runMsg").textContent = "";
   $("note").value = e.note || "";
   $("formTitle").textContent = "Edit entry";
   $("save").textContent = "Save changes";
@@ -197,19 +318,24 @@ function startEdit(id) {
 $("form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const msg = $("formMsg"), person = selectedPerson(), date = $("date").value;
-  const ws = $("weight").value.trim(), ms = $("minutes").value.trim(), note = $("note").value.trim();
-  const weight = ws === "" ? null : r1(Number(ws)), minutes = ms === "" ? null : Math.round(Number(ms));
+  const ws = $("weight").value.trim(), note = $("note").value.trim();
+  const weight = ws === "" ? null : r1(Number(ws));
+  const typed = $("runFields").hidden ? {} : readRun();
   if (!date) { msg.textContent = "Pick a date for this entry."; return; }
   if (weight !== null && !(weight >= 30 && weight <= 250)) { msg.textContent = "Enter a weight between 30 and 250 kg."; return; }
-  if (minutes !== null && !(minutes >= 0 && minutes <= 1440)) { msg.textContent = "Enter exercise minutes between 0 and 1440."; return; }
-  if (weight === null && minutes === null && !note) { msg.textContent = "Add a weight, exercise minutes or a note first."; return; }
+  if (typed.error) { msg.textContent = typed.error; return; }
   const id = `${person}_${date}`, existing = entries.find((e) => e.id === id), wasEditing = editingId;
   const body = { person, date };
   // A new entry on a day that already has one fills in only what was typed, so nothing written earlier is lost.
   const keep = !wasEditing && existing ? existing : {};
-  const w = weight ?? keep.weight, mn = minutes ?? keep.minutes, n = note || keep.note;
+  const before = wasEditing ? entries.find((e) => e.id === wasEditing) || {} : keep;
+  const run = typed.run || keep.run;
+  // Minutes come from the run. Entries from before run pictures keep the minutes they had.
+  const w = weight ?? keep.weight, mn = run ? Math.round(run.secs / 60) : before.run ? null : before.minutes, n = note || keep.note;
   if (typeof w === "number") body.weight = w;
   if (typeof mn === "number") body.minutes = mn;
+  if (run) body.run = run;
+  if (Object.keys(body).length === 2 && !n) { msg.textContent = "Add a weight, a run picture or a note first."; return; }
   if (n) body.note = n;
   $("save").disabled = true;
   await commit(() => setDoc(doc(entriesCol, id), body));

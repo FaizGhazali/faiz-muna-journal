@@ -1,6 +1,6 @@
 // Keeps the app opening without a connection. Journal data is cached by Firestore, not here.
-const CACHE = "journal-v3";
-const SHELL = ["/", "/app.js", "/suggest.js", "/activities.js", "/styles.css", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
+const CACHE = "journal-v4";
+const SHELL = ["/", "/app.js", "/suggest.js", "/activities.js", "/fitness.js", "/coros.js", "/styles.css", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -11,8 +11,8 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
-  if (url.hostname === "www.gstatic.com") {
-    // The Firebase library files have a version in their address and never change.
+  if (url.hostname === "www.gstatic.com" || url.hostname === "cdn.jsdelivr.net") {
+    // The Firebase library and the picture reader have a version in their address and never change.
     e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
       const copy = res.clone();
       caches.open(CACHE).then((c) => c.put(e.request, copy));

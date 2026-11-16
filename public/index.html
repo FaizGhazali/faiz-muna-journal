@@ -74,10 +74,38 @@ try { const t = localStorage.getItem("journal-theme"); if (t === "light" || t ==
         <h2 id="formTitle">Write today's entry</h2>
         <div class="lbl"><span>Who</span><div class="seg" id="who"></div></div>
         <label for="date">Date<input type="date" id="date" required></label>
-        <div class="two">
-          <label for="weight">Weight, kg<input type="number" id="weight" step="0.1" min="30" max="250" inputmode="decimal"></label>
-          <label for="minutes">Exercise, min<input type="number" id="minutes" step="1" min="0" max="1440" inputmode="numeric"></label>
+        <label for="weight">Weight, kg<input type="number" id="weight" step="0.1" min="30" max="250" inputmode="decimal"></label>
+        <div class="lbl">
+          <span>Exercise</span>
+          <div class="runpick">
+            <select id="runSource" aria-label="Watch app"><option value="coros">COROS</option></select>
+            <button type="button" id="runPick">Add run picture</button>
+            <input type="file" id="runFile" accept="image/*" hidden>
+          </div>
+          <progress id="runBar" max="1" value="0" hidden></progress>
+          <small id="runMsg" role="status"></small>
         </div>
+        <fieldset id="runFields" hidden>
+          <legend>Your run</legend>
+          <p class="note">Check these against the picture and fix any that look wrong.</p>
+          <div class="two">
+            <label for="run-km">Distance, km<input type="number" id="run-km" step="0.01" min="0.1" max="100" inputmode="decimal"></label>
+            <label for="run-secs">Time<input type="text" id="run-secs" inputmode="text" placeholder="40:37" autocomplete="off"></label>
+          </div>
+          <div class="two">
+            <label for="run-pace">Avg pace, per km<input type="text" id="run-pace" placeholder="9:29" autocomplete="off"></label>
+            <label for="run-effort">Effort pace<input type="text" id="run-effort" placeholder="9:34" autocomplete="off"></label>
+          </div>
+          <div class="two">
+            <label for="run-hr">Avg heart rate<input type="number" id="run-hr" min="60" max="220" inputmode="numeric"></label>
+            <label for="run-hrMax">Max heart rate<input type="number" id="run-hrMax" min="100" max="220" inputmode="numeric"></label>
+          </div>
+          <div class="two">
+            <label for="run-hrr">Recovery, HRR<input type="number" id="run-hrr" min="1" max="120" inputmode="numeric"></label>
+            <label for="run-load">Training load<input type="number" id="run-load" min="1" max="2000" inputmode="numeric"></label>
+          </div>
+          <div class="actions"><button type="button" class="mini" id="runRemove">Remove run</button></div>
+        </fieldset>
         <label for="note">Notes <small>Meals, sleep, how the day went</small><textarea id="note" maxlength="2000"></textarea></label>
         <div class="actions">
           <button type="submit" class="primary" id="save">Save entry</button>
