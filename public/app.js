@@ -4,6 +4,7 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, terminate, clearIndexedDbPersistence,
   collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { initActivities, startActivities, stopActivities, refresh as refreshActivities } from "./activities.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const PACE = 0.5; // kg a week
@@ -233,6 +234,8 @@ $("feed").addEventListener("click", async (ev) => {
   }
 });
 
+initActivities({ db, people: () => PEOPLE, commit });
+
 let lastWidth = 0;
 new ResizeObserver(() => { const w = $("people").clientWidth; if (w !== lastWidth) { lastWidth = w; drawCharts(); } }).observe($("people"));
 
@@ -283,13 +286,15 @@ function startApp(user) {
     renderFoot();
     show("app");
     render();
+    refreshActivities();
   }, denied));
   unsubs.push(onSnapshot(entriesCol, (snap) => {
     entries = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.date || ""));
     if (PEOPLE.length) { entries = entries.filter((e) => PEOPLE.some((p) => p.id === e.person)); render(); }
   }, denied));
+  startActivities();
 }
-function stop() { unsubs.forEach((u) => u()); unsubs = []; }
+function stop() { unsubs.forEach((u) => u()); unsubs = []; stopActivities(); }
 
 onAuthStateChanged(auth, (user) => {
   stop();
@@ -317,6 +322,20 @@ $("signOut").addEventListener("click", async () => {
   try { await terminate(db); await clearIndexedDbPersistence(db); } catch (_) {}
   location.reload();
 });
+
+// Day / night switch. With no saved choice the app follows the phone's own setting.
+const darkQuery = matchMedia("(prefers-color-scheme: dark)");
+const isDark = () => (document.documentElement.dataset.theme || (darkQuery.matches ? "dark" : "light")) === "dark";
+const themeBtns = document.querySelectorAll(".theme");
+const showTheme = () => themeBtns.forEach((b) => { b.textContent = isDark() ? "☀️ Day" : "🌙 Night"; b.setAttribute("aria-label", isDark() ? "Switch to day mode" : "Switch to night mode"); });
+themeBtns.forEach((b) => b.addEventListener("click", () => {
+  const next = isDark() ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("journal-theme", next); } catch (_) {}
+  showTheme();
+}));
+darkQuery.addEventListener("change", showTheme);
+showTheme();
 
 let installEvent = null;
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvent = e; $("install").hidden = false; });

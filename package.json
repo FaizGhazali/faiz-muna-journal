@@ -1,1 +1,11 @@
-{"name":"our-journal","private":true,"scripts":{"icons":"node tools/make-icons.js"},"devDependencies":{"firebase-tools":"^15.34.2"}}
+{
+  "name": "our-journal",
+  "private": true,
+  "scripts": {
+    "dev": "node tools/dev.js",
+    "icons": "node tools/make-icons.js"
+  },
+  "devDependencies": {
+    "firebase-tools": "^15.34.2"
+  }
+}

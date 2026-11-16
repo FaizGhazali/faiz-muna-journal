@@ -12,8 +12,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
 <link rel="stylesheet" href="/styles.css">
+<script>
+// Apply the saved day/night choice before the page draws, so it never flashes the wrong colours.
+try { const t = localStorage.getItem("journal-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (_) {}
+</script>
 </head>
 <body>
+<button type="button" class="theme corner"></button>
 <div class="gate" id="loading"><p class="note">Opening your journal…</p></div>
 
 <div class="gate" id="login" hidden>
@@ -44,11 +49,24 @@
       <p>Our goal: both of us in the normal BMI range, 18.5 to 24.9.</p>
     </div>
     <div class="actions">
+      <button type="button" class="theme"></button>
       <button type="button" id="install" hidden>Install app</button>
       <button type="button" id="signOut">Sign out</button>
     </div>
   </header>
   <p class="banner" id="banner" hidden></p>
+  <div class="navrow">
+    <nav class="tabs" id="nav" aria-label="Pages">
+      <a href="#" data-view="home">Dashboard</a>
+      <a href="#activities" data-view="activities">Activities</a>
+    </nav>
+    <div class="lbl me"><span>For</span><div class="seg" id="me"></div></div>
+  </div>
+  <div class="view" id="home">
+  <section class="move" aria-label="Your next move">
+    <div class="panel next" id="next"></div>
+    <div class="panel habits" id="habits"></div>
+  </section>
   <section class="people" id="people" aria-label="Progress"></section>
   <div class="lower">
     <div class="panel" id="formPanel">
@@ -74,6 +92,25 @@
     </div>
   </div>
   <footer id="foot"></footer>
+  </div>
+  <div class="view" id="activities" hidden>
+    <form class="panel add" id="addForm" novalidate>
+      <h2><label for="addTitle">What do you want to add?</label></h2>
+      <div class="addrow">
+        <input type="text" id="addTitle" maxlength="120" autocomplete="off" placeholder="e.g. Try the new café in town">
+        <select id="addType" aria-label="Type"><option value="skill">Skill</option><option value="task" selected>One-time task</option><option value="explore">Explore</option><option value="cook">Cooking</option><option value="habit">Habit</option></select>
+        <button type="submit" class="primary">Add</button>
+      </div>
+      <p class="note" id="addMsg" role="status">New things go to Ideas first. Start them when you're ready.</p>
+    </form>
+    <div class="panel">
+      <div class="filters">
+        <div class="chips" id="tabs"></div>
+        <select id="typeFilter" aria-label="Show type"><option value="">All types</option><option value="skill">Skills</option><option value="task">One-time tasks</option><option value="explore">Explore</option><option value="cook">Cooking</option><option value="habit">Habits</option></select>
+      </div>
+      <div class="list" id="list"></div>
+    </div>
+  </div>
 </div>
 <script type="module" src="/app.js"></script>
 </body>
