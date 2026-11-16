@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#2f4bd6">
+<title>Our Journal</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="gate" id="loading"><p class="note">Opening your journal…</p></div>
+
+<div class="gate" id="login" hidden>
+  <form class="panel" id="loginForm">
+    <h1>Our Journal</h1>
+    <p class="note">Enter the family password.</p>
+    <label for="password">Password<input type="password" id="password" autocomplete="current-password" required></label>
+    <button type="submit" class="primary" id="signIn">Sign in</button>
+    <p id="loginMsg" role="status"></p>
+  </form>
+</div>
+
+<div class="gate" id="setup" hidden>
+  <form class="panel" id="setupForm" novalidate>
+    <h1>Set up your journal</h1>
+    <p class="note">Only signed-in family members can see this. You only do this once.</p>
+    <div id="setupPeople"></div>
+    <label for="startDate">Date of these weights<input type="date" id="startDate" required></label>
+    <button type="submit" class="primary" id="setupSave">Start journal</button>
+    <p id="setupMsg" role="status"></p>
+  </form>
+</div>
+
+<div class="wrap" id="app" hidden>
+  <header class="top">
+    <div>
+      <h1 id="heading">Our Journal</h1>
+      <p>Our goal: both of us in the normal BMI range, 18.5 to 24.9.</p>
+    </div>
+    <div class="actions">
+      <button type="button" id="install" hidden>Install app</button>
+      <button type="button" id="signOut">Sign out</button>
+    </div>
+  </header>
+  <p class="banner" id="banner" hidden></p>
+  <section class="people" id="people" aria-label="Progress"></section>
+  <div class="lower">
+    <div class="panel" id="formPanel">
+      <form id="form" novalidate>
+        <h2 id="formTitle">Write today's entry</h2>
+        <div class="lbl"><span>Who</span><div class="seg" id="who"></div></div>
+        <label for="date">Date<input type="date" id="date" required></label>
+        <div class="two">
+          <label for="weight">Weight, kg<input type="number" id="weight" step="0.1" min="30" max="250" inputmode="decimal"></label>
+          <label for="minutes">Exercise, min<input type="number" id="minutes" step="1" min="0" max="1440" inputmode="numeric"></label>
+        </div>
+        <label for="note">Notes <small>Meals, sleep, how the day went</small><textarea id="note" maxlength="2000"></textarea></label>
+        <div class="actions">
+          <button type="submit" class="primary" id="save">Save entry</button>
+          <button type="button" id="cancelEdit" hidden>Cancel</button>
+        </div>
+        <p id="formMsg" role="status"></p>
+      </form>
+    </div>
+    <div class="panel">
+      <h2>Journal</h2>
+      <div class="feed" id="feed"></div>
+    </div>
+  </div>
+  <footer id="foot"></footer>
+</div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

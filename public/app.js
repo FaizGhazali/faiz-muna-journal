@@ -1,0 +1,325 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, connectAuthEmulator, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, terminate, clearIndexedDbPersistence,
+  collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch,
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
+const PACE = 0.5; // kg a week
+const WEEKLY_MINUTES = 150; // WHO weekly minimum for moderate activity
+const LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const r1 = (n) => Math.round(n * 10) / 10;
+const pad = (n) => String(n).padStart(2, "0");
+const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parse = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const dayNum = (s) => { const [y, m, d] = s.split("-").map(Number); return Date.UTC(y, m - 1, d) / 864e5; };
+const fmt = (s, o) => parse(s).toLocaleDateString(undefined, o);
+const today = () => iso(new Date());
+const m2 = (p) => (p.cm / 100) ** 2;
+const bmiOf = (p, kg) => r1(kg / m2(p));
+const range = (p) => ({ lo: r1(18.5 * m2(p)), hi: r1(24.9 * m2(p)), asian: r1(22.9 * m2(p)) });
+const statusOf = (b) => b < 18.5 ? { t: "Underweight", c: "--under" } : b < 25 ? { t: "Normal", c: "--good" } : b < 30 ? { t: "Overweight", c: "--over" } : { t: "Obese", c: "--obese" };
+const show = (id) => ["loading", "login", "setup", "app"].forEach((v) => { $(v).hidden = v !== id; });
+
+const config = LOCAL
+  ? { apiKey: "demo-key", projectId: "demo-journal", appId: "demo" }
+  : await fetch("/__/firebase/init.json").then((r) => r.json());
+const app = initializeApp(config);
+const auth = getAuth(app);
+const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+if (LOCAL) {
+  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  connectFirestoreEmulator(db, "127.0.0.1", 8085);
+}
+
+let PEOPLE = [], entries = [], editingId = null, confirmDelete = null, unsubs = [];
+const entriesCol = collection(db, "entries");
+
+// Offline, Firestore keeps a write and sends it later, so its promise waits. Don't hold the form for that.
+async function commit(write) {
+  const done = write();
+  done.catch(() => banner("A change couldn't be saved. Reload the app and check your entries."));
+  await Promise.race([done, new Promise((res) => setTimeout(res, 2500))]);
+}
+
+function weighIns(p) {
+  return entries.filter((e) => e.person === p.id && typeof e.weight === "number").sort((a, b) => a.date.localeCompare(b.date));
+}
+function weekMinutes(p) {
+  const t = new Date(), mon = new Date(t.getFullYear(), t.getMonth(), t.getDate() - ((t.getDay() + 6) % 7));
+  const from = iso(mon);
+  return entries.filter((e) => e.person === p.id && e.date >= from && e.date <= today() && typeof e.minutes === "number").reduce((a, e) => a + e.minutes, 0);
+}
+
+function goalHtml(p, w) {
+  const { lo, hi } = range(p);
+  if (w == null) return `<strong>Goal: ${lo.toFixed(1)} to ${hi.toFixed(1)} kg</strong><p>Add a weigh-in to see the distance left.</p>`;
+  const first = weighIns(p)[0], change = r1(w - first.weight);
+  const since = change === 0 ? "" : ` ${change < 0 ? "Down" : "Up"} ${Math.abs(change).toFixed(1)} kg since ${fmt(first.date, { day: "numeric", month: "short" })}.`;
+  if (w >= lo && w <= hi) return `<strong>In the normal range</strong><p>Goal met. Stay between ${lo.toFixed(1)} and ${hi.toFixed(1)} kg.${since}</p>`;
+  const target = w > hi ? hi : lo, gap = r1(Math.abs(w - target)), weeks = Math.ceil(gap / PACE);
+  const t = new Date(); t.setDate(t.getDate() + weeks * 7);
+  const when = t.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  return `<strong>${gap.toFixed(1)} kg to ${w > hi ? "lose" : "gain"}</strong><p>Goal: ${target.toFixed(1)} kg, BMI ${w > hi ? "24.9" : "18.5"}. About ${weeks} weeks at ${PACE} kg a week, around ${when}.${since}</p>`;
+}
+
+function renderPeople() {
+  $("people").innerHTML = PEOPLE.map((p) => {
+    const pts = weighIns(p), w = pts.length ? pts[pts.length - 1].weight : null;
+    const b = w == null ? null : bmiOf(p, w), s = b == null ? null : statusOf(b);
+    const pos = b == null ? 0 : Math.max(0, Math.min(100, ((b - 15) / 20) * 100));
+    return `<article class="person">
+      <div class="who"><h2>${esc(p.name)}</h2><span>${esc(p.age)} · ${esc(p.sex)} · ${esc(p.cm)} cm</span></div>
+      <div class="stats">
+        <div class="stat"><small>Weight</small><b>${w == null ? "–" : w.toFixed(1)}</b><i>kg</i></div>
+        <div class="stat"><small>BMI</small><b>${b == null ? "–" : b.toFixed(1)}</b></div>
+        ${s ? `<span class="pill" style="--c:var(${s.c})">${s.t}</span>` : ""}
+      </div>
+      <div class="scale" aria-label="BMI scale${b == null ? "" : `, currently ${b.toFixed(1)}, ${s.t}`}">
+        <div class="bands">
+          <div style="--c:var(--under)">Under</div><div style="--c:var(--good)">Normal</div><div style="--c:var(--over)">Over</div><div style="--c:var(--obese)">Obese</div>
+        </div>
+        ${b == null ? "" : `<div class="marker" style="left:${pos}%"></div>`}
+        <span class="cut" style="left:17.5%">18.5</span><span class="cut" style="left:50%">25</span><span class="cut" style="left:75%">30</span>
+      </div>
+      <div class="goal">${goalHtml(p, w)}</div>
+      <div class="chart" id="chart-${p.id}"></div>
+      <p class="week"><b>${weekMinutes(p)}</b> of ${WEEKLY_MINUTES} exercise minutes this week</p>
+    </article>`;
+  }).join("");
+  drawCharts();
+}
+
+function drawCharts() { PEOPLE.forEach((p) => { const el = $("chart-" + p.id); if (el) drawChart(el, p); }); }
+
+function drawChart(host, p) {
+  const pts = weighIns(p), W = host.clientWidth || 320, H = 170;
+  if (!pts.length) { host.innerHTML = `<p class="note">Your weight line starts with the first weigh-in.</p>`; return; }
+  const { lo, hi } = range(p), m = { l: 30, r: 10, t: 22, b: 24 };
+  const ws = pts.map((e) => e.weight), wMin = Math.min(...ws), wMax = Math.max(...ws);
+  const inRange = wMax <= hi && wMin >= lo;
+  const anchorLo = inRange || wMin < lo ? lo : hi;
+  const yMin = Math.floor(Math.min(anchorLo, wMin - 1) / 5) * 5, yMax = Math.ceil(Math.max(hi, wMax + 1) / 5) * 5;
+  const x0 = dayNum(pts[0].date), x1 = Math.max(dayNum(pts[pts.length - 1].date), x0 + 28);
+  const X = (d) => m.l + ((dayNum(d) - x0) / (x1 - x0)) * (W - m.l - m.r);
+  const Y = (v) => m.t + ((yMax - v) / (yMax - yMin)) * (H - m.t - m.b);
+  const step = yMax - yMin > 40 ? 10 : 5;
+  let g = "";
+  for (let v = yMin; v <= yMax; v += step) g += `<line class="grid" x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${m.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
+  const bt = Y(Math.min(hi, yMax)), bb = Y(Math.max(lo, yMin));
+  let band = `<rect class="band" x="${m.l}" width="${W - m.l - m.r}" y="${bt}" height="${bb - bt}"/>`;
+  if (wMax > hi) band += `<line class="goalline" x1="${m.l}" x2="${W - m.r}" y1="${bt}" y2="${bt}"/><text x="${W - m.r}" y="${bt - 5}" text-anchor="end">Goal ${hi.toFixed(1)} kg</text>`;
+  else band += `<text x="${W - m.r}" y="${bt + 15}" text-anchor="end">Normal range</text>`;
+  const path = pts.map((e, i) => `${i ? "L" : "M"}${X(e.date).toFixed(1)} ${Y(e.weight).toFixed(1)}`).join("");
+  const last = pts[pts.length - 1], lx = X(last.date), ly = Y(last.weight);
+  const dots = pts.length <= 40 ? pts.slice(0, -1).map((e) => `<circle class="pt" cx="${X(e.date)}" cy="${Y(e.weight)}" r="4"/>`).join("") : "";
+  const xl = (n) => new Date(n * 864e5).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+  host.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(p.name)}'s weight over time. Latest ${last.weight.toFixed(1)} kg. Normal range ${lo.toFixed(1)} to ${hi.toFixed(1)} kg.">
+    ${band}${g}
+    <path class="ln" d="${path}"/>${dots}
+    <circle class="pt" cx="${lx}" cy="${ly}" r="5"/>
+    <text class="val" x="${lx}" y="${ly - 10}" text-anchor="${lx > W / 2 ? "end" : "start"}">${last.weight.toFixed(1)} kg</text>
+    <text x="${m.l}" y="${H - 6}">${esc(xl(x0))}</text>
+    <text x="${W - m.r}" y="${H - 6}" text-anchor="end">${esc(xl(x1))}</text>
+    <line class="cross" y1="${m.t}" y2="${H - m.b}" visibility="hidden"/>
+  </svg><div class="tip" hidden></div>`;
+  const svg = host.querySelector("svg"), cross = host.querySelector(".cross"), tip = host.querySelector(".tip");
+  const showTip = (ev) => {
+    const px = ev.clientX - svg.getBoundingClientRect().left;
+    let best = pts[0];
+    pts.forEach((e) => { if (Math.abs(X(e.date) - px) < Math.abs(X(best.date) - px)) best = e; });
+    const bx = X(best.date);
+    cross.setAttribute("x1", bx); cross.setAttribute("x2", bx); cross.setAttribute("visibility", "visible");
+    tip.hidden = false;
+    tip.textContent = `${fmt(best.date, { day: "numeric", month: "short", year: "numeric" })}: ${best.weight.toFixed(1)} kg, BMI ${bmiOf(p, best.weight).toFixed(1)}`;
+    tip.style.left = Math.max(0, Math.min(W - tip.offsetWidth, bx - tip.offsetWidth / 2)) + "px";
+  };
+  svg.addEventListener("pointermove", showTip);
+  svg.addEventListener("pointerdown", showTip);
+  svg.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+}
+
+function renderFeed() {
+  const feed = $("feed");
+  if (!entries.length) { feed.innerHTML = `<p class="note">No entries yet. Save your first entry with the form.</p>`; return; }
+  const days = [...new Set(entries.map((e) => e.date))].sort().reverse();
+  feed.innerHTML = days.map((d) => `<section class="day"><h3>${esc(fmt(d, { weekday: "long", day: "numeric", month: "long", year: "numeric" }))}</h3>
+    ${entries.filter((e) => e.date === d).sort((a, b) => a.person.localeCompare(b.person)).map(entryHtml).join("")}</section>`).join("");
+}
+function entryHtml(e) {
+  const p = PEOPLE.find((x) => x.id === e.person), facts = [];
+  if (typeof e.weight === "number") facts.push(`${e.weight.toFixed(1)} kg, BMI ${bmiOf(p, e.weight).toFixed(1)}`);
+  if (typeof e.minutes === "number") facts.push(`${e.minutes} min exercise`);
+  const btns = confirmDelete === e.id
+    ? `<button class="mini danger" data-act="del-yes" data-id="${esc(e.id)}">Delete</button><button class="mini" data-act="del-no">Keep</button>`
+    : `<button class="mini" data-act="edit" data-id="${esc(e.id)}">Edit</button><button class="mini" data-act="del" data-id="${esc(e.id)}">Delete</button>`;
+  return `<div class="entry"><div class="name">${esc(p.name)}</div>
+    <div><div class="facts">${esc(facts.join(" · ") || "Note")}</div>${e.note ? `<p class="text">${esc(e.note)}</p>` : ""}</div>
+    <div class="btns">${btns}</div></div>`;
+}
+function renderFoot() {
+  $("foot").innerHTML = `<p>BMI is weight in kg divided by height in metres squared. Ranges follow the WHO adult cut-offs. Many Asian guidelines, including Malaysia's, put the top of normal lower at 22.9, which is ${PEOPLE.map((p) => `${range(p).asian.toFixed(1)} kg for ${esc(p.name)}`).join(" and ")}.</p>
+    <p>BMI doesn't separate muscle from fat, so read it alongside how you feel and what a doctor tells you.</p>`;
+}
+function render() { renderPeople(); renderFeed(); }
+function banner(text) { $("banner").textContent = text || ""; $("banner").hidden = !text; }
+
+function selectedPerson() { return document.querySelector("input[name=person]:checked")?.value; }
+function resetForm() {
+  editingId = null;
+  $("form").reset();
+  $("date").value = today();
+  try { const last = localStorage.getItem("journal-person"); if (last && $("person-" + last)) $("person-" + last).checked = true; } catch (_) {}
+  $("formTitle").textContent = "Write today's entry";
+  $("save").textContent = "Save entry";
+  $("cancelEdit").hidden = true;
+}
+function startEdit(id) {
+  const e = entries.find((x) => x.id === id); if (!e) return;
+  editingId = id;
+  $("person-" + e.person).checked = true;
+  $("date").value = e.date;
+  $("weight").value = typeof e.weight === "number" ? e.weight : "";
+  $("minutes").value = typeof e.minutes === "number" ? e.minutes : "";
+  $("note").value = e.note || "";
+  $("formTitle").textContent = "Edit entry";
+  $("save").textContent = "Save changes";
+  $("cancelEdit").hidden = false;
+  $("formMsg").textContent = "";
+  $("formPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+$("form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const msg = $("formMsg"), person = selectedPerson(), date = $("date").value;
+  const ws = $("weight").value.trim(), ms = $("minutes").value.trim(), note = $("note").value.trim();
+  const weight = ws === "" ? null : r1(Number(ws)), minutes = ms === "" ? null : Math.round(Number(ms));
+  if (!date) { msg.textContent = "Pick a date for this entry."; return; }
+  if (weight !== null && !(weight >= 30 && weight <= 250)) { msg.textContent = "Enter a weight between 30 and 250 kg."; return; }
+  if (minutes !== null && !(minutes >= 0 && minutes <= 1440)) { msg.textContent = "Enter exercise minutes between 0 and 1440."; return; }
+  if (weight === null && minutes === null && !note) { msg.textContent = "Add a weight, exercise minutes or a note first."; return; }
+  const id = `${person}_${date}`, existing = entries.find((e) => e.id === id), wasEditing = editingId;
+  const body = { person, date };
+  // A new entry on a day that already has one fills in only what was typed, so nothing written earlier is lost.
+  const keep = !wasEditing && existing ? existing : {};
+  const w = weight ?? keep.weight, mn = minutes ?? keep.minutes, n = note || keep.note;
+  if (typeof w === "number") body.weight = w;
+  if (typeof mn === "number") body.minutes = mn;
+  if (n) body.note = n;
+  $("save").disabled = true;
+  await commit(() => setDoc(doc(entriesCol, id), body));
+  if (wasEditing && wasEditing !== id) await commit(() => deleteDoc(doc(entriesCol, wasEditing)));
+  try { localStorage.setItem("journal-person", person); } catch (_) {}
+  const who = PEOPLE.find((p) => p.id === person).name;
+  resetForm();
+  msg.textContent = `${existing || wasEditing ? "Updated" : "Saved"} ${who}'s entry for ${fmt(date, { day: "numeric", month: "short" })}.`;
+  $("save").disabled = false;
+});
+$("cancelEdit").addEventListener("click", () => { resetForm(); $("formMsg").textContent = ""; });
+$("feed").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("button[data-act]"); if (!b) return;
+  const act = b.dataset.act, id = b.dataset.id;
+  if (act === "edit") startEdit(id);
+  if (act === "del") { confirmDelete = id; renderFeed(); }
+  if (act === "del-no") { confirmDelete = null; renderFeed(); }
+  if (act === "del-yes") {
+    confirmDelete = null;
+    if (editingId === id) resetForm();
+    await commit(() => deleteDoc(doc(entriesCol, id)));
+  }
+});
+
+let lastWidth = 0;
+new ResizeObserver(() => { const w = $("people").clientWidth; if (w !== lastWidth) { lastWidth = w; drawCharts(); } }).observe($("people"));
+
+function buildSetup() {
+  $("startDate").value = today();
+  $("setupPeople").innerHTML = [1, 2].map((n) => `<fieldset>
+    <legend>Person ${n}</legend>
+    <label for="s${n}-name">Name<input type="text" id="s${n}-name" autocomplete="off"></label>
+    <div class="two">
+      <label for="s${n}-age">Age<input id="s${n}-age" type="number" min="1" max="120" inputmode="numeric"></label>
+      <label for="s${n}-sex">Sex<select id="s${n}-sex"><option>Male</option><option>Female</option></select></label>
+    </div>
+    <div class="two">
+      <label for="s${n}-cm">Height, cm<input id="s${n}-cm" type="number" min="100" max="250" inputmode="numeric"></label>
+      <label for="s${n}-kg">Weight, kg<input id="s${n}-kg" type="number" min="30" max="250" step="0.1" inputmode="decimal"></label>
+    </div></fieldset>`).join("");
+}
+$("setupForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const msg = $("setupMsg"), date = $("startDate").value, people = [], batch = writeBatch(db);
+  for (const n of [1, 2]) {
+    const name = $(`s${n}-name`).value.trim(), age = Number($(`s${n}-age`).value), cm = Number($(`s${n}-cm`).value), kg = r1(Number($(`s${n}-kg`).value));
+    if (!name || !(age >= 1 && age <= 120) || !(cm >= 100 && cm <= 250) || !(kg >= 30 && kg <= 250)) { msg.textContent = `Fill in every field for person ${n}. Height is 100 to 250 cm and weight is 30 to 250 kg.`; return; }
+    const id = "p" + n;
+    people.push({ id, name, age, sex: $(`s${n}-sex`).value, cm });
+    batch.set(doc(entriesCol, `${id}_${date}`), { person: id, date, weight: kg, note: "Starting weight." });
+  }
+  if (!date) { msg.textContent = "Pick the date of these weights."; return; }
+  batch.set(doc(db, "config", "people"), { people });
+  $("setupSave").disabled = true;
+  try { await batch.commit(); } catch (_) { msg.textContent = "That didn't save. Check your connection and try again."; $("setupSave").disabled = false; }
+});
+
+function startApp(user) {
+  let timer = setTimeout(() => { if (!$("loading").hidden) $("loading").innerHTML = `<p class="note">Still connecting. Check your internet connection.</p>`; }, 10000);
+  const denied = async () => { clearTimeout(timer); stop(); await signOut(auth); $("loginMsg").textContent = "This account can't open the journal."; };
+  unsubs.push(onSnapshot(doc(db, "config", "people"), (snap) => {
+    clearTimeout(timer);
+    if (!snap.exists()) {
+      if (snap.metadata.fromCache) return;
+      buildSetup(); show("setup"); return;
+    }
+    PEOPLE = snap.data().people;
+    $("heading").textContent = `${PEOPLE.map((p) => p.name).join(" & ")}'s Journal`;
+    document.title = $("heading").textContent;
+    $("who").innerHTML = PEOPLE.map((p, i) => `<input type="radio" name="person" id="person-${p.id}" value="${p.id}"${i ? "" : " checked"}><label for="person-${p.id}">${esc(p.name)}</label>`).join("");
+    resetForm();
+    renderFoot();
+    show("app");
+    render();
+  }, denied));
+  unsubs.push(onSnapshot(entriesCol, (snap) => {
+    entries = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.date || ""));
+    if (PEOPLE.length) { entries = entries.filter((e) => PEOPLE.some((p) => p.id === e.person)); render(); }
+  }, denied));
+}
+function stop() { unsubs.forEach((u) => u()); unsubs = []; }
+
+onAuthStateChanged(auth, (user) => {
+  stop();
+  if (user) { show("loading"); startApp(user); }
+  else show("login");
+});
+$("loginForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const msg = $("loginMsg");
+  msg.textContent = "";
+  $("signIn").disabled = true;
+  try {
+    await signInWithEmailAndPassword(auth, FAMILY_EMAIL, $("password").value);
+    $("password").value = "";
+  } catch (e) {
+    msg.textContent = e.code === "auth/too-many-requests" ? "Too many tries. Wait a few minutes, then try again."
+      : e.code === "auth/network-request-failed" ? "No connection. Check your internet and try again."
+      : "That password isn't right.";
+  } finally { $("signIn").disabled = false; }
+});
+$("signOut").addEventListener("click", async () => {
+  // Remove the saved copy of the journal from this device as well.
+  stop();
+  await signOut(auth);
+  try { await terminate(db); await clearIndexedDbPersistence(db); } catch (_) {}
+  location.reload();
+});
+
+let installEvent = null;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvent = e; $("install").hidden = false; });
+$("install").addEventListener("click", async () => { if (!installEvent) return; installEvent.prompt(); await installEvent.userChoice; installEvent = null; $("install").hidden = true; });
+window.addEventListener("appinstalled", () => { $("install").hidden = true; });
+if ("serviceWorker" in navigator && !LOCAL) navigator.serviceWorker.register("/sw.js");
