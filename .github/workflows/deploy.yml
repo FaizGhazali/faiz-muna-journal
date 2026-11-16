@@ -1,0 +1,29 @@
+# Publishes public/ to the live site on every push to main.
+# Hosting only: firestore.rules is never deployed from here. Deploy rules by hand with
+#   npx firebase deploy --only firestore:rules
+# Needs the repo secret FIREBASE_SERVICE_ACCOUNT_FAIZ_MUNA_JOURNAL_C43AB (a service account JSON key for faiz-muna-journal-c43ab).
+name: Deploy to Firebase Hosting
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # also allows a manual run from the Actions tab
+
+concurrency:
+  group: deploy-live
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_FAIZ_MUNA_JOURNAL_C43AB }}
+          projectId: faiz-muna-journal-c43ab
+          channelId: live

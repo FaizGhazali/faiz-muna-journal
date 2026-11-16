@@ -51,4 +51,5 @@ npx firebase deploy    # deploy hosting + firestore rules to production
 - `npm run dev` goes through `tools/dev.js`, which points Java's local-socket folder at `~/.cache/firebase/uds`. On this machine the Firestore emulator otherwise crashes with "Unable to establish loopback connection" because Java can't open sockets in `%TEMP%`.
 - `firestore.rules` is the only thing protecting the data. Changing the UID or loosening the match locks the family out or opens the journal — do not edit or deploy rules without being asked.
 - `npx firebase deploy` goes straight to the live site the family uses. Only deploy when asked.
+- **Pushing to `main` deploys too.** `.github/workflows/deploy.yml` publishes `public/` (hosting only, never rules) using the repo secret `FIREBASE_SERVICE_ACCOUNT_FAIZ_MUNA_JOURNAL_C43AB`. So a push is a release: only push to `main` when asked.
 - This repo lives at `Documents\Faiz\2026\faiz-muna-journal`, beside (not inside) the unrelated `Creator` repo. Keep it out of `Creator`.
