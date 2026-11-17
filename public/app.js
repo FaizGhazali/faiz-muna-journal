@@ -6,7 +6,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import { fitnessSeries, perBeat, paceOf, clock, toSecs } from "./fitness.js";
 import { readCoros, parseCoros } from "./coros.js";
-import { initActivities, startActivities, stopActivities, refresh as refreshActivities } from "./activities.js";
+import { initActivities, startActivities, stopActivities, refresh as refreshActivities, refreshMove } from "./activities.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const PACE = 0.5; // kg a week
@@ -360,7 +360,8 @@ $("feed").addEventListener("click", async (ev) => {
   }
 });
 
-initActivities({ db, people: () => PEOPLE, commit });
+const exercisedToday = (pid) => entries.some((e) => e.person === pid && e.date === today() && (e.minutes > 0 || e.run));
+initActivities({ db, people: () => PEOPLE, commit, exercisedToday });
 
 let lastWidth = 0;
 new ResizeObserver(() => { const w = $("people").clientWidth; if (w !== lastWidth) { lastWidth = w; drawCharts(); } }).observe($("people"));
@@ -416,7 +417,7 @@ function startApp(user) {
   }, denied));
   unsubs.push(onSnapshot(entriesCol, (snap) => {
     entries = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.date || ""));
-    if (PEOPLE.length) { entries = entries.filter((e) => PEOPLE.some((p) => p.id === e.person)); render(); }
+    if (PEOPLE.length) { entries = entries.filter((e) => PEOPLE.some((p) => p.id === e.person)); render(); refreshMove(); }
   }, denied));
   startActivities();
 }

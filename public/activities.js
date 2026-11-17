@@ -2,11 +2,13 @@
 // Data lives in Firestore next to the journal entries (same login, same offline cache):
 //   activities/{auto id}       one per skill, task, place, dish or habit, owned by "p1" or "p2"
 //   habitDays/{person}_{date}  { owner, date, done: [habit ids], skipped: [habit ids] }, one per person per day
+//   moves/{auto id}            { owner, item, type, act: done|later|another, date, hour }, what was done or passed over,
+//                              so suggestions learn each person's patterns (see learn() in suggest.js)
 import {
-  collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, arrayUnion, arrayRemove,
+  collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, arrayUnion, arrayRemove, query, where,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import {
-  TYPES, ALL_DAYS, guessType, isScheduled, habitState, habitWeek, describe, firstOpenStep, scoreOf, pickNext, iso, parse, addDays, dayNum,
+  TYPES, ALL_DAYS, guessType, isScheduled, habitState, habitWeek, describe, firstOpenStep, scoreOf, pickNext, learn, iso, parse, addDays, dayNum,
 } from "./suggest.js";
 
 const $ = (id) => document.getElementById(id);
@@ -21,15 +23,16 @@ const store = {
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const TABS = { inbox: "Ideas", active: "Active", paused: "Paused", done: "Done" };
 
-let db, people, commit, actsCol, daysCol;
-let acts = [], dayDocs = [], unsubs = [];
+let db, people, commit, exercisedToday, actsCol, daysCol, movesCol;
+let acts = [], dayDocs = [], moves = [], movesReady = false, unsubs = [];
 let me = null, tab = "inbox", typeFilter = "", editing = null, draft = null, confirmDel = null;
 let moveMsg = "", undoFn = null, undoId = null, addTypeTouched = false, lastDay = today();
 
 export function initActivities(opts) {
-  ({ db, people, commit } = opts);
+  ({ db, people, commit, exercisedToday } = opts);
   actsCol = collection(db, "activities");
   daysCol = collection(db, "habitDays");
+  movesCol = collection(db, "moves");
   wire();
   window.addEventListener("hashchange", showView);
   // A new day: habits start fresh and the suggestion is chosen again.
@@ -41,8 +44,12 @@ export function initActivities(opts) {
 export function startActivities() {
   unsubs.push(onSnapshot(actsCol, (snap) => { acts = snap.docs.map((d) => ({ id: d.id, ...d.data() })); refresh(); }));
   unsubs.push(onSnapshot(daysCol, (snap) => { dayDocs = snap.docs.map((d) => d.data()); refresh(); }));
+  // Only the last 180 days are used for learning, so older history isn't downloaded.
+  unsubs.push(onSnapshot(query(movesCol, where("date", ">=", addDays(today(), -180))), (snap) => { moves = snap.docs.map((d) => d.data()); movesReady = true; renderMove(); }));
 }
-export function stopActivities() { unsubs.forEach((u) => u()); unsubs = []; }
+// The journal calls this when entries change, so "already exercised today" stays current.
+export function refreshMove() { if (people().length && me) renderMove(); }
+export function stopActivities() { unsubs.forEach((u) => u()); unsubs = []; movesReady = false; }
 
 // Called once the people are known, and again on every data change.
 export function refresh() {
@@ -70,6 +77,12 @@ const logs = () => Object.fromEntries(dayDocs.filter((d) => d.owner === me).map(
 const strip = ({ id, ...rest }) => rest;
 const update = (id, patch) => commit(() => updateDoc(doc(actsCol, id), { ...patch, updated: Date.now() }));
 const replace = (id, body) => commit(() => setDoc(doc(actsCol, id), { ...body, updated: Date.now() }));
+// Note what was done or passed over. Returns a function that takes the note back (for Undo).
+function logMove(a, act) {
+  const ref = doc(movesCol), now = new Date();
+  commit(() => setDoc(ref, { owner: me, item: a.id, type: a.type, act, date: iso(now), hour: now.getHours() }));
+  return () => commit(() => deleteDoc(ref));
+}
 function markHabit(id, state, date = today()) {
   const ref = doc(daysCol, `${me}_${date}`);
   const body = { owner: me, date, done: state === "done" ? arrayUnion(id) : arrayRemove(id), skipped: state === "skipped" ? arrayUnion(id) : arrayRemove(id) };
@@ -77,7 +90,10 @@ function markHabit(id, state, date = today()) {
 }
 
 // ---------- Your Next Move ----------
-const ctxNow = () => ({ today: today(), hour: new Date().getHours(), logs: logs(), recent: store.get(`journal-recent-${me}`, []) });
+const ctxNow = () => ({
+  today: today(), hour: new Date().getHours(), logs: logs(), recent: store.get(`journal-recent-${me}`, []),
+  profile: learn(moves.filter((m) => m.owner === me), today()), exercised: !!exercisedToday?.(me),
+});
 const skipKey = () => `journal-skip-${me}`;
 const skipList = () => { const s = store.get(skipKey(), null); return s && s.date === today() ? s.ids : []; };
 const setSkip = (ids) => store.set(skipKey(), { date: today(), ids });
@@ -91,7 +107,7 @@ function currentMove() {
   }
   let pick = pickNext(all, { ...ctx, skip: new Set(skipList()) });
   if (!pick && skipList().length) { setSkip([]); pick = pickNext(all, ctx); } // everything was passed over: new round
-  if (pick) remember(pick.a.id);
+  if (pick && movesReady) remember(pick.a.id); // only settle on a pick once the history has loaded
   return pick;
 }
 function remember(id) {
@@ -145,6 +161,8 @@ async function moveAction(act) {
       await update(a.id, patch);
       undoFn = () => replace(a.id, before);
     }
+    const unlog = logMove(a, "done"), undoDone = undoFn;
+    undoFn = async () => { await unlog(); await undoDone(); };
     moveMsg = a.type === "skill" ? `Good work on "${a.title}".` : `"${a.title}" is done.`;
     clearCurrent();
   }
@@ -152,11 +170,13 @@ async function moveAction(act) {
     // Hidden today and the next two days. Habits just step aside for today.
     if (a.type === "habit") setSkip([...skipList(), a.id]);
     else await update(a.id, { snoozed: addDays(today(), 2) });
-    if (a.type !== "habit") undoFn = () => replace(a.id, before);
+    const unlog = logMove(a, "later");
+    undoFn = a.type === "habit" ? () => { setSkip(skipList().filter((x) => x !== a.id)); return unlog(); } : async () => { await unlog(); await replace(a.id, before); };
     moveMsg = "Okay, not now.";
     clearCurrent();
   }
   if (act === "another") {
+    logMove(a, "another");
     const skip = [...skipList(), a.id];
     clearCurrent();
     if (pickNext(mine(), { ...ctxNow(), skip: new Set(skip) })) setSkip(skip);
@@ -360,7 +380,9 @@ function wire() {
   $("habits").addEventListener("click", (ev) => { if (ev.target.closest("[data-mv=habits]")) { tab = "active"; typeFilter = "habit"; setTimeout(() => $("addTitle").focus(), 0); } });
   $("habits").addEventListener("change", (ev) => {
     const box = ev.target.closest("[data-habit]"); if (!box) return;
+    const h = acts.find((x) => x.id === box.dataset.habit);
     markHabit(box.dataset.habit, box.checked ? "done" : null);
+    if (h && box.checked) logMove(h, "done"); // ticking a habit teaches when it usually gets done
   });
   $("me").addEventListener("change", (ev) => { me = ev.target.value; store.set("journal-me", me); editing = draft = null; moveMsg = ""; undoFn = null; refresh(); });
   $("addTitle").addEventListener("input", () => { if (!addTypeTouched) $("addType").value = guessType($("addTitle").value); });
