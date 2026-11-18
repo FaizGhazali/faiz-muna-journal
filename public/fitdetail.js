@@ -2,13 +2,17 @@
 // The pairing and the line are worked out in runweight.js; this file only draws them.
 import { pairRunsWithWeight, linearRegression, runEntries, similarEffort, MAX_GAP_DAYS, MIN_TREND, CONFIDENT, SIMILAR_BPM } from "./runweight.js";
 import { clock } from "./fitness.js";
-import { parse } from "./suggest.js";
+import { parse, dayNum } from "./suggest.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = (s, o) => parse(s).toLocaleDateString(undefined, o);
 const short = (s) => fmt(s, { day: "numeric", month: "short" });
 const long = (s) => fmt(s, { day: "numeric", month: "short", year: "numeric" });
+const month = (s) => fmt(s, { month: "short", year: "numeric" });
+// Dot colour by date: oldest run pale, newest run full colour, so you can see how you moved over time.
+const OLD_PCT = 18;
+const shade = (t) => `color-mix(in srgb, var(--accent) ${Math.round(OLD_PCT + (100 - OLD_PCT) * t)}%, var(--line))`;
 const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 
 let people, entries, pid = null, fromApp = false, lastWidth = 0;
@@ -78,6 +82,7 @@ function draw() {
     </div>`;
   }
   $("fdBody").innerHTML = `<div class="chart scatter" id="fdChart"></div>
+    <p class="legend"><span>${esc(month(pts[0].date))}</span><span class="ramp" style="background:linear-gradient(to right, ${shade(0)}, ${shade(1)})"></span><span>${esc(month(pts[n - 1].date))}</span></p>
     <p class="legend"><span class="key same"></span>Weighed that day <span class="key near"></span>Weight from a nearby day</p>
     ${summary}${countHtml}`;
   scatter($("fdChart"), p, pts, fit.slope == null ? null : fit);
@@ -106,7 +111,12 @@ function scatter(host, p, pts, fit) {
     const a = Math.min(...ws), b = Math.max(...ws);
     line = `<line class="trend" x1="${X(a)}" y1="${Y(fit.intercept + fit.slope * a)}" x2="${X(b)}" y2="${Y(fit.intercept + fit.slope * b)}"/>`;
   }
-  const dots = pts.map((q) => `<circle class="${q.gapDays ? "run" : "pt"}" cx="${X(q.weightKg)}" cy="${Y(q.paceSec)}" r="5"/>`).join("");
+  // Oldest first, so the newest runs sit on top.
+  const d0 = dayNum(pts[0].date), span = dayNum(pts[pts.length - 1].date) - d0;
+  const dots = pts.map((q) => {
+    const c = shade(span ? (dayNum(q.date) - d0) / span : 1);
+    return `<circle class="${q.gapDays ? "dot near" : "dot"}" style="${q.gapDays ? "stroke" : "fill"}:${c}" cx="${X(q.weightKg)}" cy="${Y(q.paceSec)}" r="5"/>`;
+  }).join("");
   host.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(p.name)}'s pace against body weight, ${plural(pts.length, "run")}.">
     ${g}${line}${dots}
     <text x="${m.l}" y="14">Pace per km · faster ↑</text>
