@@ -7,7 +7,7 @@ Status (2026-11-17): personalised suggestions are live (commit d0d0b9e). No widg
 ## What we found
 
 - A PWA can't have a home-screen widget, so this needs a small native Android app beside the web app.
-- The repo is **private**, so GitHub Release / Actions downloads need a GitHub login. Plan for that when deciding how the phones get the APK.
+- The repo is **public** (since 2026-11-18), so GitHub Release / Actions downloads work without a login. Never commit the APK signing keystore or its passwords: keep them in repo secrets.
 - `https://faiz-muna-journal-c43ab.web.app/__/firebase/init.json` is reachable (200). The widget can read the `apiKey` and `projectId` from it at runtime, so no keys go into the repo.
 - No Android Studio on any PC: the user doesn't want it. Build the APK in GitHub Actions instead (a `setup-java` + `android-actions/setup-android` + Gradle job on `android/**` changes). Test on a branch first, so pushes don't go to `main`.
 

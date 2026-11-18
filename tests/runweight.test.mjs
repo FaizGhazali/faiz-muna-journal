@@ -6,16 +6,16 @@ import { pairRunsWithWeight, linearRegression, median, similarEffort, runEntries
 const run = (person, date, pace, hr, extra = {}) => ({ person, date, run: { source: "coros", km: 5, secs: pace * 5, pace, hr }, ...extra });
 const weigh = (person, date, weight) => ({ person, date, weight });
 
-test("fixture: two runs give two points and no trend line", () => {
+test("two runs with weight give two points and no trend line", () => {
   const entries = [
-    run("p1", "2026-08-18", 500, 159, { weight: 81.9 }),
-    run("p1", "2026-10-12", 569, 147),
-    weigh("p1", "2026-10-12", 75),
+    run("p1", "2026-08-18", 480, 152, { weight: 64.2 }),
+    run("p1", "2026-10-12", 540, 144),
+    weigh("p1", "2026-10-12", 66.5),
   ];
   const pairs = pairRunsWithWeight(entries, "p1");
   assert.deepEqual(pairs, [
-    { date: "2026-08-18", paceSec: 500, weightKg: 81.9, hr: 159, km: 5, note: "", weightDate: "2026-08-18", gapDays: 0 },
-    { date: "2026-10-12", paceSec: 569, weightKg: 75, hr: 147, km: 5, note: "", weightDate: "2026-10-12", gapDays: 0 },
+    { date: "2026-08-18", paceSec: 480, weightKg: 64.2, hr: 152, km: 5, note: "", weightDate: "2026-08-18", gapDays: 0 },
+    { date: "2026-10-12", paceSec: 540, weightKg: 66.5, hr: 144, km: 5, note: "", weightDate: "2026-10-12", gapDays: 0 },
   ]);
   const fit = linearRegression(pairs.map((p) => ({ x: p.weightKg, y: p.paceSec })));
   assert.equal(fit.n, 2);
