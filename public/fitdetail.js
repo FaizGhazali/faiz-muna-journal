@@ -1,5 +1,5 @@
 // The "Fitness detail" page at #fitness/<person id>: up to four graph cards for one person. Read-only.
-// Which cards show is picked with the chips at the top and remembered on this device.
+// Which cards show (any, all or none) is picked with the chips at the top and remembered on this device.
 // The pairing, bands and lines are worked out in runweight.js; this file only draws them.
 import { runsWithWeight, linearRegression, runEntries, similarEffort, weightBands, bandWidth, ageOn, ageText, MAX_GAP_DAYS, MIN_TREND, CONFIDENT, SIMILAR_BPM } from "./runweight.js";
 import { clock } from "./fitness.js";
@@ -44,8 +44,7 @@ let people, entries, saveBorn, pid = null, fromApp = false, lastWidth = 0, editi
 function loadPick() {
   try {
     const v = JSON.parse(localStorage.getItem(PICK_KEY));
-    const ok = Array.isArray(v) ? GRAPHS.map((g) => g.id).filter((id) => v.includes(id)) : [];
-    return ok.length ? ok : DEFAULT_PICK;
+    return Array.isArray(v) ? GRAPHS.map((g) => g.id).filter((id) => v.includes(id)) : DEFAULT_PICK; // [] = none, on purpose
   } catch (_) { return DEFAULT_PICK; }
 }
 function savePick() { try { localStorage.setItem(PICK_KEY, JSON.stringify(picked)); } catch (_) {} }
@@ -73,7 +72,7 @@ export function initFitDetail(opts) {
   $("fdPick").addEventListener("click", (ev) => {
     const id = ev.target.closest("[data-graph]")?.dataset.graph;
     if (!id) return;
-    if (picked.includes(id)) { if (picked.length === 1) return; picked = picked.filter((x) => x !== id); } // always keep one
+    if (picked.includes(id)) picked = picked.filter((x) => x !== id);
     else picked = GRAPHS.map((g) => g.id).filter((x) => x === id || picked.includes(x));
     savePick();
     drawPick();
@@ -108,7 +107,7 @@ export function refreshFitDetail() {
 function drawPick() {
   $("fdPick").innerHTML = GRAPHS.map((g) => {
     const on = picked.includes(g.id);
-    return `<button type="button" class="chip" data-graph="${g.id}" aria-pressed="${on}"${on && picked.length === 1 ? ` title="At least one graph stays on"` : ""}>${esc(g.title)}</button>`;
+    return `<button type="button" class="chip" data-graph="${g.id}" aria-pressed="${on}">${esc(g.title)}</button>`;
   }).join("");
 }
 
@@ -137,7 +136,7 @@ function draw() {
   const kept = similar ? similarEffort(rows, runs.map((e) => ({ date: e.date, hr: e.run.hr }))) : rows;
   const ctx = { p, rows, kept, similar };
   const cards = GRAPHS.filter((g) => picked.includes(g.id));
-  $("fdBody").innerHTML = cards.map((g) => card(g, ctx)).join("");
+  $("fdBody").innerHTML = cards.length ? cards.map((g) => card(g, ctx)).join("") : `<p class="fdempty">No graphs picked. Tap one above to show it.</p>`;
   for (const g of cards) g.render?.();
 }
 

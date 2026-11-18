@@ -1,5 +1,5 @@
 // Keeps the app opening without a connection. Journal data is cached by Firestore, not here.
-const CACHE = "journal-v11";
+const CACHE = "journal-v12";
 const SHELL = ["/", "/app.js", "/suggest.js", "/activities.js", "/fitness.js", "/runweight.js", "/fitdetail.js", "/coros.js", "/backup.js", "/styles.css", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (e) => {
