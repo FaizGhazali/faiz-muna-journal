@@ -1,10 +1,19 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pairRunsWithWeight, linearRegression, median, similarEffort, usualHr, runEntries } from "../public/runweight.js";
+import { pairRunsWithWeight, linearRegression, median, similarEffort, usualHr, runEntries, ageOn, ageText } from "../public/runweight.js";
 
 const run = (person, date, pace, hr, extra = {}) => ({ person, date, run: { source: "coros", km: 5, secs: pace * 5, pace, hr }, ...extra });
 const weigh = (person, date, weight) => ({ person, date, weight });
+
+test("age on a run date counts completed years and months", () => {
+  assert.deepEqual(ageOn("1990-03-15", "2026-03-15"), { years: 36, months: 0 });
+  assert.deepEqual(ageOn("1990-03-15", "2026-03-14"), { years: 35, months: 11 });
+  assert.deepEqual(ageOn("1990-01-31", "2026-10-12"), { years: 36, months: 8 });
+  assert.equal(ageText(ageOn("1990-12-01", "2026-08-18")), "35y 8m");
+  assert.equal(ageOn("", "2026-08-18"), null);
+  assert.equal(ageOn("2027-01-01", "2026-08-18"), null);
+});
 
 test("two runs with weight give two points and no trend line", () => {
   const entries = [

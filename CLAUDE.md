@@ -30,7 +30,7 @@ npx firebase deploy    # deploy hosting + firestore rules to production
 - **Local login:** the emulator starts empty. Create the user `family@journal.invalid` with any password in the emulator UI (Authentication tab), then sign in with that password.
 - **Production config** comes from `/__/firebase/init.json`, which Firebase Hosting serves automatically. No API keys live in the repo.
 - **Data model:**
-  - `config/people` → `{ people: [{ id: "p1"|"p2", name, age, sex, cm }] }`. Written once by the first-run setup screen.
+  - `config/people` → `{ people: [{ id: "p1"|"p2", name, age, sex, cm, born? }] }`. Written by the first-run setup screen. `born` (`YYYY-MM-DD`) is added later on the Fitness detail page and labels each dot with the age on that run.
   - `entries/{person}_{YYYY-MM-DD}` → `{ person, date, weight?, minutes?, run?, note? }`. One entry per person per day; saving again on the same day merges into it. `run` → `{ source: "coros", km, secs, hr, pace?, effort?, hrMax?, hrr?, load?, cadence?, stride?, power?, ground?, kcal? }` (paces in seconds per km). `minutes` is set from the run time; older entries have typed minutes and no `run`.
   - `activities/{auto id}` → `{ owner: "p1"|"p2", title, type: skill|task|explore|cook|habit, status: inbox|active|paused|done|archived, created, ...optional }`. Optional fields by type: `note`, `minutes`, `due` (task), `steps: [{text, done}]` + `lastDone` (skill), `location` (explore), `url` + `favourite` (cook), `days: [0-6]` (habit; missing = every day), `snoozed` (hidden through that date), `doneOn`.
   - `habitDays/{person}_{YYYY-MM-DD}` → `{ owner, date, done: [habit ids], skipped: [habit ids] }`. History is kept; "today" is just a new doc id.

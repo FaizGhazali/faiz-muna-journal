@@ -67,6 +67,17 @@ export function linearRegression(points) {
   return { slope, intercept, r2, n };
 }
 
+// Age on a date from a birth date, both "YYYY-MM-DD": completed years and months. null if unknown.
+export function ageOn(born, date) {
+  const re = /^(\d{4})-(\d{2})-(\d{2})$/, b = re.exec(born || ""), d = re.exec(date || "");
+  if (!b || !d || date < born) return null;
+  let years = d[1] - b[1], months = d[2] - b[2];
+  if (+d[3] < +b[3]) months -= 1;
+  if (months < 0) { years -= 1; months += 12; }
+  return { years, months };
+}
+export const ageText = (a) => (a ? `${a.years}y ${a.months}m` : "");
+
 export function median(nums) {
   const s = nums.filter(Number.isFinite).sort((a, b) => a - b);
   if (!s.length) return null;

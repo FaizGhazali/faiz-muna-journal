@@ -366,7 +366,10 @@ $("feed").addEventListener("click", async (ev) => {
 const exercisedToday = (pid) => entries.some((e) => e.person === pid && e.date === today() && (e.minutes > 0 || e.run));
 initActivities({ db, people: () => PEOPLE, commit, exercisedToday });
 initBackup({ db });
-initFitDetail({ people: () => PEOPLE, entries: () => entries });
+initFitDetail({
+  people: () => PEOPLE, entries: () => entries,
+  saveBorn: (pid, born) => commit(() => setDoc(doc(db, "config", "people"), { people: PEOPLE.map((p) => (p.id === pid ? { ...p, born } : p)) })),
+});
 
 let lastWidth = 0;
 new ResizeObserver(() => { const w = $("people").clientWidth; if (w !== lastWidth) { lastWidth = w; drawCharts(); } }).observe($("people"));
