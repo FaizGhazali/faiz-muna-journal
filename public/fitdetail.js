@@ -1,6 +1,6 @@
 // The "Fitness detail" page at #fitness/<person id>: weight vs pace for one person. Read-only.
 // The pairing and the line are worked out in runweight.js; this file only draws them.
-import { pairRunsWithWeight, linearRegression, runEntries, median, similarEffort, MAX_GAP_DAYS, MIN_TREND, CONFIDENT, SIMILAR_BPM } from "./runweight.js";
+import { pairRunsWithWeight, linearRegression, runEntries, similarEffort, MAX_GAP_DAYS, MIN_TREND, CONFIDENT, SIMILAR_BPM } from "./runweight.js";
 import { clock } from "./fitness.js";
 import { parse } from "./suggest.js";
 
@@ -48,17 +48,17 @@ function draw() {
   const p = people().find((x) => x.id === pid);
   if (!p || !onFitnessPage()) return;
   const all = entries(), runs = runEntries(all, pid), pairs = pairRunsWithWeight(all, pid);
-  const similar = $("fdSimilar").checked, usual = median(runs.map((e) => e.run.hr));
-  const pts = similar ? similarEffort(pairs, usual) : pairs, n = pts.length;
+  const similar = $("fdSimilar").checked;
+  const pts = similar ? similarEffort(pairs, runs.map((e) => ({ date: e.date, hr: e.run.hr }))) : pairs, n = pts.length;
   const fit = linearRegression(pts.map((q) => ({ x: q.weightKg, y: q.paceSec })));
 
   const counts = [];
   if (runs.length > pairs.length) counts.push(`${plural(runs.length - pairs.length, "run")} excluded (no weight within ${MAX_GAP_DAYS} days)`);
-  if (similar && pairs.length > n) counts.push(`${plural(pairs.length - n, "run")} left out by "Similar effort only"${usual == null ? "" : ` (usual heart rate ${Math.round(usual)} bpm, ±${SIMILAR_BPM})`}`);
+  if (similar && pairs.length > n) counts.push(`${plural(pairs.length - n, "run")} left out by "Similar effort only" (more than ${SIMILAR_BPM} bpm from your usual heart rate that month)`);
   const countHtml = counts.length ? `<p class="note">${esc(counts.join(". "))}.</p>` : "";
 
   if (!n) {
-    const empty = similar && pairs.length ? `No runs within ${SIMILAR_BPM} bpm of your usual heart rate. Turn off "Similar effort only" to see them all.` : "Log your weight on run days to see this graph.";
+    const empty = similar && pairs.length ? `No runs within ${SIMILAR_BPM} bpm of your usual heart rate that month. Turn off "Similar effort only" to see them all.` : "Log your weight on run days to see this graph.";
     $("fdBody").innerHTML = `<p class="fdempty">${esc(empty)}</p>${countHtml}`;
     return;
   }

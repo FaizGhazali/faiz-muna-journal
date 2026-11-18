@@ -10,7 +10,8 @@ import { dayNum } from "./suggest.js";
 export const MAX_GAP_DAYS = 7;  // furthest a weigh-in can be from a run and still count
 export const MIN_TREND = 3;     // fewer runs than this: dots only, no line
 export const CONFIDENT = 8;     // fewer runs than this: line shown with a "low confidence" badge
-export const SIMILAR_BPM = 5;   // "Similar effort only" keeps runs within this many bpm of the median
+export const SIMILAR_BPM = 5;   // "Similar effort only" keeps runs within this many bpm of the usual heart rate
+export const SIMILAR_DAYS = 15; // "usual" = median heart rate of the runs within this many days either side (a month)
 
 const list = (entries) => (Array.isArray(entries) ? entries : Object.values(entries || {}));
 const ok = (n) => typeof n === "number" && Number.isFinite(n) && n > 0;
@@ -73,8 +74,18 @@ export function median(nums) {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-// Keep runs at a similar effort: average heart rate within ±bpm of the median of the person's runs.
-export function similarEffort(pairs, medianHr, bpm = SIMILAR_BPM) {
-  if (medianHr == null) return [];
-  return pairs.filter((p) => Number.isFinite(p.hr) && Math.abs(p.hr - medianHr) <= bpm);
+// Usual heart rate around a date: median average HR of the runs within ±days of it.
+// runs: [{ date, hr }]. Using nearby runs (not all runs ever) means a heart rate that drops as the person
+// gets fitter doesn't push their early or recent runs out of "similar effort".
+export function usualHr(runs, date, days = SIMILAR_DAYS) {
+  const day = dayNum(date);
+  return median((runs || []).filter((r) => Math.abs(dayNum(r.date) - day) <= days).map((r) => r.hr));
+}
+
+// Keep runs at a similar effort: average heart rate within ±bpm of the usual heart rate at that time.
+export function similarEffort(pairs, runs, bpm = SIMILAR_BPM, days = SIMILAR_DAYS) {
+  return pairs.filter((p) => {
+    const usual = Number.isFinite(p.hr) ? usualHr(runs, p.date, days) : null;
+    return usual != null && Math.abs(p.hr - usual) <= bpm;
+  });
 }

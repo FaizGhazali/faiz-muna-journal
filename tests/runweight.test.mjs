@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pairRunsWithWeight, linearRegression, median, similarEffort, runEntries } from "../public/runweight.js";
+import { pairRunsWithWeight, linearRegression, median, similarEffort, usualHr, runEntries } from "../public/runweight.js";
 
 const run = (person, date, pace, hr, extra = {}) => ({ person, date, run: { source: "coros", km: 5, secs: pace * 5, pace, hr }, ...extra });
 const weigh = (person, date, weight) => ({ person, date, weight });
@@ -99,10 +99,24 @@ test("regression gives no line for fewer than 3 points or one weight only", () =
   assert.equal(same.n, 3);
 });
 
-test("similar effort keeps runs within 5 bpm of the median", () => {
-  const pairs = [140, 146, 150, 154, 160].map((hr) => ({ hr }));
-  assert.equal(median(pairs.map((p) => p.hr)), 150);
+test("similar effort keeps runs within 5 bpm of the usual heart rate that month", () => {
+  assert.equal(median([140, 146, 150, 154, 160]), 150);
   assert.equal(median([1, 2, 3, 10]), 2.5);
-  assert.deepEqual(similarEffort(pairs, 150).map((p) => p.hr), [146, 150, 154]);
-  assert.deepEqual(similarEffort(pairs, null), []);
+  const runs = [140, 146, 150, 154, 160].map((hr, i) => ({ date: `2026-03-0${i + 1}`, hr }));
+  assert.deepEqual(similarEffort(runs, runs).map((p) => p.hr), [146, 150, 154]);
+  assert.deepEqual(similarEffort(runs, []), []);
+  assert.deepEqual(similarEffort([{ date: "2026-03-01", hr: null }], runs), []);
+});
+
+test("similar effort follows a heart rate that drops as fitness improves", () => {
+  // Same easy runs, but the heart rate falls from ~160 to ~130 over six months.
+  const runs = [];
+  for (let m = 1; m <= 6; m++) for (const d of [5, 15, 25]) runs.push({ date: `2026-0${m}-${d}`, hr: 166 - m * 6 });
+  runs.push({ date: "2026-03-16", hr: 175 }); // one hard session
+  // An all-time middle value (~148) would drop the first and last months; a monthly one keeps every easy run.
+  const kept = similarEffort(runs, runs);
+  assert.equal(kept.length, 18);
+  assert.ok(!kept.some((r) => r.hr === 175));
+  assert.equal(usualHr(runs, "2026-01-15"), 160);
+  assert.equal(usualHr(runs, "2026-06-15"), 130);
 });
