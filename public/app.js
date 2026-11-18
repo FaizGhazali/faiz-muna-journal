@@ -8,6 +8,7 @@ import { fitnessSeries, perBeat, paceOf, clock, toSecs } from "./fitness.js";
 import { readCoros, parseCoros } from "./coros.js";
 import { initActivities, startActivities, stopActivities, refresh as refreshActivities, refreshMove } from "./activities.js";
 import { initBackup } from "./backup.js";
+import { initFitDetail, refreshFitDetail } from "./fitdetail.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const PACE = 0.5; // kg a week
@@ -77,6 +78,7 @@ function fitHtml(p) {
     <div class="fithead"><div class="stat"><small>Fitness score</small><b>${last.trend.toFixed(1)}</b></div>${delta}</div>
     <div class="chart" id="fit-${p.id}"></div>
     <p class="week">${esc(facts.join(" · "))}</p>
+    <a class="btn more" href="#fitness/${encodeURIComponent(p.id)}">Show more detail</a>
   </div>`;
 }
 
@@ -233,7 +235,7 @@ function renderFoot() {
     <p>The fitness score compares how fast a run was with how hard the heart worked for it, with a small bonus for quick heart rate recovery. Faster at the same heart rate, or the same pace at a lower one, moves it up. It's an estimate for watching your own trend, not a medical measure.</p>
     <p>BMI doesn't separate muscle from fat, so read it alongside how you feel and what a doctor tells you.</p>`;
 }
-function render() { renderPeople(); renderFeed(); }
+function render() { renderPeople(); renderFeed(); refreshFitDetail(); }
 function banner(text) { $("banner").textContent = text || ""; $("banner").hidden = !text; }
 
 // The run boxes in the form. Paces and time are typed as 9:29 and 40:37.
@@ -364,6 +366,7 @@ $("feed").addEventListener("click", async (ev) => {
 const exercisedToday = (pid) => entries.some((e) => e.person === pid && e.date === today() && (e.minutes > 0 || e.run));
 initActivities({ db, people: () => PEOPLE, commit, exercisedToday });
 initBackup({ db });
+initFitDetail({ people: () => PEOPLE, entries: () => entries });
 
 let lastWidth = 0;
 new ResizeObserver(() => { const w = $("people").clientWidth; if (w !== lastWidth) { lastWidth = w; drawCharts(); } }).observe($("people"));

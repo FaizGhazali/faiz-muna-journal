@@ -65,10 +65,10 @@ export function refresh() {
 }
 
 function showView() {
-  const onList = location.hash === "#activities";
-  $("home").hidden = onList;
-  $("activities").hidden = !onList;
-  document.querySelectorAll("#nav a").forEach((a) => a.toggleAttribute("aria-current", (a.dataset.view === "activities") === onList));
+  const view = location.hash === "#activities" ? "activities" : location.hash.startsWith("#fitness") ? "fitness" : "home";
+  ["home", "activities", "fitness"].forEach((v) => { $(v).hidden = v !== view; });
+  $("meBox").hidden = view === "fitness"; // the fitness page has its own person switch
+  document.querySelectorAll("#nav a").forEach((a) => a.toggleAttribute("aria-current", a.dataset.view === view));
 }
 
 // ---------- data ----------

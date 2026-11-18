@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "dev": "node tools/dev.js",
-    "icons": "node tools/make-icons.js"
+    "icons": "node tools/make-icons.js",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"tests/*.test.mjs\""
   },
   "devDependencies": {
     "firebase-tools": "^15.34.2"
