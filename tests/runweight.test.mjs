@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pairRunsWithWeight, linearRegression, median, similarEffort, usualHr, runEntries, ageOn, ageText } from "../public/runweight.js";
+import { pairRunsWithWeight, runsWithWeight, weightBands, bandWidth, linearRegression, median, similarEffort, usualHr, runEntries, ageOn, ageText } from "../public/runweight.js";
 
 const run = (person, date, pace, hr, extra = {}) => ({ person, date, run: { source: "coros", km: 5, secs: pace * 5, pace, hr }, ...extra });
 const weigh = (person, date, weight) => ({ person, date, weight });
@@ -128,4 +128,33 @@ test("similar effort follows a heart rate that drops as fitness improves", () =>
   assert.ok(!kept.some((r) => r.hr === 175));
   assert.equal(usualHr(runs, "2026-01-15"), 160);
   assert.equal(usualHr(runs, "2026-06-15"), 130);
+});
+
+test("runsWithWeight keeps runs with no weight nearby, with null weight", () => {
+  const all = runsWithWeight([run("p1", "2026-09-10", 480, 150), run("p1", "2026-09-20", 470, 150, { weight: 80 })], "p1");
+  assert.equal(all.length, 2);
+  assert.equal(all[0].weightKg, null);
+  assert.equal(all[0].gapDays, null);
+  assert.equal(all[1].weightKg, 80);
+});
+
+test("weight bands average the distance and keep empty bands in between", () => {
+  const pts = [
+    { date: "2026-03-01", weightKg: 64.2, km: 5 },
+    { date: "2026-03-08", weightKg: 64.9, km: 7 },
+    { date: "2026-04-01", weightKg: 66.0, km: 3 },
+  ];
+  const b = weightBands(pts, 1);
+  assert.deepEqual(b.map((x) => [x.lo, x.hi, x.n, x.avgKm, x.maxKm]), [[64, 65, 2, 6, 7], [65, 66, 0, null, null], [66, 67, 1, 3, 3]]);
+  assert.equal(b[0].from, "2026-03-01");
+  assert.equal(b[0].to, "2026-03-08");
+  assert.deepEqual(weightBands([], 1), []);
+  assert.deepEqual(weightBands([{ date: "2026-03-01", weightKg: 64, km: null }], 1), []);
+});
+
+test("band width keeps the bars to about ten", () => {
+  assert.equal(bandWidth([64, 66]), 0.5);
+  assert.equal(bandWidth([64, 70]), 1);
+  assert.equal(bandWidth([60, 78]), 2);
+  assert.equal(bandWidth([]), 1);
 });

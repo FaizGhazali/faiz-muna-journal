@@ -27,12 +27,13 @@ export function runEntries(entries, personId) {
 }
 
 // entries: array of entries, or the export's { id: entry } map.
-// → [{ date, paceSec, weightKg, hr, km, note, weightDate, gapDays }] oldest first.
-export function pairRunsWithWeight(entries, personId, maxGapDays = MAX_GAP_DAYS) {
+// → [{ date, paceSec, weightKg, hr, km, note, weightDate, gapDays }] oldest first, for every run.
+// Runs with no weigh-in close enough have weightKg, weightDate and gapDays set to null.
+export function runsWithWeight(entries, personId, maxGapDays = MAX_GAP_DAYS) {
   const weighIns = list(entries)
     .filter((e) => e && e.person === personId && ok(e.weight) && /^\d{4}-\d{2}-\d{2}$/.test(e.date || ""))
     .map((e) => ({ date: e.date, day: dayNum(e.date), kg: e.weight }));
-  return runEntries(entries, personId).flatMap((e) => {
+  return runEntries(entries, personId).map((e) => {
     let weightKg = ok(e.weight) ? e.weight : null, weightDate = e.date, gapDays = 0;
     if (weightKg == null) {
       const day = dayNum(e.date);
@@ -42,14 +43,48 @@ export function pairRunsWithWeight(entries, personId, maxGapDays = MAX_GAP_DAYS)
         if (gap > maxGapDays) continue;
         if (!best || gap < best.gap || (gap === best.gap && w.date < best.date)) best = { ...w, gap };
       }
-      if (!best) return [];
-      ({ kg: weightKg, date: weightDate, gap: gapDays } = best);
+      if (best) ({ kg: weightKg, date: weightDate, gap: gapDays } = best);
+      else weightDate = gapDays = null;
     }
-    return [{
-      date: e.date, paceSec: runPace(e.run), weightKg, hr: e.run.hr ?? null, km: e.run.km ?? null,
+    return {
+      date: e.date, paceSec: runPace(e.run), weightKg, hr: e.run.hr ?? null, km: ok(e.run.km) ? e.run.km : null,
       note: e.note || "", weightDate, gapDays,
-    }];
+    };
   });
+}
+
+// Only the runs that have a weight (see runsWithWeight).
+export const pairRunsWithWeight = (entries, personId, maxGapDays = MAX_GAP_DAYS) =>
+  runsWithWeight(entries, personId, maxGapDays).filter((r) => r.weightKg != null);
+
+// Band size for grouping runs by weight: the smallest of 0.5 / 1 / 2 / 5 kg that keeps it to about 10 bars.
+export function bandWidth(weights) {
+  const w = weights.filter(Number.isFinite);
+  if (!w.length) return 1;
+  const span = Math.max(...w) - Math.min(...w);
+  return [0.5, 1, 2, 5].find((s) => span / s < 10) || 10;
+}
+
+// Runs grouped by weight band, for the Weight vs distance bars. points: [{ date, weightKg, km }].
+// → [{ lo, hi, n, avgKm, maxKm, from, to, avgDay }] lightest first, with every band between the lightest
+// and heaviest (empty bands have n 0 and null values) so gaps in weight show as gaps.
+export function weightBands(points, width = 1) {
+  const pts = (points || []).filter((p) => Number.isFinite(p?.weightKg) && Number.isFinite(p?.km))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!pts.length) return [];
+  const idx = (p) => Math.floor(p.weightKg / width + 1e-9);
+  const first = Math.min(...pts.map(idx)), last = Math.max(...pts.map(idx)), out = [];
+  for (let i = first; i <= last; i++) {
+    const rs = pts.filter((p) => idx(p) === i), n = rs.length;
+    out.push({
+      lo: +(i * width).toFixed(2), hi: +((i + 1) * width).toFixed(2), n,
+      avgKm: n ? rs.reduce((a, p) => a + p.km, 0) / n : null,
+      maxKm: n ? Math.max(...rs.map((p) => p.km)) : null,
+      from: n ? rs[0].date : null, to: n ? rs[n - 1].date : null,
+      avgDay: n ? rs.reduce((a, p) => a + dayNum(p.date), 0) / n : null,
+    });
+  }
+  return out;
 }
 
 // points: [{ x, y }] → { slope, intercept, r2, n }. slope, intercept and r2 are null with fewer than
