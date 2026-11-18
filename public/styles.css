@@ -217,6 +217,22 @@ progress { width: 100%; height: 8px; accent-color: var(--accent) }
 .legend .same { background: var(--accent) }
 .legend .near { border: 2px solid var(--accent); background: var(--surface) }
 .chart .age { font-size: 11px; fill: var(--ink); font-variant-numeric: tabular-nums }
+.chart .age.tagged { font-weight: 700 }
+.chart .keyring { fill: none; stroke: var(--accent); stroke-width: 1.5 }
+.fdcard { display: grid; gap: 8px }
+.fdwho { margin: 0; font: 700 17px var(--display) }
+.fdtiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(86px, 1fr)); gap: 8px }
+.fdtile { display: grid; gap: 2px; align-content: start; padding: 10px; background: var(--bg); border-radius: 8px; border: 2px solid transparent; min-width: 0 }
+.fdtile.best { border-color: var(--accent) }
+.fdtag { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted) }
+.fdtile.best .fdtag { color: var(--accent) }
+.fdtile strong { font: 700 24px/1.1 var(--display); font-variant-numeric: tabular-nums }
+.fdtile strong small { font: 400 13px var(--body); color: var(--muted) }
+.fdkg { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums }
+.fdtile .note { font-size: 13px; line-height: 1.35 }
+.fdchange { margin: 0; font-size: 15px }
+.fdchange .up { color: var(--good) }
+.fdchange .down { color: var(--obese) }
 .fdborn { display: grid; gap: 6px; margin: 0 }
 .fdbornrow { display: flex; gap: 8px }
 .fdbornrow input { flex: 1 }

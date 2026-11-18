@@ -112,11 +112,44 @@ function draw() {
       ${n < CONFIDENT ? `<span class="badge">Low confidence, keep logging</span>` : ""}
     </div>`;
   }
-  $("fdBody").innerHTML = `<div class="chart scatter" id="fdChart"></div>
+  // First run, best pace and latest run, written out in full so a screenshot reads at a glance.
+  const best = pts.reduce((b, q, i) => (q.paceSec <= pts[b].paceSec ? i : b), 0), last = n - 1;
+  const tags = new Map();
+  if (n === 1) tags.set(0, "Only run");
+  else {
+    tags.set(0, best === 0 ? "First · best" : "First");
+    if (best !== 0 && best !== last) tags.set(best, "Best");
+    tags.set(last, best === last ? "Now · best" : "Now");
+  }
+  const tile = (i) => {
+    const q = pts[i], tag = tags.get(i), age = p.born ? ageText(ageOn(p.born, q.date)) : "";
+    return `<div class="fdtile${i === best ? " best" : ""}">
+      <span class="fdtag">${esc(tag)}</span>
+      <strong>${clock(q.paceSec)}<small> /km</small></strong>
+      <span class="fdkg">${q.weightKg.toFixed(1)} kg</span>
+      <span class="note">${age ? `Age ${esc(age)}<br>` : ""}${esc(long(q.date))}</span>
+    </div>`;
+  };
+  let change = "";
+  if (n > 1) {
+    const a = pts[0], z = pts[last], dKg = z.weightKg - a.weightKg, dPace = Math.round(a.paceSec - z.paceSec);
+    const gap = ageOn(a.date, z.date), days = dayNum(z.date) - dayNum(a.date);
+    const over = gap.years ? `${gap.years}y ${gap.months}m` : gap.months ? plural(gap.months, "month") : plural(Math.max(1, Math.round(days / 7)), "week");
+    const kg = Math.abs(dKg) < 0.05 ? "same weight" : `${dKg < 0 ? "−" : "+"}${Math.abs(dKg).toFixed(1)} kg`;
+    const pace = dPace === 0 ? "same pace" : `${clock(Math.abs(dPace))} /km ${dPace > 0 ? "faster" : "slower"}`;
+    change = `<p class="fdchange">In ${esc(over)}: <b>${esc(kg)}</b> · <b class="${dPace > 0 ? "up" : dPace < 0 ? "down" : ""}">${esc(pace)}</b></p>`;
+  }
+  const head = `<div class="fdcard">
+      <p class="fdwho">${esc(p.name)}'s running</p>
+      <div class="fdtiles">${[...tags.keys()].sort((x, y) => x - y).map(tile).join("")}</div>
+      ${change}
+    </div>`;
+
+  $("fdBody").innerHTML = `${head}<div class="chart scatter" id="fdChart"></div>
     <p class="legend"><span>${esc(month(pts[0].date))}</span><span class="ramp" style="background:linear-gradient(to right, ${shade(0)}, ${shade(1)})"></span><span>${esc(month(pts[n - 1].date))}</span></p>
     <p class="legend"><span class="key same"></span>Weighed that day <span class="key near"></span>Weight from a nearby day</p>
     ${summary}${countHtml}`;
-  scatter($("fdChart"), p, pts, fit.slope == null ? null : fit);
+  scatter($("fdChart"), p, pts, fit.slope == null ? null : fit, tags);
 }
 
 // Nice round steps for an axis that covers lo..hi with about `ticks` lines.
@@ -125,7 +158,7 @@ function axis(lo, hi, steps, ticks) {
   return { step, min: Math.floor(lo / step) * step, max: Math.ceil(hi / step) * step };
 }
 
-function scatter(host, p, pts, fit) {
+function scatter(host, p, pts, fit, tags) {
   const W = host.clientWidth || 320, H = 280, m = { l: 46, r: 14, t: 28, b: 44 };
   lastWidth = W;
   const ws = pts.map((q) => q.weightKg), ps = pts.map((q) => q.paceSec);
@@ -142,22 +175,26 @@ function scatter(host, p, pts, fit) {
     const a = Math.min(...ws), b = Math.max(...ws);
     line = `<line class="trend" x1="${X(a)}" y1="${Y(fit.intercept + fit.slope * a)}" x2="${X(b)}" y2="${Y(fit.intercept + fit.slope * b)}"/>`;
   }
-  // Age labels beside the dots, newest placed first so they get the best spot. A label that would overlap
-  // another label, a dot or the edge is tried on each side and skipped if it fits nowhere; the tap tip still shows it.
+  // Labels beside the dots: the tagged runs (First / Best / Now) first, then the rest newest first, each with
+  // the age when a birth date is set. A label that would overlap another label, a dot or the edge is tried
+  // on each side and skipped if it fits nowhere; the tap tip still shows it.
   const boxes = pts.map((q) => ({ x1: X(q.weightKg) - 6, x2: X(q.weightKg) + 6, y1: Y(q.paceSec) - 6, y2: Y(q.paceSec) + 6 }));
   const hit = (a) => a.x1 < m.l || a.x2 > W - m.r || a.y1 < m.t || a.y2 > H - m.b || boxes.some((b) => a.x1 < b.x2 && b.x1 < a.x2 && a.y1 < b.y2 && b.y1 < a.y2);
-  const labels = p.born ? [...pts].reverse().map((q) => {
-    const t = ageText(ageOn(p.born, q.date));
+  const order = [...tags.keys()].reverse().concat(pts.map((_, i) => i).reverse().filter((i) => !tags.has(i)));
+  const labels = order.map((i) => {
+    const q = pts[i], age = p.born ? ageText(ageOn(p.born, q.date)) : "", tag = tags.get(i);
+    const t = tag ? (age ? `${tag} · ${age}` : tag) : age;
     if (!t) return "";
     const cx = X(q.weightKg), cy = Y(q.paceSec), w = t.length * 6.4, h = 13;
     for (const [x, y, anchor] of [[cx + 9, cy + 4, "start"], [cx - 9, cy + 4, "end"], [cx, cy - 10, "middle"], [cx, cy + 18, "middle"]]) {
       const x1 = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2, box = { x1, x2: x1 + w, y1: y - h + 3, y2: y + 3 };
       if (hit(box)) continue;
       boxes.push(box);
-      return `<text class="age" x="${x}" y="${y}" text-anchor="${anchor}">${t}</text>`;
+      return `<text class="age${tag ? " tagged" : ""}" x="${x}" y="${y}" text-anchor="${anchor}">${esc(t)}</text>`;
     }
     return "";
-  }).join("") : "";
+  }).join("");
+  const rings = [...tags.keys()].map((i) => `<circle class="keyring" cx="${X(pts[i].weightKg)}" cy="${Y(pts[i].paceSec)}" r="9"/>`).join("");
   // Oldest first, so the newest runs sit on top.
   const d0 = dayNum(pts[0].date), span = dayNum(pts[pts.length - 1].date) - d0;
   const dots = pts.map((q) => {
@@ -165,7 +202,7 @@ function scatter(host, p, pts, fit) {
     return `<circle class="${q.gapDays ? "dot near" : "dot"}" style="${q.gapDays ? "stroke" : "fill"}:${c}" cx="${X(q.weightKg)}" cy="${Y(q.paceSec)}" r="5"/>`;
   }).join("");
   host.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(p.name)}'s pace against body weight, ${plural(pts.length, "run")}.">
-    ${g}${line}${labels}${dots}
+    ${g}${line}${labels}${rings}${dots}
     <text x="${m.l}" y="14">Pace per km · faster ↑</text>
     <text x="${(m.l + W - m.r) / 2}" y="${H - 6}" text-anchor="middle">Body weight, kg</text>
     <circle class="ring" r="9" visibility="hidden"/>
