@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://faiz-muna-journal-c43ab.web.app/sitemap.xml
