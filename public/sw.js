@@ -1,6 +1,6 @@
 // Keeps the app opening without a connection. Journal data is cached by Firestore, not here.
-const CACHE = "journal-v13";
-const SHELL = ["/", "/app.js", "/suggest.js", "/activities.js", "/fitness.js", "/runweight.js", "/fitdetail.js", "/coros.js", "/backup.js", "/styles.css", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/robots.txt", "/sitemap.xml"];
+const CACHE = "journal-v14";
+const SHELL = ["/", "/app.js", "/suggest.js", "/activities.js", "/fitness.js", "/runweight.js", "/fitdetail.js", "/coros.js", "/backup.js", "/styles.css", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/robots.txt", "/sitemap.xml", "/google6e6a8a8f21a7fbb1.html"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
