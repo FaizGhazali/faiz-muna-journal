@@ -7,6 +7,7 @@ import {
 import { fitnessSeries, perBeat, paceOf, clock, toSecs } from "./fitness.js";
 import { readCoros, parseCoros } from "./coros.js";
 import { initActivities, startActivities, stopActivities, refresh as refreshActivities, refreshMove } from "./activities.js";
+import { initBackup } from "./backup.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const PACE = 0.5; // kg a week
@@ -362,6 +363,7 @@ $("feed").addEventListener("click", async (ev) => {
 
 const exercisedToday = (pid) => entries.some((e) => e.person === pid && e.date === today() && (e.minutes > 0 || e.run));
 initActivities({ db, people: () => PEOPLE, commit, exercisedToday });
+initBackup({ db });
 
 let lastWidth = 0;
 new ResizeObserver(() => { const w = $("people").clientWidth; if (w !== lastWidth) { lastWidth = w; drawCharts(); } }).observe($("people"));

@@ -119,6 +119,23 @@ try { const t = localStorage.getItem("journal-theme"); if (t === "light" || t ==
       <div class="feed" id="feed"></div>
     </div>
   </div>
+  <section class="panel data" aria-labelledby="dataTitle">
+    <h2 id="dataTitle">Backup</h2>
+    <p class="note">Save everything to a file on this phone, or load a backup file back in.</p>
+    <div class="actions">
+      <button type="button" id="exportBtn">Save backup</button>
+      <button type="button" id="importBtn">Load backup</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+    <div id="importAsk" hidden>
+      <p id="importText"></p>
+      <div class="actions">
+        <button type="button" class="primary" id="importYes">Load it</button>
+        <button type="button" id="importNo">Cancel</button>
+      </div>
+    </div>
+    <p class="note" id="dataMsg" role="status"></p>
+  </section>
   <footer id="foot"></footer>
   </div>
   <div class="view" id="activities" hidden>
