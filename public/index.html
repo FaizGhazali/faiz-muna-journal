@@ -17,7 +17,7 @@
 {"@context":"https://schema.org","@graph":[
  {"@type":"WebApplication","name":"Faiz & Muna's Journal","alternateName":"Our Journal","url":"https://faiz-muna-journal-c43ab.web.app/","applicationCategory":"HealthApplication","operatingSystem":"Any (web browser, installable PWA)","inLanguage":"en","dateModified":"2026-11-19",
   "description":"A private weight, BMI and running journal for two people, with run reading from a COROS watch picture, a fitness score, activity suggestions and a daily habit checklist.",
-  "featureList":["Weight and BMI tracking with WHO ranges","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file","Try-it demo with sample data","Daily mood rating with a quote, year in pixels and what goes with good days","Visitor count by country, guessed from time zone","Meals journal with your own food list, one-tap meal sets and learned portions","Daily calories against a range from BMI and calorie burn","Journal switcher wheel"]},
+  "featureList":["Weight and BMI tracking with WHO ranges","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file","Try-it demo with sample data","Daily mood rating with a quote, year in pixels and what goes with good days","Visitor count by country, guessed from time zone","Meals journal with your own food list, one-tap meal sets and learned portions","Daily calories against a range from BMI and calorie burn","Journal switcher wheel","Getting started guide"]},
  {"@type":"FAQPage","mainEntity":[
   {"@type":"Question","name":"What is Our Journal?","acceptedAnswer":{"@type":"Answer","text":"A private web app for two people to track weight, BMI, running and daily habits together. It runs in the browser and can be installed on a phone like an app."}},
   {"@type":"Question","name":"How does it read my run from a picture?","acceptedAnswer":{"@type":"Answer","text":"You choose the screenshot of your COROS run. Text recognition runs on your own phone to pick out distance, time, pace and heart rate. The picture is never uploaded or saved, and you check the numbers before saving."}},
@@ -234,6 +234,7 @@ try {
   <section class="info" aria-labelledby="l-new">
     <h2 id="l-new">What's new</h2>
     <ol class="changes">
+      <li><time datetime="2026-11-19">19 Nov 2026</time> A ⋯ button on the round journal menu opens extras: a Getting started guide, meal sets and backup. A small tip points it out the first few times, then gets out of your way.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Zoom into the weight, fitness and running graphs: pinch on a phone, or Ctrl + scroll on a computer, to see a few weeks up close with a finer scale (down to 0.1 kg). Drag along the dates, double-tap or "Reset zoom" to see it all.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Fold any card: hold its top to tuck it away, hold or tap it to open again. The app also opens on the journal and page you used last.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Meals journal: your own food list, meal sets you log with one tap, portions it learns, and calories against a range for your BMI, by 14 days or a whole year in colour. Tap the round button to switch journals.</li>
@@ -359,6 +360,21 @@ try {
       <div class="actions"><button type="button" id="soonBack">Back to my journal</button></div>
     </section>
   </div>
+  <div class="view" id="guide" hidden>
+    <div class="fdtop"><button type="button" id="guideBack">← Back</button></div>
+    <section class="panel guide" aria-labelledby="guideTitle">
+      <h2 id="guideTitle">Getting started</h2>
+      <p class="note">The basics, one line each.</p>
+      <ol class="gsteps">
+        <li style="--i:0"><span aria-hidden="true">🍽️</span><div><b>Log a meal</b>Pick the meal, add foods or a meal set, save.</div></li>
+        <li style="--i:1"><span aria-hidden="true">⚖️</span><div><b>Weigh in</b>Open Weight on the round button and add today's weight.</div></li>
+        <li style="--i:2"><span aria-hidden="true">🏃</span><div><b>Add a run</b>Add a picture of your COROS run and check the numbers.</div></li>
+        <li style="--i:3"><span aria-hidden="true">🙂</span><div><b>Rate your day</b>Tap a face on the Yesterday card.</div></li>
+        <li style="--i:4"><span aria-hidden="true">✋</span><div><b>Fold a card</b>Hold the knob on a card's top edge to tuck it away.</div></li>
+        <li style="--i:5"><span aria-hidden="true">🔍</span><div><b>Zoom a graph</b>Pinch with two fingers. Double-tap to see it all.</div></li>
+      </ol>
+    </section>
+  </div>
   <div class="view" id="home">
   <div class="lower">
     <div class="panel" id="formPanel">
@@ -480,6 +496,22 @@ try {
   <div class="wheel" id="wheel" hidden>
     <div class="wring" id="wheelRing" role="group" aria-label="Journals"></div>
     <div class="whub" id="wheelHub" aria-live="polite">Pick a journal</div>
+    <button type="button" class="wmore" id="wheelMore" aria-label="More options" aria-expanded="false" aria-controls="wheelMenu"><span aria-hidden="true">⋯</span></button>
+    <div class="wmenu" id="wheelMenu" role="menu" aria-label="More options" hidden>
+      <button type="button" role="menuitem" data-go="guide"><span aria-hidden="true">📘</span>Getting started</button>
+      <button type="button" role="menuitem" data-go="mealsets"><span aria-hidden="true">🥗</span>Meal sets and foods</button>
+      <button type="button" role="menuitem" data-go="backup"><span aria-hidden="true">💾</span>Backup</button>
+      <button type="button" role="menuitem" data-go="tips"><span aria-hidden="true">💡</span>Show tips again</button>
+    </div>
+    <div class="wtip" id="wheelTip" role="note" hidden>
+      <div class="wtipin">
+        <p>More lives here: Getting started, meal sets and backup.</p>
+        <div class="wtipfoot">
+          <label><input type="checkbox" id="tipNever"> Don't show again</label>
+          <button type="button" id="tipOk">Got it</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 <script type="module" src="/app.js"></script>

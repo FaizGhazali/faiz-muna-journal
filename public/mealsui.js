@@ -475,6 +475,8 @@ const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (_) { return d; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} },
 };
+// How many times the "More lives here" tip shows before it stops by itself (journal-tip-more: count, or "off").
+const TIP_VIEWS = 5, TIP_KEY = "journal-tip-more";
 // The view the Dashboard tab opens: the last journal picked on this phone, Meals at first.
 export function journalView() { return store.get("journal-type", "meals") === "weight" ? "home" : "meals"; }
 
@@ -504,15 +506,26 @@ export function initWheel() {
     slots.forEach((x) => x.classList.toggle("hot", x === s));
     hub.textContent = s ? JOURNALS.find((j) => j.id === s.dataset.j).name : "Pick a journal";
   };
+  // The ⋯ button in the top corner opens a short menu of extras. A cloud tip points at it until it has
+  // been seen TIP_VIEWS times, "Don't show again" is ticked, or ⋯ is used. Nobody has to tick anything.
+  const more = $("wheelMore"), menu = $("wheelMenu"), tip = $("wheelTip");
+  const tipSeen = () => { const v = store.get(TIP_KEY, "0"); return v === "off" ? Infinity : Number(v) || 0; };
+  const setMenu = (on) => { menu.hidden = !on; more.setAttribute("aria-expanded", String(on)); };
+  const showTip = () => { $("tipNever").checked = false; tip.hidden = false; wheel.classList.add("hint"); };
+  const hideTip = () => { wheel.classList.remove("hint"); tip.hidden = true; };
+  const tipDone = () => { store.set(TIP_KEY, "off"); hideTip(); };
   function show() {
     if (open) return;
     open = true; openedAt = performance.now(); place(); setHot(null);
+    setMenu(false); hideTip();
+    if (tipSeen() < TIP_VIEWS) { store.set(TIP_KEY, String(tipSeen() + 1)); showTip(); }
     wheel.hidden = false;
     requestAnimationFrame(() => requestAnimationFrame(() => wheel.classList.add("open")));
   }
   function hide() {
     if (!open) return;
     open = false; dragging = false;
+    setMenu(false);
     wheel.classList.remove("open");
     setTimeout(() => { if (!open) wheel.hidden = true; }, 220);
     fab.focus({ preventScroll: true });
@@ -558,7 +571,21 @@ export function initWheel() {
   fab.addEventListener("contextmenu", (ev) => ev.preventDefault()); // long press on Android
   fab.addEventListener("click", (ev) => { if (ev.detail === 0) { show(); slots[0].focus(); } }); // keyboard
   ring.addEventListener("click", (ev) => { const s = ev.target.closest(".wslot"); if (s && !(ev.detail && ghost())) choose(s.dataset.j); });
-  wheel.addEventListener("click", (ev) => { if ((ev.target === wheel || ev.target === hub) && !(ev.detail && ghost())) hide(); });
+  wheel.addEventListener("click", (ev) => {
+    if ((ev.target === wheel || ev.target === hub) && !(ev.detail && ghost())) { if (!menu.hidden) setMenu(false); else hide(); }
+  });
+  more.addEventListener("click", () => { tipDone(); setMenu(menu.hidden); });
+  $("tipOk").addEventListener("click", () => { if ($("tipNever").checked) tipDone(); else hideTip(); });
+  menu.addEventListener("click", (ev) => {
+    const go = ev.target.closest("[data-go]")?.dataset.go;
+    if (!go) return;
+    if (go === "tips") { store.set(TIP_KEY, "0"); setMenu(false); showTip(); return; }
+    hide();
+    if (go === "backup") { document.querySelector("#app .data")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    location.hash = `#${go}`;
+    scrollTo({ top: 0 });
+  });
+  $("guideBack").addEventListener("click", () => { location.hash = ""; scrollTo({ top: 0 }); });
   addEventListener("keydown", (ev) => { if (open && ev.key === "Escape") hide(); });
   addEventListener("hashchange", paintFab);
   $("soonBack").addEventListener("click", () => choose(store.get("journal-type", "meals")));
