@@ -18,3 +18,4 @@ export const query = (...a) => impl.query(...a);
 export const where = (...a) => impl.where(...a);
 export const arrayUnion = (...a) => impl.arrayUnion(...a);
 export const arrayRemove = (...a) => impl.arrayRemove(...a);
+export const increment = (...a) => impl.increment(...a);

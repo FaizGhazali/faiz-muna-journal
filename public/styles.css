@@ -351,6 +351,13 @@ body:has(#loading:not([hidden])) #landing, body:has(#setup:not([hidden])) #landi
 /* What's new, questions, back to sign-in. */
 .info { display: grid; gap: 12px; max-width: 70ch; padding-block: 32px; border-top: 1px solid var(--line) }
 .changes { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px }
+.vis-big { margin: 0; font-size: 18px }
+.vis-big b { font-family: "Bricolage Grotesque", sans-serif; font-size: 28px }
+.vis-list { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 8px }
+.vis-list li { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface) }
+.vis-list li b { margin-left: auto }
+.vis-list li.you { border-color: var(--accent) }
+.vis-list li.more { color: var(--muted); border-style: dashed }
 .changes time { display: block; color: var(--muted); font-size: 13px; font-weight: 700 }
 details { border-bottom: 1px solid var(--line); padding: 10px 0 }
 summary { cursor: pointer; font-weight: 700 }

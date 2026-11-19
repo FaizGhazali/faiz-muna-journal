@@ -2,7 +2,7 @@
 // Data lives in this tab's sessionStorage: it survives a reload and is gone when the tab closes.
 // Nothing here ever talks to the network, so demo visitors cost the real database nothing.
 const KEY = "journal-demo-db";
-const UNION = Symbol("union"), REMOVE = Symbol("remove");
+const UNION = Symbol("union"), REMOVE = Symbol("remove"), ADD = Symbol("add");
 const OPS = { "==": (a, b) => a === b, ">=": (a, b) => a >= b, "<=": (a, b) => a <= b, ">": (a, b) => a > b, "<": (a, b) => a < b };
 
 let data = {}; // { collection: { docId: fields } }
@@ -31,7 +31,7 @@ function touch(col) {
 
 const autoId = () => Date.now().toString(36) + (n++).toString(36) + Math.random().toString(36).slice(2, 8);
 const clone = (v) => structuredClone(v);
-const isSentinel = (v) => v && typeof v === "object" && (UNION in v || REMOVE in v);
+const isSentinel = (v) => v && typeof v === "object" && (UNION in v || REMOVE in v || ADD in v);
 
 export const collection = (_db, name) => ({ kind: "col", name });
 export function doc(parent, a, b) {
@@ -42,6 +42,7 @@ export const where = (field, op, value) => ({ field, op, value });
 export const query = (col, ...wheres) => ({ ...col, wheres });
 export const arrayUnion = (...v) => ({ [UNION]: v });
 export const arrayRemove = (...v) => ({ [REMOVE]: v });
+export const increment = (by) => ({ [ADD]: by });
 
 function docSnap(ref) {
   const d = data[ref.col]?.[ref.id];
@@ -63,7 +64,8 @@ export function onSnapshot(target, next) {
 function write(ref, body, merge) {
   const col = (data[ref.col] ||= {}), old = (merge && col[ref.id]) || {}, out = merge ? { ...old } : {};
   for (const [k, v] of Object.entries(body)) {
-    if (isSentinel(v)) {
+    if (isSentinel(v) && ADD in v) out[k] = (typeof old[k] === "number" ? old[k] : 0) + v[ADD];
+    else if (isSentinel(v)) {
       const have = Array.isArray(old[k]) ? old[k] : [];
       out[k] = UNION in v ? [...have, ...v[UNION].filter((x) => !have.includes(x))] : have.filter((x) => !v[REMOVE].includes(x));
     } else out[k] = clone(v);
