@@ -110,6 +110,10 @@ function renderPage() {
   const pid = me(), p = people().find((x) => x.id === pid), map = moodMap(entries(), pid), t = today();
   if (!pickDay) pickDay = year && year < parse(t).getFullYear() ? `${year}-12-31` : addDays(t, -1);
   if (!year) year = parse(pickDay).getFullYear();
+  // While the Mood mix is open, Year in pixels shows its year and lights up only the days it counts.
+  const mix = mixOpen ? moodMix(map, view, anchor || t, t) : null;
+  if (mix) year = parse(anchor || t).getFullYear();
+  const inMix = (d) => (mix && d >= mix.from && d <= mix.to ? " inmix" : "");
   $("mdTitle").textContent = `${p.name}'s mood`;
 
   // How you've been: this week, month and year.
@@ -132,11 +136,11 @@ function renderPage() {
   $("mdPix").innerHTML = `<div class="fdhead"><h3 class="fdtitle">Year in pixels</h3>
       <div class="myear"><button type="button" class="mini" data-year="${year - 1}"${year > first ? "" : " disabled"} aria-label="Previous year">‹</button><b>${year}</b><button type="button" class="mini" data-year="${year + 1}"${year < last ? "" : " disabled"} aria-label="Next year">›</button></div></div>
     <p class="note">${rated ? `${rated} day${rated > 1 ? "s" : ""} rated. ` : ""}Tap a day to see the mood mix for its month, and again for its week.</p>
-    <div class="pixels" role="grid" aria-label="Mood for each day of ${year}">
+    <div class="pixels${mix ? " mixing" : ""}" role="grid" aria-label="Mood for each day of ${year}">
       <span class="pxmon"></span>${Array.from({ length: 31 }, (_, i) => `<span class="pxday">${[1, 10, 20, 30].includes(i + 1) ? i + 1 : ""}</span>`).join("")}
       ${grid.map((days, m) => `<span class="pxmon">${esc(MONTHS[m])}</span>${days.map((c) => c.future
-        ? `<i class="px future"></i>`
-        : `<button type="button" class="px${c.date === pickDay ? " on" : ""}" data-pick="${c.date}" style="${c.mood ? `background:var(--m${c.mood})` : ""}" aria-label="${esc(fmt(c.date, { day: "numeric", month: "long" }))}: ${c.mood ? MOODS[c.mood].word : "not rated"}"></button>`).join("")}`).join("")}
+        ? `<i class="px future${inMix(c.date)}"></i>`
+        : `<button type="button" class="px${c.date === pickDay ? " on" : ""}${inMix(c.date)}" data-pick="${c.date}" style="${c.mood ? `background:var(--m${c.mood})` : ""}" aria-label="${esc(fmt(c.date, { day: "numeric", month: "long" }))}: ${c.mood ? MOODS[c.mood].word : "not rated"}"></button>`).join("")}`).join("")}
     </div>
     <div class="mlegend">${[5, 4, 3, 2, 1].map((v) => `<span><i style="background:var(--m${v})"></i>${MOODS[v].word}</span>`).join("")}<span><i class="none"></i>Not rated</span></div>
 `;
