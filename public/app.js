@@ -15,6 +15,7 @@ import { initFitDetail, refreshFitDetail } from "./fitdetail.js";
 import { initMood, refreshMood } from "./moodui.js";
 import { MOODS, isMood } from "./mood.js";
 import { initMeals, startMeals, stopMeals, refreshMeals, refreshCalories, initWheel } from "./mealsui.js";
+import { initCollapse } from "./collapse.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const PACE = 0.5; // kg a week
@@ -398,6 +399,7 @@ initActivities({ db, people: () => PEOPLE, commit, exercisedToday, onChange: () 
 initBackup({ db });
 initMeals({ db, people: () => PEOPLE, me: currentPerson, entries: () => entries, commit });
 initWheel();
+initCollapse();
 initMood({ db, people: () => PEOPLE, entries: () => entries, me: currentPerson, habitFacts, commit });
 initFitDetail({
   people: () => PEOPLE, entries: () => entries,

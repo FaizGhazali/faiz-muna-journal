@@ -35,6 +35,9 @@ export function initActivities(opts) {
   daysCol = collection(db, "habitDays");
   movesCol = collection(db, "moves");
   wire();
+  // Open where you left off: the last page on this phone (the journal itself is kept by the wheel, "journal-type").
+  const last = store.get("journal-page", "");
+  if (!location.hash && RESUME.test(last)) history.replaceState(null, "", last);
   window.addEventListener("hashchange", showView);
   // A new day: habits start fresh and the suggestion is chosen again.
   const tick = () => { if (today() !== lastDay) { lastDay = today(); refresh(); } };
@@ -83,8 +86,10 @@ export function habitFacts(pid) {
   return out;
 }
 
+const RESUME = /^#(activities|mood|mealsets|fitness\/[\w-]+)$/;
 function showView() {
   const h = location.hash;
+  store.set("journal-page", RESUME.test(h) ? h : "");
   // The Dashboard tab shows the journal picked on the wheel (journalView in mealsui.js).
   const view = h === "#activities" ? "activities" : h.startsWith("#fitness") ? "fitness" : h === "#mood" ? "mood" : h === "#soon" ? "soon"
     : h === "#meals" ? "meals" : h === "#mealsets" ? "mealsets" : journalView();

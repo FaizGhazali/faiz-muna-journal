@@ -217,21 +217,24 @@ try {
     <div class="copy">
       <p class="eyebrow">Built for phones</p>
       <h2 id="l-app">Installs like an app, works offline, stays private</h2>
-      <p>Add it to your home screen and it opens like any other app. Entries save even without a connection and sync when you're back online. Only the two of you can sign in, and you can save a full backup file any time.</p>
+      <p>Add it to your home screen and it opens like any other app. Entries save even without a connection and sync when you're back online. Only the two of you can sign in, and you can save a full backup file any time. Hold the round button on any card to fold it away, and the app opens on the journal and page you used last.</p>
     </div>
     <div class="demo tiles" aria-hidden="true">
-      <div class="tile" data-at="0.15"><b>📱</b><span>Install on any phone</span></div>
-      <div class="tile" data-at="0.3"><b>📶</b><span>Works offline</span></div>
-      <div class="tile" data-at="0.45"><b>🔒</b><span>Private to two people</span></div>
-      <div class="tile" data-at="0.6"><b>💾</b><span>Backup to a file</span></div>
-      <div class="tile" data-at="0.75"><b>🌙</b><span>Day and night mode</span></div>
-      <div class="tile" data-at="0.9"><b>🚫</b><span>No ads, no reminders</span></div>
+      <div class="tile" data-at="0.10"><b>📱</b><span>Install on any phone</span></div>
+      <div class="tile" data-at="0.21"><b>📶</b><span>Works offline</span></div>
+      <div class="tile" data-at="0.32"><b>🔒</b><span>Private to two people</span></div>
+      <div class="tile" data-at="0.43"><b>💾</b><span>Backup to a file</span></div>
+      <div class="tile" data-at="0.54"><b>🌙</b><span>Day and night mode</span></div>
+      <div class="tile" data-at="0.65"><b>🚫</b><span>No ads, no reminders</span></div>
+      <div class="tile" data-at="0.76"><b>🗂️</b><span>Fold the cards you don't need</span></div>
+      <div class="tile" data-at="0.87"><b>↩️</b><span>Opens where you left off</span></div>
     </div>
   </section>
 
   <section class="info" aria-labelledby="l-new">
     <h2 id="l-new">What's new</h2>
     <ol class="changes">
+      <li><time datetime="2026-11-19">19 Nov 2026</time> Fold any card: hold its round button to tuck it away, tap it to open again. The app also opens on the journal and page you used last.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Meals journal: your own food list, meal sets you log with one tap, portions it learns, and calories against a range for your BMI, by 14 days or a whole year in colour. Tap the round button to switch journals.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Visitor count on this page: how many people have dropped by, and from which countries.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Mood mix: tap a day in the year in pixels to count your hard to great days that month, tap again for that week.</li>
@@ -314,6 +317,22 @@ try {
     </nav>
     <div class="lbl me" id="meBox"><span>For</span><div class="seg" id="me"></div></div>
   </div>
+  <aside class="foldhint" id="foldHint" aria-labelledby="foldHintTitle" hidden>
+    <div class="fhdemo" aria-hidden="true">
+      <div class="fhcard">
+        <i class="fhbtn"><svg viewBox="0 0 36 36"><circle class="ftrack" cx="18" cy="18" r="16"/><circle class="fring" cx="18" cy="18" r="16" pathLength="100"/><path class="fchev" d="M12 15.5l6 6 6-6"/></svg></i>
+        <b></b><span></span><span></span><span class="s"></span>
+      </div>
+      <i class="fhfinger"></i>
+    </div>
+    <div class="fhtext">
+      <p class="fhtag">Quick tip</p>
+      <h2 id="foldHintTitle">Tidy up your screen</h2>
+      <p>Press and <b>hold</b> the round <span class="fhicon" aria-hidden="true"><svg viewBox="0 0 36 36"><path class="fchev" d="M12 15.5l6 6 6-6"/></svg></span> button at the top right of any card until its ring fills. The card folds away.</p>
+      <p>Tap a folded card to open it again. Your phone remembers which ones you folded.</p>
+      <label class="fhgot"><input type="checkbox" id="foldGot"><span class="fhbox" aria-hidden="true"></span>Got it, don't show this again</label>
+    </div>
+  </aside>
   <div class="view" id="shared">
     <section class="move" aria-label="Your next move">
       <div class="panel next" id="next"></div>
