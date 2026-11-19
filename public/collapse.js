@@ -1,4 +1,5 @@
-// Fold any card: hold the round knob on its top edge until the ring fills; tap a folded card to open it.
+// Fold any card: hold the round knob on its top edge until the ring fills (on a phone or tablet, hold anywhere on the
+// card's top row); hold or tap a folded card to open it.
 // Which cards are folded is kept per device in localStorage "journal-folded". A tutorial card explains it
 // until the person ticks "Got it" ("journal-foldhint").
 // Cards are often redrawn with innerHTML, so a MutationObserver puts the button and the folded state back.
@@ -82,41 +83,65 @@ export function initCollapse() {
   new MutationObserver(scan).observe(app, { childList: true, subtree: true });
   scan();
 
-  // Hold to fold. A short tap only reminds you to hold, so a card never folds by accident while scrolling.
-  let timer = 0, held = null, sx = 0, sy = 0;
-  const stop = () => { clearTimeout(timer); held?.classList.remove("holding"); held = null; };
+  // Hold to fold, hold to open. On a phone or tablet the whole top of a card (its title row) can be held, not just the
+  // knob; with a mouse only the knob. A short tap on the knob only reminds you to hold, and moving the finger (scrolling)
+  // cancels, so a card never folds by accident.
+  let timer = 0, card = null, sx = 0, sy = 0, swallowUntil = 0;
+  const stop = () => { clearTimeout(timer); card?.classList.remove("pressing"); card?.querySelector(":scope > .fold")?.classList.remove("holding"); card = null; };
+  const ACTIVE = "button:not(.fold), a, input, select, textarea, label, summary, [contenteditable], .chart, canvas";
+  // How far down a card counts as its top: the first row of content, at least 56px, at most 120px.
+  function inTop(c, y) {
+    if (c.classList.contains("folded")) return true;
+    const top = c.getBoundingClientRect().top;
+    const first = [...c.children].find((x) => !x.classList.contains("fold") && x.offsetHeight);
+    const edge = first ? first.getBoundingClientRect().bottom - top + 10 : 56;
+    return y - top <= Math.min(120, Math.max(56, edge));
+  }
   app.addEventListener("pointerdown", (ev) => {
-    const b = ev.target.closest(".fold");
-    if (!b || ev.button > 0) return;
-    const card = b.parentElement;
-    if (card.classList.contains("folded")) return; // a tap opens it (click below)
-    held = b; sx = ev.clientX; sy = ev.clientY;
-    b.classList.add("holding");
+    if (ev.button > 0) return;
+    const knob = ev.target.closest(".fold");
+    const touch = ev.pointerType === "touch" || ev.pointerType === "pen";
+    let c = knob?.parentElement;
+    if (!c && touch) {
+      c = ev.target.closest(".foldable");
+      if (!c || (!c.classList.contains("folded") && ev.target.closest(ACTIVE)) || !inTop(c, ev.clientY)) c = null;
+    }
+    if (!c) return;
+    // A folded card already opens with a tap; with the mouse there is nothing to hold.
+    if (c.classList.contains("folded") && !touch) return;
+    stop();
+    card = c; sx = ev.clientX; sy = ev.clientY;
+    c.classList.add("pressing");
+    c.querySelector(":scope > .fold")?.classList.add("holding");
     timer = setTimeout(() => {
-      const c = held?.parentElement;
+      const target = card;
       stop();
-      if (!c) return;
+      if (!target?.isConnected) return;
       navigator.vibrate?.(12);
-      setFold(c, true);
-      b.dataset.done = Date.now();
+      swallowUntil = Date.now() + 600; // the click that follows lifting the finger does nothing
+      setFold(target, !target.classList.contains("folded"));
     }, HOLD_MS);
   });
-  addEventListener("pointermove", (ev) => { if (held && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 14) stop(); });
-  addEventListener("pointerup", () => {
-    if (!held) return;
-    const b = held; stop();
-    b.classList.remove("nudge"); void b.offsetWidth; b.classList.add("nudge"); // "Hold me" bubble
-    clearTimeout(b._nt); b._nt = setTimeout(() => b.classList.remove("nudge"), 1600);
+  addEventListener("pointermove", (ev) => { if (card && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 12) stop(); });
+  addEventListener("pointerup", (ev) => {
+    if (!card) return;
+    const c = card, knob = ev.target.closest?.(".fold");
+    stop();
+    if (!knob || c.classList.contains("folded")) return;
+    knob.classList.remove("nudge"); void knob.offsetWidth; knob.classList.add("nudge"); // "Hold me" bubble
+    clearTimeout(knob._nt); knob._nt = setTimeout(() => knob.classList.remove("nudge"), 1600);
   });
   addEventListener("pointercancel", stop);
-  app.addEventListener("contextmenu", (ev) => { if (ev.target.closest(".fold")) ev.preventDefault(); });
+  addEventListener("scroll", () => { if (card) stop(); }, { passive: true });
+  // No text selection or long-press menu while holding a card's top.
+  app.addEventListener("contextmenu", (ev) => { if (ev.target.closest(".fold, .pressing, .folded")) ev.preventDefault(); });
 
-  // A folded card opens with a tap anywhere on it; nothing inside it is pressed by that tap.
+  // A folded card also opens with a tap anywhere on it; nothing inside it is pressed by that tap.
   app.addEventListener("click", (ev) => {
+    if (Date.now() < swallowUntil && ev.target.closest(".foldable")) { ev.preventDefault(); ev.stopPropagation(); swallowUntil = 0; return; }
     const b = ev.target.closest(".fold");
-    if (b && Date.now() - (b.dataset.done || 0) < 500) { ev.preventDefault(); ev.stopPropagation(); return; }
-    const card = ev.target.closest(".folded");
-    if (card) { ev.preventDefault(); ev.stopPropagation(); setFold(card, false); return; }
+    const folded = ev.target.closest(".folded");
+    if (folded) { ev.preventDefault(); ev.stopPropagation(); setFold(folded, false); return; }
     if (b && ev.detail === 0) setFold(b.parentElement, true); // keyboard: Enter / Space folds at once
   }, true);
 
