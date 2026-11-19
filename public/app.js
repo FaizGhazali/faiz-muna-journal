@@ -17,6 +17,7 @@ import { MOODS, isMood } from "./mood.js";
 import { initMeals, startMeals, stopMeals, refreshMeals, refreshCalories, initWheel } from "./mealsui.js";
 import { initCollapse } from "./collapse.js";
 import { initZoom, zoomable, xWindow, isZoomed } from "./zoom.js";
+import { initGuides } from "./tour.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const PACE = 0.5; // kg a week
@@ -437,6 +438,7 @@ initMeals({ db, people: () => PEOPLE, me: currentPerson, entries: () => entries,
 initWheel();
 initCollapse();
 initZoom();
+initGuides();
 initMood({ db, people: () => PEOPLE, entries: () => entries, me: currentPerson, habitFacts, commit });
 initFitDetail({
   people: () => PEOPLE, entries: () => entries,

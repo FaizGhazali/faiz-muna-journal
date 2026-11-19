@@ -17,7 +17,7 @@
 {"@context":"https://schema.org","@graph":[
  {"@type":"WebApplication","name":"Faiz & Muna's Journal","alternateName":"Our Journal","url":"https://faiz-muna-journal-c43ab.web.app/","applicationCategory":"HealthApplication","operatingSystem":"Any (web browser, installable PWA)","inLanguage":"en","dateModified":"2026-11-19",
   "description":"A private weight, BMI and running journal for two people, with run reading from a COROS watch picture, a fitness score, activity suggestions and a daily habit checklist.",
-  "featureList":["Weight and BMI tracking with WHO ranges","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file","Try-it demo with sample data","Daily mood rating with a quote, year in pixels and what goes with good days","Visitor count by country, guessed from time zone","Meals journal with your own food list, one-tap meal sets and learned portions","Daily calories against a range from BMI and calorie burn","Journal switcher wheel","Getting started guide"]},
+  "featureList":["Weight and BMI tracking with WHO ranges","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file","Try-it demo with sample data","Daily mood rating with a quote, year in pixels and what goes with good days","Visitor count by country, guessed from time zone","Meals journal with your own food list, one-tap meal sets and learned portions","Daily calories against a range from BMI and calorie burn","Journal switcher wheel","Show me how: searchable how-tos with step-by-step walkthroughs that light up what to tap"]},
  {"@type":"FAQPage","mainEntity":[
   {"@type":"Question","name":"What is Our Journal?","acceptedAnswer":{"@type":"Answer","text":"A private web app for two people to track weight, BMI, running and daily habits together. It runs in the browser and can be installed on a phone like an app."}},
   {"@type":"Question","name":"How does it read my run from a picture?","acceptedAnswer":{"@type":"Answer","text":"You choose the screenshot of your COROS run. Text recognition runs on your own phone to pick out distance, time, pace and heart rate. The picture is never uploaded or saved, and you check the numbers before saving."}},
@@ -213,6 +213,22 @@ try {
     </div>
   </section>
 
+  <section class="scene" aria-labelledby="l-how">
+    <div class="copy">
+      <p class="eyebrow">Show me how</p>
+      <h2 id="l-how">The app shows you where to tap</h2>
+      <p>Search the how-tos, pick one, and tap Start walkthrough. The screen dims, the one button you need lights up, and a dotted arrow points at it. When you need to scroll, it waits until the right card comes up, then walks you through each box on it. At the end, look around on your own or pick another how-to. You can stop any time.</p>
+      <ul><li>Search, like "weight" or "meal"</li><li>Lights up one thing at a time</li><li>Dotted arrows to each box</li><li>Stop whenever you like</li></ul>
+    </div>
+    <div class="demo tiles" aria-hidden="true">
+      <div class="tile" data-at="0.12"><b>🔍</b><span>Search "weight"</span></div>
+      <div class="tile" data-at="0.30"><b>🔦</b><span>The round button lights up</span></div>
+      <div class="tile" data-at="0.48"><b>⚖️</b><span>Tap Weight, scroll to the card</span></div>
+      <div class="tile" data-at="0.66"><b>➰</b><span>Arrows to who, day and kg</span></div>
+      <div class="tile" data-at="0.84"><b>🎉</b><span>Saved. Look around or learn more</span></div>
+    </div>
+  </section>
+
   <section class="scene" aria-labelledby="l-app">
     <div class="copy">
       <p class="eyebrow">Built for phones</p>
@@ -234,7 +250,8 @@ try {
   <section class="info" aria-labelledby="l-new">
     <h2 id="l-new">What's new</h2>
     <ol class="changes">
-      <li><time datetime="2026-11-19">19 Nov 2026</time> A ⋯ button on the round journal menu opens extras: a Getting started guide, meal sets and backup. A small tip points it out the first few times, then gets out of your way.</li>
+      <li><time datetime="2026-11-19">19 Nov 2026</time> Show me how: search the how-tos and let the app walk you through logging your weight, lighting up each thing to tap.</li>
+      <li><time datetime="2026-11-19">19 Nov 2026</time> A ⋯ button on the round journal menu opens extras: Show me how, meal sets and backup. A small tip points it out the first few times, then gets out of your way.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Zoom into the weight, fitness and running graphs: pinch on a phone, or Ctrl + scroll on a computer, to see a few weeks up close with a finer scale (down to 0.1 kg). Drag along the dates, double-tap or "Reset zoom" to see it all.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Fold any card: hold its top to tuck it away, hold or tap it to open again. The app also opens on the journal and page you used last.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Meals journal: your own food list, meal sets you log with one tap, portions it learns, and calories against a range for your BMI, by 14 days or a whole year in colour. Tap the round button to switch journals.</li>
@@ -266,6 +283,7 @@ try {
     <details><summary>Does it work without internet?</summary><p>Yes. Once opened, it keeps working offline, and new entries sync when the connection comes back.</p></details>
     <details><summary>How does the mood card work?</summary><p>Each person taps one of five faces to rate how yesterday felt, from hard to great, and gets a short quote to match. The app never guesses your mood. The Mood history page shows a year in pixels where tapping a day shows how many hard to great days that month (or week) had, and what tends to go with your good days, like exercise or habits.</p></details>
     <details><summary>How does the meals journal work?</summary><p>You add the foods you usually eat once, with calories, carbs, protein and fat per 100 g, from the pack or a nutrition website. Then you save plates you eat often as meal sets. To log a meal, pick the set, check the grams and add it. After you weigh a food three times, the journal fills in your usual portion. A chart compares each day's calories with a range from your BMI and an estimate of what you burn, or the burn from your watch if you type it in. Days you don't log are left out, not counted as zero. A Year view colours one square per day, from far under to far over, with days logged, percent in range, average and best streak. The round button at the bottom switches between journals.</p></details>
+    <details><summary>How do I learn my way around?</summary><p>Tap the round button, then ⋯, then Show me how. Search for what you want to do and start a walkthrough. The app dims the screen, lights up each thing to tap and points at it with a dotted arrow, one step at a time. You can stop whenever you like.</p></details>
     <details><summary>Can anyone sign up?</summary><p>Not at the moment. This journal is private to one family, and only they can sign in. Anyone can open the demo to try every feature with sample data.</p></details>
     <details><summary>How are visitors counted?</summary><p>Each phone or computer that opens this page is counted once, under the country its time zone points to. No location, IP address or personal detail is looked up or saved, only a number per country.</p></details>
     <details><summary>Is anything I do in the demo saved?</summary><p>No. The demo uses made-up sample data kept only in your browser tab. Nothing is sent to a server, and it is all gone when you close the tab.</p></details>
@@ -363,17 +381,14 @@ try {
   <div class="view" id="guide" hidden>
     <div class="fdtop"><button type="button" id="guideBack">← Back</button></div>
     <section class="panel guide" aria-labelledby="guideTitle">
-      <h2 id="guideTitle">Getting started</h2>
-      <p class="note">The basics, one line each.</p>
-      <ol class="gsteps">
-        <li style="--i:0"><span aria-hidden="true">🍽️</span><div><b>Log a meal</b>Pick the meal, add foods or a meal set, save.</div></li>
-        <li style="--i:1"><span aria-hidden="true">⚖️</span><div><b>Weigh in</b>Open Weight on the round button and add today's weight.</div></li>
-        <li style="--i:2"><span aria-hidden="true">🏃</span><div><b>Add a run</b>Add a picture of your COROS run and check the numbers.</div></li>
-        <li style="--i:3"><span aria-hidden="true">🙂</span><div><b>Rate your day</b>Tap a face on the Yesterday card.</div></li>
-        <li style="--i:4"><span aria-hidden="true">✋</span><div><b>Fold a card</b>Hold the knob on a card's top edge to tuck it away.</div></li>
-        <li style="--i:5"><span aria-hidden="true">🔍</span><div><b>Zoom a graph</b>Pinch with two fingers. Double-tap to see it all.</div></li>
-      </ol>
+      <p class="eyebrow">How-tos</p>
+      <h2 id="guideTitle">Show me how</h2>
+      <p class="note">Pick one. The app lights up each thing to tap, one step at a time.</p>
+      <input type="search" id="guideSearch" class="gsearch" placeholder="Search: weight, meal, run…" aria-label="Search how-tos" autocomplete="off" enterkeyhint="search">
+      <ul class="glist" id="guideList"></ul>
+      <p class="note" id="guideEmpty" role="status" hidden></p>
     </section>
+    <dialog class="gsheet" id="guideSheet" aria-labelledby="gsTitle"></dialog>
   </div>
   <div class="view" id="home">
   <div class="lower">
@@ -498,14 +513,14 @@ try {
     <div class="whub" id="wheelHub" aria-live="polite">Pick a journal</div>
     <button type="button" class="wmore" id="wheelMore" aria-label="More options" aria-expanded="false" aria-controls="wheelMenu"><span aria-hidden="true">⋯</span></button>
     <div class="wmenu" id="wheelMenu" role="menu" aria-label="More options" hidden>
-      <button type="button" role="menuitem" data-go="guide"><span aria-hidden="true">📘</span>Getting started</button>
+      <button type="button" role="menuitem" data-go="guide"><span aria-hidden="true">📘</span>Show me how</button>
       <button type="button" role="menuitem" data-go="mealsets"><span aria-hidden="true">🥗</span>Meal sets and foods</button>
       <button type="button" role="menuitem" data-go="backup"><span aria-hidden="true">💾</span>Backup</button>
       <button type="button" role="menuitem" data-go="tips"><span aria-hidden="true">💡</span>Show tips again</button>
     </div>
     <div class="wtip" id="wheelTip" role="note" hidden>
       <div class="wtipin">
-        <p>More lives here: Getting started, meal sets and backup.</p>
+        <p>More lives here: Show me how, meal sets and backup.</p>
         <div class="wtipfoot">
           <label><input type="checkbox" id="tipNever"> Don't show again</label>
           <button type="button" id="tipOk">Got it</button>

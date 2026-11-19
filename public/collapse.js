@@ -75,6 +75,9 @@ function setFold(el, on) {
   if (!on) dispatchEvent(new Event("resize")); // charts drawn while folded get their real width
 }
 
+// Open a card if it is folded (used by walkthroughs that need to show what is inside).
+export function unfold(el) { if (el?.classList.contains("folded")) setFold(el, false); }
+
 export function initCollapse() {
   const app = $("app");
   if (!app) return;

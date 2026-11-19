@@ -558,16 +558,85 @@ button.mface[aria-pressed="true"] { border-color: var(--ink) }
 .wtipfoot button { padding: 6px 14px; font-size: 14px }
 @keyframes wpop { 0% { opacity: 0; transform: scale(.3) translateY(-10px) } 60% { opacity: 1 } 100% { opacity: 1; transform: none } }
 @keyframes wfloat { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
-/* Getting started page */
-.gsteps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px }
-.gsteps li { display: flex; gap: 14px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg);
-  animation: gin .4s ease-out calc(var(--i) * 70ms) both }
-.gsteps li > span { font-size: 24px; line-height: 1.2 }
-.gsteps b { display: block }
-.gsteps div { color: var(--muted); line-height: 1.4 }
-.gsteps b { color: var(--ink) }
+/* Show me how (#guide): searchable how-to list and its sheet */
+.guide { display: grid; gap: 12px }
+.guide h2 { margin: 0 }
+.gsearch { font-size: 16px; padding: 12px 14px; border-radius: 12px }
+input[type=search] { width: 100%; min-width: 0; font: 16px var(--body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px }
+input[type=search]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.glist { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px }
+.glist.intro li { animation: gin .35s ease-out calc(var(--i) * 50ms) both }
+.gcard { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: center; text-align: left; padding: 14px; border-radius: 14px;
+  background: var(--bg); font-weight: 400; transition: transform .15s, border-color .15s }
+.gcard:active { transform: scale(.98) }
+.gcard.live { border-color: var(--accent); background: var(--accent-soft) }
+.gico { grid-row: span 2; width: 46px; height: 46px; display: grid; place-items: center; font-size: 24px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line) }
+.gico.big { width: 56px; height: 56px; font-size: 30px }
+.gtxt b { display: block; font-size: 16px }
+.gtxt span { display: block; color: var(--muted); font-size: 14px; line-height: 1.4 }
+.gtag { grid-column: 2; justify-self: start; font-size: 12px; font-weight: 700; color: var(--muted); padding: 2px 9px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface) }
+.gcard.live .gtag { color: var(--on-accent); background: var(--accent); border-color: var(--accent) }
+.gtag i { font-style: normal; font-size: 10px }
+.gsheet { border: 1px solid var(--line); border-radius: 20px; padding: 0; width: min(440px, calc(100vw - 32px)); background: var(--surface); color: var(--ink) }
+@media (max-width: 600px) { .gsheet { margin: auto auto max(16px, env(safe-area-inset-bottom, 0px)); max-width: none } }
+.gsheet::backdrop { background: rgb(10 14 30 / .55) }
+.gsheet[open] { animation: gup .25s ease-out }
+.gsin { display: grid; gap: 12px; padding: 20px }
+.gsin p { margin: 0; line-height: 1.5 }
+.gshead { display: flex; gap: 14px; align-items: center }
+.gshead h3 { margin: 2px 0 0; font-size: 20px }
+.glearn { margin: 0; padding: 0; list-style: none; counter-reset: g; display: grid; gap: 6px }
+.glearn li { counter-increment: g; display: flex; gap: 10px; align-items: center; font-size: 15px }
+.glearn li::before { content: counter(g); flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--accent-soft); color: var(--ink) }
+.gsin .actions { display: flex; gap: 8px; flex-wrap: wrap }
+.gsin .actions .primary { flex: 1 }
 @keyframes gin { from { opacity: 0; transform: translateY(12px) } }
-@media (prefers-reduced-motion: reduce) { .wslot, .whub, .wheel, .plate, .wmore, .wmenu, .wtip, .wtipin, .gsteps li { transition: none !important; animation: none !important } .wheel.hint .wmore::after { display: none } }
+@keyframes gup { from { opacity: 0; transform: translateY(24px) scale(.97) } }
+
+/* Walkthroughs (tour.js): dim everything, light up one part, point at it with a dotted arrow */
+:root { --tour-pen: #ffc94d; --tour-dim: rgb(8 12 28 / .74); --tour-dim-light: rgb(8 12 28 / .3) }
+.tour { position: fixed; inset: 0; z-index: 60; pointer-events: none }
+.tblock { position: absolute; inset: 0; pointer-events: auto; background: transparent }
+.tblock.pass { pointer-events: none }
+.tour.finish .tblock { background: var(--tour-dim); transition: background .4s }
+.tspot { position: absolute; left: 0; top: 0; box-shadow: 0 0 0 200vmax var(--tour-dim), 0 0 0 3px var(--tour-pen) inset; transition: box-shadow .5s, border-radius .3s }
+.tour.light .tspot { box-shadow: 0 0 0 200vmax var(--tour-dim-light), 0 0 0 0 transparent inset }
+.tour.finish .tspot { display: none }
+.tspot::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; border: 3px solid var(--tour-pen); animation: tping 1.6s ease-out infinite; opacity: 0 }
+.tour.light .tspot::after { display: none }
+.tring { position: absolute; left: 0; top: 0; border-radius: 12px; border: 3px dashed var(--tour-pen); box-shadow: 0 0 0 4px rgb(255 201 77 / .25); animation: tglow 1.4s ease-in-out infinite }
+.tarrow { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible }
+.tline { fill: none; stroke: var(--tour-pen); stroke-width: 4; stroke-linecap: round; stroke-dasharray: .1 11; animation: tmarch .7s linear infinite; filter: drop-shadow(0 1px 2px rgb(0 0 0 / .5)) }
+#tHead path { fill: var(--tour-pen) }
+.ttap { position: absolute; left: 0; top: 0; padding: 4px 11px; border-radius: 99px; background: var(--tour-pen); color: #2a1d00; font-weight: 700; font-size: 14px; white-space: nowrap; box-shadow: 0 2px 8px rgb(0 0 0 / .35) }
+.ttap:empty { display: none }
+.tbubble { position: absolute; left: 0; top: 0; pointer-events: auto; background: var(--surface); color: var(--ink); border-radius: 18px; padding: 14px 16px 12px; box-shadow: 0 10px 34px rgb(0 0 0 / .35); border: 1px solid var(--line); transition: transform .28s cubic-bezier(.2,.8,.3,1) }
+.tbubble.pop { animation: tpop .35s cubic-bezier(.2,.9,.3,1.3) }
+.tbubble h3 { margin: 0; font-size: 18px }
+.ttext { margin: 4px 0 10px; color: var(--muted); line-height: 1.45 }
+.tcount { margin: 6px 0 0; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted) }
+.tdots { display: flex; gap: 4px }
+.tdots i { flex: 1; height: 4px; border-radius: 2px; background: var(--line); transition: background .3s }
+.tdots i.on { background: var(--accent) }
+.tdots i.now { background: linear-gradient(90deg, var(--accent) 50%, var(--line) 50%); background-size: 200% 100%; animation: tfill 1.2s ease-out forwards }
+.tact { display: flex; justify-content: space-between; gap: 8px }
+.tact .tnext { flex: 1; max-width: 220px; margin-left: auto }
+.tact .tnext:disabled { opacity: .6; cursor: default }
+.tswipe { height: 46px; margin: -4px 0 8px; position: relative; border-radius: 12px; background: var(--bg) }
+.tswipe i { position: absolute; left: calc(50% - 13px); bottom: 6px; width: 26px; height: 26px; border-radius: 50%; background: var(--tour-pen); box-shadow: 0 0 0 6px rgb(255 201 77 / .3); animation: tswipe 1.5s ease-in-out infinite }
+.tour.finish .tbubble { text-align: center }
+.tour.finish .tact { flex-direction: row-reverse }
+.tour.finish .tact .tnext { margin-left: 0 }
+.tour.finish .tbubble h3 { font-size: 22px }
+html.touring .wheel.hint .wmore::after { display: none }
+@keyframes tping { 0% { opacity: .9; transform: scale(1) } 100% { opacity: 0; transform: scale(1.35) } }
+@keyframes tglow { 50% { box-shadow: 0 0 0 9px rgb(255 201 77 / .12) } }
+@keyframes tmarch { to { stroke-dashoffset: -11.1 } }
+@keyframes tpop { from { opacity: .3; scale: .92 } }
+@keyframes tfill { from { background-position: 100% 0 } to { background-position: 0 0 } }
+@keyframes tswipe { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 80% { transform: translateY(-22px); opacity: 1 } 100% { transform: translateY(-26px); opacity: 0 } }
+@media (prefers-reduced-motion: reduce) { .glist li, .gsheet[open], .tbubble, .tbubble.pop, .tspot, .tspot::after, .tring, .tline, .tswipe i, .tdots i.now { animation: none !important; transition: none !important } .tdots i.now { background: var(--accent) } }
+@media (prefers-reduced-motion: reduce) { .wslot, .whub, .wheel, .plate, .wmore, .wmenu, .wtip, .wtipin { transition: none !important; animation: none !important } .wheel.hint .wmore::after { display: none } }
 #app { padding-bottom: 96px }
 .mealdemo .chips .chip { border: 1px solid var(--line) }
 #landing.live .mealdemo .chip.flip:not(.on) { opacity: 1 }

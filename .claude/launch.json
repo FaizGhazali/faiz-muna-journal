@@ -4,8 +4,23 @@
     {
       "name": "journal",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 5000
+    },
+    {
+      "name": "static",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5057",
+        "--directory",
+        "public"
+      ],
+      "port": 5057
     }
   ]
 }

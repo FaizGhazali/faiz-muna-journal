@@ -518,7 +518,8 @@ export function initWheel() {
     if (open) return;
     open = true; openedAt = performance.now(); place(); setHot(null);
     setMenu(false); hideTip();
-    if (tipSeen() < TIP_VIEWS) { store.set(TIP_KEY, String(tipSeen() + 1)); showTip(); }
+    // A walkthrough is pointing at something else, so the tip stays out of its way.
+    if (tipSeen() < TIP_VIEWS && !document.documentElement.classList.contains("touring")) { store.set(TIP_KEY, String(tipSeen() + 1)); showTip(); }
     wheel.hidden = false;
     requestAnimationFrame(() => requestAnimationFrame(() => wheel.classList.add("open")));
   }
