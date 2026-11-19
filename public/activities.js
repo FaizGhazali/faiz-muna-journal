@@ -6,7 +6,7 @@
 //                              so suggestions learn each person's patterns (see learn() in suggest.js)
 import {
   collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, arrayUnion, arrayRemove, query, where,
-} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+} from "./fs.js";
 import {
   TYPES, ALL_DAYS, guessType, isScheduled, habitState, habitWeek, describe, firstOpenStep, scoreOf, pickNext, learn, iso, parse, addDays, dayNum,
 } from "./suggest.js";

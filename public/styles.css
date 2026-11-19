@@ -358,3 +358,13 @@ details p { margin: 8px 0 0; color: var(--muted) }
 .cta { justify-items: start; border-top: 0 }
 
 @media (prefers-reduced-motion: reduce) { .scrollhint span { animation: none } #landing *, #landing *::before { transition: none !important } }
+
+/* Demo: the way in under the sign-in form, and the bar shown while trying it. */
+.gate .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px }
+.gate .or::before, .gate .or::after { content: ""; flex: 1; border-top: 1px solid var(--line) }
+.demo-go { background: var(--accent-soft); border-color: var(--accent-soft) }
+.note.center { text-align: center; margin-top: -6px }
+.demobar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 10px; padding: 8px 12px; font-size: 14px }
+.demobar p { margin: 0; flex: 1 1 240px }
+.demobar .mini { color: var(--ink); background: var(--surface) }
+#loginMsg:empty { display: none }

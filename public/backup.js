@@ -1,6 +1,6 @@
 // Save the whole journal to a file, and load such a file back in.
 // Loading adds or replaces items with the same id. It never deletes anything.
-import { collection, doc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { collection, doc, getDocs, writeBatch } from "./fs.js";
 
 const APP = "our-journal";
 const VERSION = 1;

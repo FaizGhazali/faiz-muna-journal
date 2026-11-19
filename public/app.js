@@ -2,8 +2,10 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/fireba
 import { getAuth, connectAuthEmulator, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, terminate, clearIndexedDbPersistence,
-  collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, useMemory } from "./fs.js";
+import { openMemory } from "./memdb.js";
+import { sampleData } from "./sample.js";
 import { fitnessSeries, perBeat, paceOf, clock, toSecs } from "./fitness.js";
 import { readCoros, parseCoros } from "./coros.js";
 import { initActivities, startActivities, stopActivities, refresh as refreshActivities, refreshMove } from "./activities.js";
@@ -30,15 +32,33 @@ const range = (p) => ({ lo: r1(18.5 * m2(p)), hi: r1(24.9 * m2(p)), asian: r1(22
 const statusOf = (b) => b < 18.5 ? { t: "Underweight", c: "--under" } : b < 25 ? { t: "Normal", c: "--good" } : b < 30 ? { t: "Overweight", c: "--over" } : { t: "Obese", c: "--obese" };
 const show = (id) => ["loading", "login", "setup", "app"].forEach((v) => { $(v).hidden = v !== id; });
 
-const config = LOCAL
-  ? { apiKey: "demo-key", projectId: "demo-journal", appId: "demo" }
-  : await fetch("/__/firebase/init.json").then((r) => r.json());
-const app = initializeApp(config);
-const auth = getAuth(app);
-const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
-if (LOCAL) {
-  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
-  connectFirestoreEmulator(db, "127.0.0.1", 8085);
+// reCAPTCHA Enterprise site key for Firebase App Check (public, safe to commit). Empty = App Check off.
+// With it set and enforcement on in the Firebase console, only this site can reach Firestore and sign-in; scripts and bots can't.
+const APP_CHECK_KEY = "";
+
+// The demo ("Try the demo" under the sign-in form) runs on made-up data in this tab only. It never loads
+// Firebase sign-in or the real database, so it can't touch the family's journal or its usage limits.
+const DEMO = (() => { try { return sessionStorage.getItem("journal-demo") === "1"; } catch (_) { return false; } })();
+
+let auth = null, db;
+if (DEMO) {
+  useMemory();
+  db = openMemory(sampleData);
+} else {
+  const config = LOCAL
+    ? { apiKey: "demo-key", projectId: "demo-journal", appId: "demo" }
+    : await fetch("/__/firebase/init.json").then((r) => r.json());
+  const app = initializeApp(config);
+  if (APP_CHECK_KEY && !LOCAL) {
+    const { initializeAppCheck, ReCaptchaEnterpriseProvider } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-check.js");
+    initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(APP_CHECK_KEY), isTokenAutoRefreshEnabled: true });
+  }
+  auth = getAuth(app);
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  if (LOCAL) {
+    connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+    connectFirestoreEmulator(db, "127.0.0.1", 8085);
+  }
 }
 
 let PEOPLE = [], entries = [], editingId = null, confirmDelete = null, unsubs = [];
@@ -415,7 +435,7 @@ function startApp(user) {
     }
     PEOPLE = snap.data().people;
     $("heading").textContent = `${PEOPLE.map((p) => p.name).join(" & ")}'s Journal`;
-    document.title = $("heading").textContent;
+    document.title = DEMO ? "Demo – Our Journal" : $("heading").textContent;
     $("who").innerHTML = PEOPLE.map((p, i) => `<input type="radio" name="person" id="person-${p.id}" value="${p.id}"${i ? "" : " checked"}><label for="person-${p.id}">${esc(p.name)}</label>`).join("");
     resetForm();
     renderFoot();
@@ -431,11 +451,33 @@ function startApp(user) {
 }
 function stop() { unsubs.forEach((u) => u()); unsubs = []; stopActivities(); }
 
-onAuthStateChanged(auth, (user) => {
-  stop();
-  if (user) { show("loading"); startApp(user); }
-  else show("login");
-});
+// ---------- Demo ----------
+// Keys the demo keeps in this tab. journal-theme stays so the day/night choice carries on.
+function clearDemo(keepOn) {
+  try {
+    Object.keys(sessionStorage).filter((k) => k.startsWith("journal-") && k !== "journal-theme" && !(keepOn && k === "journal-demo")).forEach((k) => sessionStorage.removeItem(k));
+  } catch (_) {}
+}
+document.querySelectorAll("[data-demo]").forEach((b) => b.addEventListener("click", () => {
+  try { sessionStorage.setItem("journal-demo", "1"); } catch (_) { $("loginMsg").textContent = "The demo needs this browser to allow site storage."; return; }
+  scrollTo(0, 0);
+  location.replace(location.pathname); // start at the dashboard, not a #page
+}));
+$("demoReset").addEventListener("click", () => { clearDemo(true); scrollTo(0, 0); location.replace(location.pathname); });
+$("demoExit").addEventListener("click", () => { clearDemo(false); scrollTo(0, 0); location.replace(location.pathname); });
+
+if (DEMO) {
+  $("demoBar").hidden = false;
+  $("signOut").hidden = true;
+  show("loading");
+  startApp(null);
+} else {
+  onAuthStateChanged(auth, (user) => {
+    stop();
+    if (user) { show("loading"); startApp(user); }
+    else show("login");
+  });
+}
 $("loginForm").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const msg = $("loginMsg");

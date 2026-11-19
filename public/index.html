@@ -17,13 +17,14 @@
 {"@context":"https://schema.org","@graph":[
  {"@type":"WebApplication","name":"Faiz & Muna's Journal","alternateName":"Our Journal","url":"https://faiz-muna-journal-c43ab.web.app/","applicationCategory":"HealthApplication","operatingSystem":"Any (web browser, installable PWA)","inLanguage":"en","dateModified":"2026-11-19",
   "description":"A private weight, BMI and running journal for two people, with run reading from a COROS watch picture, a fitness score, activity suggestions and a daily habit checklist.",
-  "featureList":["Weight and BMI tracking with WHO ranges","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file"]},
+  "featureList":["Weight and BMI tracking with WHO ranges","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file","Try-it demo with sample data"]},
  {"@type":"FAQPage","mainEntity":[
   {"@type":"Question","name":"What is Our Journal?","acceptedAnswer":{"@type":"Answer","text":"A private web app for two people to track weight, BMI, running and daily habits together. It runs in the browser and can be installed on a phone like an app."}},
   {"@type":"Question","name":"How does it read my run from a picture?","acceptedAnswer":{"@type":"Answer","text":"You choose the screenshot of your COROS run. Text recognition runs on your own phone to pick out distance, time, pace and heart rate. The picture is never uploaded or saved, and you check the numbers before saving."}},
   {"@type":"Question","name":"Which BMI ranges does it use?","acceptedAnswer":{"@type":"Answer","text":"The WHO adult ranges: under 18.5 is underweight, 18.5 to 24.9 is normal, 25 to 29.9 is overweight and 30 or more is obese. It also shows the lower Asian adult cut-off, where above 22.9 counts as overweight."}},
   {"@type":"Question","name":"Does it work without internet?","acceptedAnswer":{"@type":"Answer","text":"Yes. Once opened, it keeps working offline, and new entries sync when the connection comes back."}},
-  {"@type":"Question","name":"Can anyone sign up?","acceptedAnswer":{"@type":"Answer","text":"Not at the moment. This journal is private to one family, and only they can sign in."}}]}
+  {"@type":"Question","name":"Can anyone sign up?","acceptedAnswer":{"@type":"Answer","text":"Not at the moment. This journal is private to one family, and only they can sign in. Anyone can open the demo to try every feature with sample data."}},
+  {"@type":"Question","name":"Is anything I do in the demo saved?","acceptedAnswer":{"@type":"Answer","text":"No. The demo uses made-up sample data kept only in your browser tab. Nothing is sent to a server, and it is all gone when you close the tab."}}]}
 ]}
 </script>
 <link rel="manifest" href="/manifest.webmanifest">
@@ -34,7 +35,14 @@
 <link rel="stylesheet" href="/styles.css">
 <script>
 // Apply the saved day/night choice before the page draws, so it never flashes the wrong colours.
-try { const t = localStorage.getItem("journal-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (_) {}
+try {
+  // In the demo, per-device choices (selected person, current suggestion, graphs, theme) live in this tab only,
+  // so trying the demo on a family phone never changes the family's own settings.
+  const demo = sessionStorage.getItem("journal-demo") === "1";
+  const t = (demo && sessionStorage.getItem("journal-theme")) || localStorage.getItem("journal-theme");
+  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  if (demo) Object.defineProperty(window, "localStorage", { value: sessionStorage, configurable: true });
+} catch (_) {}
 </script>
 </head>
 <body>
@@ -49,6 +57,9 @@ try { const t = localStorage.getItem("journal-theme"); if (t === "light" || t ==
     <label for="password">Password<input type="password" id="password" autocomplete="current-password" required></label>
     <button type="submit" class="primary" id="signIn">Sign in</button>
     <p id="loginMsg" role="status"></p>
+    <div class="or" aria-hidden="true"><span>or</span></div>
+    <button type="button" class="demo-go" data-demo>Try the demo</button>
+    <p class="note center">Explore every feature with sample data. Nothing you do is saved.</p>
   </form>
   <button type="button" class="scrollhint" id="tourGo">See what it does <span aria-hidden="true">↓</span></button>
 </div>
@@ -180,6 +191,7 @@ try { const t = localStorage.getItem("journal-theme"); if (t === "light" || t ==
   <section class="info" aria-labelledby="l-new">
     <h2 id="l-new">What's new</h2>
     <ol class="changes">
+      <li><time datetime="2026-11-19">19 Nov 2026</time> Try the demo: the whole journal with sample data, nothing saved.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> This page: a tour of the journal for new visitors.</li>
       <li><time datetime="2026-11-18">18 Nov 2026</time> Fitness detail page: weight vs pace, weight vs distance, pace and distance over time.</li>
       <li><time datetime="2026-11-18">18 Nov 2026</time> Save and load a backup file of the whole journal.</li>
@@ -194,12 +206,17 @@ try { const t = localStorage.getItem("journal-theme"); if (t === "light" || t ==
     <details><summary>How does it read my run from a picture?</summary><p>You choose the screenshot of your COROS run. Text recognition runs on your own phone to pick out distance, time, pace and heart rate. The picture is never uploaded or saved, and you check the numbers before saving.</p></details>
     <details><summary>Which BMI ranges does it use?</summary><p>The WHO adult ranges: under 18.5 is underweight, 18.5 to 24.9 is normal, 25 to 29.9 is overweight and 30 or more is obese. It also shows the lower Asian adult cut-off, where above 22.9 counts as overweight.</p></details>
     <details><summary>Does it work without internet?</summary><p>Yes. Once opened, it keeps working offline, and new entries sync when the connection comes back.</p></details>
-    <details><summary>Can anyone sign up?</summary><p>Not at the moment. This journal is private to one family, and only they can sign in.</p></details>
+    <details><summary>Can anyone sign up?</summary><p>Not at the moment. This journal is private to one family, and only they can sign in. Anyone can open the demo to try every feature with sample data.</p></details>
+    <details><summary>Is anything I do in the demo saved?</summary><p>No. The demo uses made-up sample data kept only in your browser tab. Nothing is sent to a server, and it is all gone when you close the tab.</p></details>
   </section>
 
   <section class="info cta">
-    <h2>Ready to write today's entry?</h2>
-    <button type="button" class="primary" id="tourBack">Sign in</button>
+    <h2>See it for yourself</h2>
+    <p class="note">The demo opens the full journal with two made-up people and 12 weeks of sample data. Add entries, tick habits, try every button. It all stays in this browser tab and is gone when you close it.</p>
+    <div class="actions">
+      <button type="button" class="primary" data-demo>Try the demo</button>
+      <button type="button" id="tourBack">Sign in</button>
+    </div>
   </section>
 </main>
 
@@ -215,6 +232,13 @@ try { const t = localStorage.getItem("journal-theme"); if (t === "light" || t ==
 </div>
 
 <div class="wrap" id="app" hidden>
+  <div class="demobar" id="demoBar" role="note" hidden>
+    <p><b>Demo with sample data.</b> Changes stay in this tab only and are gone when you close it.</p>
+    <div class="actions">
+      <button type="button" class="mini" id="demoReset">Start over</button>
+      <button type="button" class="mini" id="demoExit">Exit demo</button>
+    </div>
+  </div>
   <header class="top">
     <div>
       <h1 id="heading">Our Journal</h1>
