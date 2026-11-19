@@ -17,13 +17,14 @@
 {"@context":"https://schema.org","@graph":[
  {"@type":"WebApplication","name":"Faiz & Muna's Journal","alternateName":"Our Journal","url":"https://faiz-muna-journal-c43ab.web.app/","applicationCategory":"HealthApplication","operatingSystem":"Any (web browser, installable PWA)","inLanguage":"en","dateModified":"2026-11-19",
   "description":"A private weight, BMI and running journal for two people, with run reading from a COROS watch picture, a fitness score, activity suggestions and a daily habit checklist.",
-  "featureList":["Weight and BMI tracking with WHO ranges","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file","Try-it demo with sample data","Daily mood rating with a quote, year in pixels and what goes with good days","Visitor count by country, guessed from time zone"]},
+  "featureList":["Weight and BMI tracking with WHO ranges","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file","Try-it demo with sample data","Daily mood rating with a quote, year in pixels and what goes with good days","Visitor count by country, guessed from time zone","Meals journal with your own food list, one-tap meal sets and learned portions","Daily calories against a range from BMI and calorie burn","Journal switcher wheel"]},
  {"@type":"FAQPage","mainEntity":[
   {"@type":"Question","name":"What is Our Journal?","acceptedAnswer":{"@type":"Answer","text":"A private web app for two people to track weight, BMI, running and daily habits together. It runs in the browser and can be installed on a phone like an app."}},
   {"@type":"Question","name":"How does it read my run from a picture?","acceptedAnswer":{"@type":"Answer","text":"You choose the screenshot of your COROS run. Text recognition runs on your own phone to pick out distance, time, pace and heart rate. The picture is never uploaded or saved, and you check the numbers before saving."}},
   {"@type":"Question","name":"Which BMI ranges does it use?","acceptedAnswer":{"@type":"Answer","text":"The WHO adult ranges: under 18.5 is underweight, 18.5 to 24.9 is normal, 25 to 29.9 is overweight and 30 or more is obese. It also shows the lower Asian adult cut-off, where above 22.9 counts as overweight."}},
   {"@type":"Question","name":"Does it work without internet?","acceptedAnswer":{"@type":"Answer","text":"Yes. Once opened, it keeps working offline, and new entries sync when the connection comes back."}},
   {"@type":"Question","name":"How does the mood card work?","acceptedAnswer":{"@type":"Answer","text":"Each person taps one of five faces to rate how yesterday felt, from hard to great, and gets a short quote to match. The app never guesses your mood. The Mood history page shows a year in pixels where tapping a day shows how many hard to great days that month (or week) had, and what tends to go with your good days, like exercise or habits."}},
+  {"@type":"Question","name":"How does the meals journal work?","acceptedAnswer":{"@type":"Answer","text":"You add the foods you usually eat once, with calories, carbs, protein and fat per 100 g, from the pack or a nutrition website. Then you save plates you eat often as meal sets. To log a meal, pick the set, check the grams and add it. After you weigh a food three times, the journal fills in your usual portion. A chart compares each day's calories with a range from your BMI and an estimate of what you burn, or the burn from your watch if you type it in. Days you don't log are left out, not counted as zero. A Year view colours one square per day, from far under to far over, with days logged, percent in range, average and best streak. The round button at the bottom switches between journals."}},
   {"@type":"Question","name":"Can anyone sign up?","acceptedAnswer":{"@type":"Answer","text":"Not at the moment. This journal is private to one family, and only they can sign in. Anyone can open the demo to try every feature with sample data."}},
   {"@type":"Question","name":"How are visitors counted?","acceptedAnswer":{"@type":"Answer","text":"Each phone or computer that opens this page is counted once, under the country its time zone points to. No location, IP address or personal detail is looked up or saved, only a number per country."}},
   {"@type":"Question","name":"Is anything I do in the demo saved?","acceptedAnswer":{"@type":"Answer","text":"No. The demo uses made-up sample data kept only in your browser tab. Nothing is sent to a server, and it is all gone when you close the tab."}}]}
@@ -195,6 +196,23 @@ try {
     </div>
   </section>
 
+  <section class="scene" aria-labelledby="l-meals">
+    <div class="copy">
+      <p class="eyebrow">Meals journal</p>
+      <h2 id="l-meals">Log a whole plate with one tap</h2>
+      <p>Add the foods you usually eat once, with their calories, carbs, protein and fat per 100 g. Put them together into meal sets, like rice, fried fish and vegetables, and say which meals each is for, so breakfast only offers breakfast. Then pick the set, check the grams and add it to breakfast, lunch, dinner or a snack. Weigh a food a few times and the journal learns your usual portion, so the grams fill themselves in. A chart shows each day's calories against a range set from your BMI and what you burn, and skipped days are simply left out.</p>
+      <ul><li>Your own food list, per 100 g</li><li>Meal sets for plates you eat often</li><li>Learns your usual portion</li><li>Calories vs a range for your BMI, with your watch's burn if you have one</li><li>A year view in colour, one square per day</li><li>Hold the round button and slide to switch journals</li></ul>
+    </div>
+    <div class="demo panel mealdemo" aria-hidden="true">
+      <div class="dhead"><span class="note">Sample · lunch</span><b><span data-from="0" data-to="548" data-dp="0">548</span> <i>kcal</i></b></div>
+      <div class="chips"><span class="chip flip" data-at="0.15" aria-pressed="true">Nasi + patin + sayur</span><span class="chip">Roti canai + teh</span><span class="chip">Mee goreng</span></div>
+      <div class="mdrow flip" data-at="0.3"><span>Rice</span><b>180 g</b><small>your usual</small></div>
+      <div class="mdrow flip" data-at="0.45"><span>Fried fish</span><b>120 g</b><small>your usual</small></div>
+      <div class="mdrow flip" data-at="0.6"><span>Mixed vegetables</span><b>80 g</b><small>weighed 2 of 3</small></div>
+      <p class="ok flip" data-at="0.85">✓ Added to lunch</p>
+    </div>
+  </section>
+
   <section class="scene" aria-labelledby="l-app">
     <div class="copy">
       <p class="eyebrow">Built for phones</p>
@@ -214,6 +232,7 @@ try {
   <section class="info" aria-labelledby="l-new">
     <h2 id="l-new">What's new</h2>
     <ol class="changes">
+      <li><time datetime="2026-11-19">19 Nov 2026</time> Meals journal: your own food list, meal sets you log with one tap, portions it learns, and calories against a range for your BMI, by 14 days or a whole year in colour. Hold the round button to switch journals.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Visitor count on this page: how many people have dropped by, and from which countries.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Mood mix: tap a day in the year in pixels to count your hard to great days that month, tap again for that week.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Mood: rate yesterday with one tap, get a quote, and see your year in pixels.</li>
@@ -241,6 +260,7 @@ try {
     <details><summary>Which BMI ranges does it use?</summary><p>The WHO adult ranges: under 18.5 is underweight, 18.5 to 24.9 is normal, 25 to 29.9 is overweight and 30 or more is obese. It also shows the lower Asian adult cut-off, where above 22.9 counts as overweight.</p></details>
     <details><summary>Does it work without internet?</summary><p>Yes. Once opened, it keeps working offline, and new entries sync when the connection comes back.</p></details>
     <details><summary>How does the mood card work?</summary><p>Each person taps one of five faces to rate how yesterday felt, from hard to great, and gets a short quote to match. The app never guesses your mood. The Mood history page shows a year in pixels where tapping a day shows how many hard to great days that month (or week) had, and what tends to go with your good days, like exercise or habits.</p></details>
+    <details><summary>How does the meals journal work?</summary><p>You add the foods you usually eat once, with calories, carbs, protein and fat per 100 g, from the pack or a nutrition website. Then you save plates you eat often as meal sets. To log a meal, pick the set, check the grams and add it. After you weigh a food three times, the journal fills in your usual portion. A chart compares each day's calories with a range from your BMI and an estimate of what you burn, or the burn from your watch if you type it in. Days you don't log are left out, not counted as zero. A Year view colours one square per day, from far under to far over, with days logged, percent in range, average and best streak. The round button at the bottom switches between journals.</p></details>
     <details><summary>Can anyone sign up?</summary><p>Not at the moment. This journal is private to one family, and only they can sign in. Anyone can open the demo to try every feature with sample data.</p></details>
     <details><summary>How are visitors counted?</summary><p>Each phone or computer that opens this page is counted once, under the country its time zone points to. No location, IP address or personal detail is looked up or saved, only a number per country.</p></details>
     <details><summary>Is anything I do in the demo saved?</summary><p>No. The demo uses made-up sample data kept only in your browser tab. Nothing is sent to a server, and it is all gone when you close the tab.</p></details>
@@ -294,13 +314,32 @@ try {
     </nav>
     <div class="lbl me" id="meBox"><span>For</span><div class="seg" id="me"></div></div>
   </div>
+  <div class="view" id="shared">
+    <section class="move" aria-label="Your next move">
+      <div class="panel next" id="next"></div>
+      <div class="panel habits" id="habits"></div>
+      <div class="panel mood" id="moodCard" aria-label="Yesterday's mood"></div>
+    </section>
+    <section class="people" id="people" aria-label="Progress"></section>
+  </div>
+  <div class="view" id="meals" hidden>
+    <section class="panel mcard" id="mealCard" aria-labelledby="mealTitle"></section>
+    <section class="panel mealday" id="mealDay" aria-label="Meals logged"></section>
+    <p class="note">Calories, carbs, protein and fat come from the numbers you type for each food, so they're as good as those numbers. The range comes from your BMI and an estimate of what you burn. Use them as a guide, not an exact count.</p>
+  </div>
+  <div class="view" id="mealsets" hidden>
+    <div class="fdtop"><button type="button" id="setsBack">← Back</button></div>
+    <section class="panel mlib" id="mealLib" aria-label="Meal sets and foods"></section>
+  </div>
+  <div class="view" id="soon" hidden>
+    <section class="panel soon">
+      <p class="soonicon" aria-hidden="true">＋</p>
+      <h2>Empty slot</h2>
+      <p class="note">This space is kept for a new kind of journal. It's coming later.</p>
+      <div class="actions"><button type="button" id="soonBack">Back to my journal</button></div>
+    </section>
+  </div>
   <div class="view" id="home">
-  <section class="move" aria-label="Your next move">
-    <div class="panel next" id="next"></div>
-    <div class="panel habits" id="habits"></div>
-    <div class="panel mood" id="moodCard" aria-label="Yesterday's mood"></div>
-  </section>
-  <section class="people" id="people" aria-label="Progress"></section>
   <div class="lower">
     <div class="panel" id="formPanel">
       <form id="form" novalidate>
@@ -416,6 +455,11 @@ try {
     <section class="panel fd" id="mdYear"></section>
     <section class="panel fd" id="mdBoost"></section>
     <p class="note">Mood is how each of you rated your own day, from hard to great. Only you choose it; the app never guesses. The averages and comparisons are a rough guide to notice patterns, not a health measure.</p>
+  </div>
+  <button type="button" class="wheelbtn" id="wheelBtn" aria-label="Switch journal" aria-controls="wheel"><span aria-hidden="true">🍽️</span></button>
+  <div class="wheel" id="wheel" hidden>
+    <div class="wring" id="wheelRing" role="group" aria-label="Journals"></div>
+    <div class="whub" id="wheelHub" aria-live="polite">Pick a journal</div>
   </div>
 </div>
 <script type="module" src="/app.js"></script>

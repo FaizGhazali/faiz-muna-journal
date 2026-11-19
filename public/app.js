@@ -14,6 +14,7 @@ import { initBackup } from "./backup.js";
 import { initFitDetail, refreshFitDetail } from "./fitdetail.js";
 import { initMood, refreshMood } from "./moodui.js";
 import { MOODS, isMood } from "./mood.js";
+import { initMeals, startMeals, stopMeals, refreshMeals, refreshCalories, initWheel } from "./mealsui.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const PACE = 0.5; // kg a week
@@ -117,6 +118,9 @@ function goalHtml(p, w) {
   return `<strong>${gap.toFixed(1)} kg to ${w > hi ? "lose" : "gain"}</strong><p>Goal: ${target.toFixed(1)} kg, BMI ${w > hi ? "24.9" : "18.5"}. About ${weeks} weeks at ${PACE} kg a week, around ${when}.${since}</p>`;
 }
 
+// Each person has one card: weight and BMI on top (every journal), then a part for the journal picked on the wheel.
+// #people[data-journal] shows only the matching .pextra. A new journal adds its id here and fills "<id>Slot-<person>".
+const JOURNAL_PARTS = ["weight", "meals"];
 function renderPeople() {
   $("people").innerHTML = PEOPLE.map((p) => {
     const pts = weighIns(p), w = pts.length ? pts[pts.length - 1].weight : null;
@@ -138,8 +142,8 @@ function renderPeople() {
       </div>
       <div class="goal">${goalHtml(p, w)}</div>
       <div class="chart" id="chart-${p.id}"></div>
-      <p class="week"><b>${weekMinutes(p)}</b> of ${WEEKLY_MINUTES} exercise minutes this week</p>
-      ${fitHtml(p)}
+      ${JOURNAL_PARTS.map((j) => `<div class="pextra" data-journal="${j}" data-pid="${p.id}"${j === "weight" ? "" : ` id="${j}Slot-${p.id}"`}>${j === "weight" ? `${fitHtml(p)}
+        <p class="week"><b>${weekMinutes(p)}</b> of ${WEEKLY_MINUTES} exercise minutes this week</p>` : ""}</div>`).join("")}
     </article>`;
   }).join("");
   drawCharts();
@@ -259,7 +263,7 @@ function renderFoot() {
     <p>The fitness score compares how fast a run was with how hard the heart worked for it, with a small bonus for quick heart rate recovery. Faster at the same heart rate, or the same pace at a lower one, moves it up. It's an estimate for watching your own trend, not a medical measure.</p>
     <p>BMI doesn't separate muscle from fat, so read it alongside how you feel and what a doctor tells you.</p>`;
 }
-function render() { renderPeople(); renderFeed(); refreshFitDetail(); refreshMood(); }
+function render() { renderPeople(); renderFeed(); refreshFitDetail(); refreshMood(); refreshCalories(); }
 function banner(text) { $("banner").textContent = text || ""; $("banner").hidden = !text; }
 
 // The run boxes in the form. Paces and time are typed as 9:29 and 40:37.
@@ -392,14 +396,18 @@ $("feed").addEventListener("click", async (ev) => {
 const exercisedToday = (pid) => entries.some((e) => e.person === pid && e.date === today() && (e.minutes > 0 || e.run));
 initActivities({ db, people: () => PEOPLE, commit, exercisedToday, onChange: () => refreshMood() });
 initBackup({ db });
+initMeals({ db, people: () => PEOPLE, me: currentPerson, entries: () => entries, commit });
+initWheel();
 initMood({ db, people: () => PEOPLE, entries: () => entries, me: currentPerson, habitFacts, commit });
 initFitDetail({
   people: () => PEOPLE, entries: () => entries,
   saveBorn: (pid, born) => commit(() => setDoc(doc(db, "config", "people"), { people: PEOPLE.map((p) => (p.id === pid ? { ...p, born } : p)) })),
 });
 
-let lastWidth = 0;
-new ResizeObserver(() => { const w = $("people").clientWidth; if (w !== lastWidth) { lastWidth = w; drawCharts(); } }).observe($("people"));
+let lastWidth = "";
+new ResizeObserver(() => { const w = `${$("people").clientWidth}`; if (w !== lastWidth) { lastWidth = w; drawCharts(); } }).observe($("people"));
+// The fitness chart is hidden in other journals; draw it again at its real width when it shows.
+addEventListener("journalchange", () => drawCharts());
 
 function buildSetup() {
   $("startDate").value = today();
@@ -449,14 +457,16 @@ function startApp(user) {
     show("app");
     render();
     refreshActivities();
+    refreshMeals();
   }, denied));
   unsubs.push(onSnapshot(entriesCol, (snap) => {
     entries = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.date || ""));
     if (PEOPLE.length) { entries = entries.filter((e) => PEOPLE.some((p) => p.id === e.person)); render(); refreshMove(); }
   }, denied));
   startActivities();
+  startMeals();
 }
-function stop() { unsubs.forEach((u) => u()); unsubs = []; stopActivities(); }
+function stop() { unsubs.forEach((u) => u()); unsubs = []; stopActivities(); stopMeals(); }
 
 // ---------- Demo ----------
 // Keys the demo keeps in this tab. journal-theme stays so the day/night choice carries on.

@@ -103,5 +103,43 @@ export function sampleData(now = new Date()) {
     if (i % 9 === 0 && i) move("p1", "d-sambal", "cook", "done", d, 18);
   }
 
-  return { config: { people: { people } }, entries, activities, habitDays, moves };
+  // Meals: a small food library (rough sample numbers per 100 g), a few meal sets and three weeks of plates.
+  const foodList = {
+    "f-nasi": ["Nasi putih", 130, 28, 2.7, 0.3], "f-patin": ["Ikan patin goreng", 220, 2, 18, 16], "f-ayam": ["Ayam goreng", 260, 8, 24, 15],
+    "f-sayur": ["Sayur campur", 60, 7, 2, 3], "f-telur": ["Telur rebus", 155, 1, 13, 11], "f-roti": ["Roti canai", 300, 40, 7, 12],
+    "f-teh": ["Teh tarik", 80, 13, 2, 2], "f-oat": ["Oat", 380, 66, 13, 7], "f-pisang": ["Pisang", 89, 23, 1, 0.3], "f-mee": ["Mee goreng", 180, 25, 6, 6],
+  };
+  const foods = Object.fromEntries(Object.entries(foodList).map(([id, [name, kcal, carb, protein, fat]]) => [id, { name, kcal, carb, protein, fat }]));
+  const mealSets = {
+    "s-patin": { name: "Nasi + patin + sayur", items: [{ food: "f-nasi", g: 180 }, { food: "f-patin", g: 120 }, { food: "f-sayur", g: 80 }], slots: ["lunch", "dinner"] },
+    "s-ayam": { name: "Nasi ayam goreng", items: [{ food: "f-nasi", g: 180 }, { food: "f-ayam", g: 120 }, { food: "f-sayur", g: 60 }], slots: ["lunch", "dinner"] },
+    "s-roti": { name: "Roti canai + teh tarik", items: [{ food: "f-roti", g: 100 }, { food: "f-teh", g: 250 }], slots: ["breakfast"] },
+    "s-oat": { name: "Oat + pisang", items: [{ food: "f-oat", g: 50 }, { food: "f-pisang", g: 100 }], slots: ["breakfast", "snack"] },
+    "s-mee": { name: "Mee goreng + telur", items: [{ food: "f-mee", g: 250 }, { food: "f-telur", g: 50 }], slots: ["breakfast", "lunch", "dinner"] },
+    "s-snack": { name: "Pisang + teh tarik", items: [{ food: "f-pisang", g: 100 }, { food: "f-teh", g: 250 }], slots: ["snack"] },
+  };
+  const size = { p1: 1.3, p2: 1.2 }, menu = { breakfast: ["s-roti", "s-oat"], snack: ["s-snack"], lunch: ["s-patin", "s-ayam", "s-mee"], dinner: ["s-patin", "s-ayam", "s-mee"] };
+  const hour = { breakfast: 8, lunch: 13, snack: 16, dinner: 19 }, meals = {};
+  for (let i = 119; i >= 0; i--) {
+    const d = ago(i);
+    for (const person of ["p1", "p2"]) {
+      if (i > 0 && rnd() < (i > 60 ? 0.45 : 0.2)) continue; // some days nothing is logged, and that's fine (more often early on)
+      for (const slot of ["breakfast", "lunch", "snack", "dinner"]) {
+        if (i === 0 && (slot !== "breakfast" || person === "p2")) continue; // today only Amir's breakfast so far
+        if (rnd() < (slot === "snack" ? 0.5 : 0.08)) continue;
+        const sid = person === "p2" && slot === "breakfast" && rnd() < 0.8 ? "s-oat" : menu[slot][Math.floor(rnd() * menu[slot].length)];
+        const items = mealSets[sid].items.map(({ food, g }) => {
+          const f = foods[food], grams = Math.max(10, Math.round((g * size[person] + jitter(g * 0.12)) / 5) * 5), k = grams / 100;
+          return { food, name: f.name, g: grams, kcal: Math.round(f.kcal * k), carb: r1(f.carb * k), protein: r1(f.protein * k), fat: r1(f.fat * k) };
+        });
+        meals[`d-meal-${person}-${d}-${slot}`] = { person, date: d, slot, name: mealSets[sid].name, set: sid, items, at: parse(d).getTime() + hour[slot] * 36e5 };
+      }
+    }
+  }
+
+  // Amir sometimes types the day's burn from his watch; Lina never does, so hers is estimated.
+  const burns = {};
+  for (let i = 13; i >= 1; i--) if (rnd() < 0.4) { const d = ago(i); burns[`p1_${d}`] = { person: "p1", date: d, kcal: Math.round((2500 + jitter(250)) / 10) * 10 }; }
+
+  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns };
 }

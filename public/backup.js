@@ -4,7 +4,7 @@ import { collection, doc, getDocs, writeBatch } from "./fs.js";
 
 const APP = "our-journal";
 const VERSION = 1;
-const COLS = ["config", "entries", "activities", "habitDays", "moves"];
+const COLS = ["config", "entries", "activities", "habitDays", "moves", "foods", "mealSets", "meals", "burns"];
 const LABELS = { entries: "journal entries", activities: "activities", habitDays: "habit days", moves: "history items" };
 const BATCH = 400; // Firestore allows 500 writes per batch
 
