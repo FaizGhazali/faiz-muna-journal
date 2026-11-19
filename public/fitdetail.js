@@ -3,6 +3,7 @@
 // The pairing, bands and lines are worked out in runweight.js; this file only draws them.
 import { runsWithWeight, linearRegression, runEntries, similarEffort, weightBands, bandWidth, ageOn, ageText, MAX_GAP_DAYS, MIN_TREND, CONFIDENT, SIMILAR_BPM } from "./runweight.js";
 import { clock } from "./fitness.js";
+import { toChart, toScreen } from "./zoom.js";
 import { parse, dayNum, iso } from "./suggest.js";
 
 const $ = (id) => document.getElementById(id);
@@ -345,7 +346,7 @@ function scatter(host, p, pts, xm, ym, fit, tags) {
 
   const svg = host.querySelector("svg"), tip = host.querySelector(".tip"), ring = host.querySelector(".ring");
   const show = (ev) => {
-    const r = svg.getBoundingClientRect(), ex = ev.clientX - r.left, ey = ev.clientY - r.top;
+    const { x: ex, y: ey } = toChart(svg, ev);
     const d = (q) => (px(q) - ex) ** 2 + (py(q) - ey) ** 2;
     const q = pts.reduce((best, x) => (d(x) < d(best) ? x : best));
     const cx = px(q), cy = py(q);
@@ -355,7 +356,7 @@ function scatter(host, p, pts, xm, ym, fit, tags) {
     const age = p.born ? ageText(ageOn(p.born, q.date)) : "";
     const lines = [long(q.date) + (age ? ` · age ${age}` : ""), `${q.km != null ? `${q.km} km at ` : ""}${clock(q.paceSec)} /km${q.hr ? `, avg ${q.hr} bpm` : ""}`, kg];
     if (q.note) lines.push(q.note.length > 80 ? q.note.slice(0, 79) + "…" : q.note);
-    placeTip(tip, W, cx, cy, lines.join("\n"));
+    const at = toScreen(svg, cx, cy); placeTip(tip, W, at.x, at.y, lines.join("\n"));
   };
   svg.addEventListener("pointermove", show);
   svg.addEventListener("pointerdown", show);
@@ -395,7 +396,7 @@ function bars(host, p, bands, from, to) {
 
   const svg = host.querySelector("svg"), tip = host.querySelector(".tip"), hover = host.querySelector(".hover");
   const show = (ev) => {
-    const r = svg.getBoundingClientRect(), i = Math.floor((ev.clientX - r.left - m.l) / slot), b = bands[i];
+    const i = Math.floor((toChart(svg, ev).x - m.l) / slot), b = bands[i];
     if (!b) { tip.hidden = true; hover.setAttribute("visibility", "hidden"); return; }
     for (const [k, v] of Object.entries({ x: XL(i), y: m.t, width: slot, height: H - m.t - m.b })) hover.setAttribute(k, v);
     hover.setAttribute("visibility", "visible");
@@ -407,7 +408,7 @@ function bars(host, p, bands, from, to) {
       lines.push(b.from === b.to ? long(b.from) : `${long(b.from)} to ${long(b.to)}`);
       if (b.n < THIN) lines.push("Few runs, a rough guide");
     }
-    placeTip(tip, W, XL(i) + slot / 2, b.n ? YP(b.avgKm) : H - m.b, lines.join("\n"));
+    const at = toScreen(svg, XL(i) + slot / 2, b.n ? YP(b.avgKm) : H - m.b); placeTip(tip, W, at.x, at.y, lines.join("\n"));
   };
   svg.addEventListener("pointermove", show);
   svg.addEventListener("pointerdown", show);

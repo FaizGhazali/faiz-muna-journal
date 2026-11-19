@@ -16,6 +16,7 @@ import { initMood, refreshMood } from "./moodui.js";
 import { MOODS, isMood } from "./mood.js";
 import { initMeals, startMeals, stopMeals, refreshMeals, refreshCalories, initWheel } from "./mealsui.js";
 import { initCollapse } from "./collapse.js";
+import { initZoom, toChart, toScreen } from "./zoom.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const PACE = 0.5; // kg a week
@@ -162,14 +163,14 @@ function drawCharts() {
 function hover(host, W, pts, X, label) {
   const svg = host.querySelector("svg"), cross = host.querySelector(".cross"), tip = host.querySelector(".tip");
   const showTip = (ev) => {
-    const px = ev.clientX - svg.getBoundingClientRect().left;
+    const px = toChart(svg, ev).x;
     let best = pts[0];
     pts.forEach((e) => { if (Math.abs(X(e.date) - px) < Math.abs(X(best.date) - px)) best = e; });
     const bx = X(best.date);
     cross.setAttribute("x1", bx); cross.setAttribute("x2", bx); cross.setAttribute("visibility", "visible");
     tip.hidden = false;
     tip.textContent = `${fmt(best.date, { day: "numeric", month: "short", year: "numeric" })}: ${label(best)}`;
-    tip.style.left = Math.max(0, Math.min(W - tip.offsetWidth, bx - tip.offsetWidth / 2)) + "px";
+    tip.style.left = Math.max(0, Math.min(W - tip.offsetWidth, toScreen(svg, bx, 0).x - tip.offsetWidth / 2)) + "px";
   };
   svg.addEventListener("pointermove", showTip);
   svg.addEventListener("pointerdown", showTip);
@@ -400,6 +401,7 @@ initBackup({ db });
 initMeals({ db, people: () => PEOPLE, me: currentPerson, entries: () => entries, commit });
 initWheel();
 initCollapse();
+initZoom();
 initMood({ db, people: () => PEOPLE, entries: () => entries, me: currentPerson, habitFacts, commit });
 initFitDetail({
   people: () => PEOPLE, entries: () => entries,
