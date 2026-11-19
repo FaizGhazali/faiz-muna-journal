@@ -718,13 +718,9 @@ button.mface[aria-pressed="true"] { border-color: var(--ink) }
   .fhfinger { display: none }
 }
 
-/* Graph zoom (zoom.js): pinch / Ctrl + scroll. Lines keep their thickness when zoomed. */
-.chart .grid, .chart .ln, .chart .trend, .chart .cross, .chart .axisln, .chart .goalline, .chart .ring, .chart .keyring, .chart .run, .chart .dot { vector-effect: non-scaling-stroke }
-.chart svg.zoomed { touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none }
-.chart svg.zoomed:active { cursor: grabbing }
-.chart svg.zoomed text { font-size: calc(12px / var(--z, 1)) }
-.chart svg.zoomed text.val { font-size: calc(13px / var(--z, 1)) }
-.chart svg.zoomed text.age { font-size: calc(11px / var(--z, 1)) }
+/* Graph zoom (zoom.js): pinch / Ctrl + scroll narrows the dates and redraws. */
+.chart.zoomed svg { touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none }
+.chart.zoomed svg:active { cursor: grabbing }
 .zreset { position: absolute; top: 4px; right: 4px; z-index: 3; padding: 4px 10px; font-size: 12px; font-weight: 700; border-radius: 999px;
   border: 1px solid var(--line); background: var(--surface); color: var(--ink); box-shadow: 0 2px 6px rgb(0 0 0 / .15); cursor: pointer }
 .zhint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 3; pointer-events: none; padding: 6px 12px;

@@ -1,146 +1,140 @@
-// Zoom any graph (every `.chart svg` in the app). Phones: pinch with two fingers, drag with one finger once zoomed,
-// double-tap to go back. Computers: Ctrl + scroll (or a trackpad pinch) zooms at the pointer, drag to look around,
-// double-click zooms in or back out. A "Reset" button shows while zoomed.
-// It only changes the SVG's viewBox, so charts need no changes of their own; anything that turns a pointer into chart
-// coordinates (tooltips) goes through toChart() / toScreen(). Charts are redrawn with innerHTML (new data, a resize), so
-// the zoom is remembered by the chart's id and put back on the new drawing when it has the same size.
+// Zoom a graph into its data: pinching (phones) or Ctrl + scroll / trackpad pinch (computers) narrows the dates (or kg)
+// along the bottom, and the chart redraws just that stretch with its side scale fitted to the points in view, so small
+// changes become readable. One finger (or the mouse) drags along the time line once zoomed; double-tap, double-click
+// or "Reset zoom" shows everything again.
+// A chart opts in by calling zoomable(host, plotLeft, plotRight, redraw) after drawing, and reads xWindow(host) —
+// the visible part of its full range as fractions { a, b } of 0..1 — while drawing. The window is kept by host id, so
+// it survives redraws.
 
-const CHARTS = "#app .chart svg";
-const MAX = 5;
-const kept = new Map(); // chart host id → { s, x, y, W, H }
+const wins = new Map(); // chart host id → { a, b }
+const MIN = 0.03;       // narrowest window: 3% of the whole range
 
-function view(svg) {
-  const v = svg.viewBox.baseVal, W = svg.width.baseVal.value, H = svg.height.baseVal.value;
-  return { x: v ? v.x : 0, y: v ? v.y : 0, s: v && v.width ? W / v.width : 1, W, H };
-}
-// Pointer → chart units (what the chart drew with), and chart units → pixels inside the chart's box.
-export function toChart(svg, ev) {
-  const r = svg.getBoundingClientRect(), v = view(svg);
-  return { x: (ev.clientX - r.left) / v.s + v.x, y: (ev.clientY - r.top) / v.s + v.y };
-}
-export function toScreen(svg, x, y) {
-  const v = view(svg);
-  return { x: (x - v.x) * v.s, y: (y - v.y) * v.s };
-}
+export const xWindow = (host) => wins.get(host.id) || { a: 0, b: 1 };
+export const isZoomed = (host) => wins.has(host.id);
 
-function set(svg, s, x, y) {
-  const { W, H } = view(svg);
-  s = Math.min(MAX, Math.max(1, s));
-  if (s < 1.02) { s = 1; x = 0; y = 0; }
-  const w = W / s, h = H / s;
-  x = Math.min(W - w, Math.max(0, x)); y = Math.min(H - h, Math.max(0, y));
-  svg.setAttribute("viewBox", `${x} ${y} ${w} ${h}`);
-  const host = svg.parentElement, zoomed = s > 1;
-  if (host.id) { if (zoomed) kept.set(host.id, { s, x, y, W, H }); else kept.delete(host.id); }
-  svg.classList.toggle("zoomed", zoomed);
-  svg.style.setProperty("--z", s); // styles.css keeps the words their normal size
-  const tip = host.querySelector(".tip"); if (tip) tip.hidden = true; // it would point at the old spot
-  let btn = host.querySelector(":scope > .zreset");
-  if (zoomed && !btn) {
-    btn = document.createElement("button");
+export function zoomable(host, l, r, redraw) {
+  host._zoom = { l, r, redraw };
+  const on = isZoomed(host);
+  host.classList.toggle("zoomed", on);
+  if (on && !host.querySelector(":scope > .zreset")) {
+    const btn = document.createElement("button");
     btn.type = "button"; btn.className = "zreset"; btn.textContent = "Reset zoom";
-    btn.addEventListener("click", (ev) => { ev.stopPropagation(); set(svg, 1, 0, 0); });
+    btn.addEventListener("click", (ev) => { ev.stopPropagation(); apply(host, 0, 1); });
     host.append(btn);
-  } else if (!zoomed && btn) btn.remove();
+  }
 }
-// Zoom by k, keeping the point under (px, py) (pixels inside the chart) in place.
-function zoomAt(svg, k, px, py) {
-  const v = view(svg), ux = px / v.s + v.x, uy = py / v.s + v.y, s = Math.min(MAX, Math.max(1, v.s * k));
-  set(svg, s, ux - px / s, uy - py / s);
+
+let frame = 0, pending = null;
+function apply(host, a, b) {
+  const w = Math.max(MIN, Math.min(1, b - a));
+  a = Math.max(0, Math.min(1 - w, a));
+  if (w > 0.995) wins.delete(host.id); else wins.set(host.id, { a, b: a + w });
+  pending = host;
+  if (!frame) frame = requestAnimationFrame(() => { frame = 0; const h = pending; pending = null; h?._zoom?.redraw(); });
 }
-const local = (svg, x, y) => { const r = svg.getBoundingClientRect(); return { x: x - r.left, y: y - r.top }; };
-const isZoomed = (svg) => svg.classList.contains("zoomed");
+// Where clientX falls across the plot, 0..1.
+function frac(host, clientX) {
+  const z = host._zoom, r = host.getBoundingClientRect();
+  return Math.max(0, Math.min(1, (clientX - r.left - z.l) / Math.max(1, z.r - z.l)));
+}
+function zoomAt(host, k, clientX) {
+  const { a, b } = xWindow(host), f = frac(host, clientX), at = a + f * (b - a);
+  const w = Math.max(MIN, Math.min(1, (b - a) / k));
+  apply(host, at - f * w, at - f * w + w);
+}
+const hostOf = (el) => { const h = el?.closest?.("#app .chart"); return h && h._zoom && el.closest("svg") ? h : null; };
 
 export function initZoom() {
-  new MutationObserver(() => {
-    for (const [id, k] of kept) {
-      const svg = document.getElementById(id)?.querySelector(":scope > svg");
-      if (!svg || svg.classList.contains("zoomed")) continue;
-      const v = view(svg);
-      if (v.W === k.W && v.H === k.H) set(svg, k.s, k.x, k.y); else kept.delete(id);
-    }
-  }).observe(document.getElementById("app"), { childList: true, subtree: true });
-
-  // Touch: two fingers pinch (and move), one finger drags once zoomed, a double tap goes back.
-  let pinch = null, pan = null, lastTap = { t: 0, svg: null }, lastTouch = 0;
-  document.addEventListener("touchstart", (ev) => {
-    lastTouch = Date.now();
-    const svg = ev.target.closest?.(CHARTS);
-    if (!svg) return;
-    if (ev.touches.length === 2) {
+  // Touch. The chart is redrawn while the fingers move, which takes the touched element out of the page; touch events
+  // keep going to that element, so the move / end listeners sit on it rather than on the document.
+  let g = null, lastTap = { t: 0, host: null };
+  const move = (ev) => {
+    if (!g) return;
+    const host = g.host, t = ev.touches;
+    if (g.pinch && t.length >= 2) {
       ev.preventDefault();
-      const [a, b] = ev.touches, mid = local(svg, (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2), v = view(svg);
-      pinch = { svg, d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1, s: v.s, ux: mid.x / v.s + v.x, uy: mid.y / v.s + v.y };
-      pan = null;
-    } else if (ev.touches.length === 1) {
-      const t = ev.touches[0], now = Date.now();
-      if (isZoomed(svg) && lastTap.svg === svg && now - lastTap.t < 300) { ev.preventDefault(); set(svg, 1, 0, 0); lastTap.t = 0; return; }
-      lastTap = { t: now, svg };
-      pan = isZoomed(svg) ? { svg, sx: t.clientX, sy: t.clientY, v: view(svg) } : null;
-    }
-  }, { passive: false });
-  document.addEventListener("touchmove", (ev) => {
-    if (pinch && ev.touches.length >= 2) {
-      ev.preventDefault();
-      const [a, b] = ev.touches, svg = pinch.svg, mid = local(svg, (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2);
-      const s = Math.min(MAX, Math.max(1, pinch.s * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pinch.d));
-      set(svg, s, pinch.ux - mid.x / s, pinch.uy - mid.y / s);
+      const d = Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY) || 1;
+      const w = Math.max(MIN, Math.min(1, g.w * g.d / d)), f = frac(host, (t[0].clientX + t[1].clientX) / 2);
+      apply(host, g.at - f * w, g.at - f * w + w);
       lastTap.t = 0;
-    } else if (pan && ev.touches.length === 1) {
+    } else if (!g.pinch && t.length === 1) {
       ev.preventDefault();
-      const t = ev.touches[0], { svg, v } = pan, dx = t.clientX - pan.sx, dy = t.clientY - pan.sy;
-      if (Math.abs(dx) + Math.abs(dy) > 6) lastTap.t = 0;
-      set(svg, v.s, v.x - dx / v.s, v.y - dy / v.s);
+      const z = host._zoom, dx = t[0].clientX - g.x, s = g.a - dx / Math.max(1, z.r - z.l) * g.w;
+      if (Math.abs(dx) > 6) lastTap.t = 0;
+      apply(host, s, s + g.w);
+    }
+  };
+  const end = (ev) => {
+    if (!g) return;
+    if (ev.touches.length === 0) {
+      g.els.forEach((el) => { el.removeEventListener("touchmove", move); el.removeEventListener("touchend", end); el.removeEventListener("touchcancel", end); });
+      g = null;
+    } else if (g.pinch && ev.touches.length < 2) {
+      const { a, b } = xWindow(g.host);
+      Object.assign(g, { pinch: false, x: ev.touches[0].clientX, a, w: b - a });
+    }
+  };
+  const listen = (el) => {
+    if (g.els.has(el)) return;
+    g.els.add(el);
+    el.addEventListener("touchmove", move, { passive: false }); el.addEventListener("touchend", end); el.addEventListener("touchcancel", end);
+  };
+  document.addEventListener("touchstart", (ev) => {
+    const host = hostOf(ev.target);
+    if (!host) return;
+    const t = ev.touches, { a, b } = xWindow(host);
+    if (t.length >= 2) {
+      ev.preventDefault();
+      const f = frac(host, (t[0].clientX + t[1].clientX) / 2);
+      g = { host, els: g?.els || new Set(), pinch: true, d: Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY) || 1, w: b - a, at: a + f * (b - a) };
+      for (const x of t) listen(x.target);
+    } else if (t.length === 1) {
+      const now = Date.now();
+      if (isZoomed(host) && lastTap.host === host && now - lastTap.t < 300) { ev.preventDefault(); lastTap.t = 0; apply(host, 0, 1); return; }
+      lastTap = { t: now, host };
+      if (!isZoomed(host)) return; // not zoomed: the page scrolls and taps work as always
+      g = { host, els: new Set(), pinch: false, x: t[0].clientX, a, w: b - a };
+      listen(t[0].target);
     }
   }, { passive: false });
-  const end = (ev) => {
-    if (ev.touches.length < 2) pinch = null;
-    if (ev.touches.length === 0) pan = null;
-  };
-  document.addEventListener("touchend", end);
-  document.addEventListener("touchcancel", end);
 
   // Computer: Ctrl + scroll (a trackpad pinch arrives as this too) zooms at the pointer.
-  let hinted = false;
+  let hinted = false, lastTouch = 0;
+  document.addEventListener("touchend", () => { lastTouch = Date.now(); });
   document.addEventListener("wheel", (ev) => {
-    const svg = ev.target.closest?.(CHARTS);
-    if (!svg) return;
-    if (!ev.ctrlKey) {
-      if (!hinted && !isZoomed(svg)) { hinted = true; hint(svg, "Ctrl + scroll to zoom"); }
-      return;
-    }
+    const host = hostOf(ev.target);
+    if (!host) return;
+    if (!ev.ctrlKey) { if (!hinted && !isZoomed(host)) { hinted = true; hint(host, "Ctrl + scroll to zoom"); } return; }
     ev.preventDefault();
-    const dy = ev.deltaMode === 1 ? ev.deltaY * 30 : ev.deltaY, p = local(svg, ev.clientX, ev.clientY);
-    zoomAt(svg, Math.exp(-Math.max(-60, Math.min(60, dy)) * 0.01), p.x, p.y);
+    const dy = ev.deltaMode === 1 ? ev.deltaY * 30 : ev.deltaY;
+    zoomAt(host, Math.exp(-Math.max(-60, Math.min(60, dy)) * 0.01), ev.clientX);
   }, { passive: false });
 
-  // Mouse drag to look around while zoomed.
+  // Mouse drag along the time line while zoomed.
   let drag = null;
   document.addEventListener("pointerdown", (ev) => {
     if (ev.pointerType !== "mouse" || ev.button !== 0) return;
-    const svg = ev.target.closest?.(CHARTS);
-    if (svg && isZoomed(svg)) { drag = { svg, sx: ev.clientX, sy: ev.clientY, v: view(svg) }; ev.preventDefault(); }
+    const host = hostOf(ev.target);
+    if (host && isZoomed(host)) { const { a, b } = xWindow(host); drag = { host, x: ev.clientX, a, w: b - a }; ev.preventDefault(); }
   });
   addEventListener("pointermove", (ev) => {
     if (!drag) return;
-    const { svg, v } = drag;
-    set(svg, v.s, v.x - (ev.clientX - drag.sx) / v.s, v.y - (ev.clientY - drag.sy) / v.s);
+    const z = drag.host._zoom, s = drag.a - (ev.clientX - drag.x) / Math.max(1, z.r - z.l) * drag.w;
+    apply(drag.host, s, s + drag.w);
   });
   addEventListener("pointerup", () => { drag = null; });
 
   // Double-click: zoom in there, or back out when already zoomed.
   document.addEventListener("dblclick", (ev) => {
     if (Date.now() - lastTouch < 800) return; // phones use double-tap above
-    const svg = ev.target.closest?.(CHARTS);
-    if (!svg) return;
+    const host = hostOf(ev.target);
+    if (!host) return;
     ev.preventDefault();
-    if (isZoomed(svg)) set(svg, 1, 0, 0);
-    else { const p = local(svg, ev.clientX, ev.clientY); zoomAt(svg, 2.5, p.x, p.y); }
+    if (isZoomed(host)) apply(host, 0, 1); else zoomAt(host, 3, ev.clientX);
   });
 }
 
-function hint(svg, text) {
-  const host = svg.parentElement;
+function hint(host, text) {
   if (host.querySelector(":scope > .zhint")) return;
   const el = document.createElement("div");
   el.className = "zhint"; el.textContent = text;

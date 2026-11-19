@@ -3,7 +3,7 @@
 // The pairing, bands and lines are worked out in runweight.js; this file only draws them.
 import { runsWithWeight, linearRegression, runEntries, similarEffort, weightBands, bandWidth, ageOn, ageText, MAX_GAP_DAYS, MIN_TREND, CONFIDENT, SIMILAR_BPM } from "./runweight.js";
 import { clock } from "./fitness.js";
-import { toChart, toScreen } from "./zoom.js";
+import { zoomable, xWindow, isZoomed } from "./zoom.js";
 import { parse, dayNum, iso } from "./suggest.js";
 
 const $ = (id) => document.getElementById(id);
@@ -292,9 +292,18 @@ function placeTip(tip, W, cx, cy, text) {
 function scatter(host, p, pts, xm, ym, fit, tags) {
   const W = host.clientWidth || 320, H = 280, m = { l: 46, r: 14, t: 28, b: 44 };
   lastWidth = W;
-  const xs = pts.map(xm.get), ys = pts.map((q) => q[ym.key]);
-  const xRoom = Math.max(xm.room, (Math.max(...xs) - Math.min(...xs)) * (xm === X.date ? 0.05 : 0.12)), yRoom = Math.max(ym.room, (Math.max(...ys) - Math.min(...ys)) * 0.12);
-  const xa = xm === X.date ? { min: Math.min(...xs) - xRoom, max: Math.max(...xs) + xRoom } : axis(Math.min(...xs) - xRoom, Math.max(...xs) + xRoom, xm.steps, W < 420 ? 4 : 6);
+  const xs = pts.map(xm.get);
+  const xRoom = Math.max(xm.room, (Math.max(...xs) - Math.min(...xs)) * (xm === X.date ? 0.05 : 0.12));
+  let xa = xm === X.date ? { min: Math.min(...xs) - xRoom, max: Math.max(...xs) + xRoom } : axis(Math.min(...xs) - xRoom, Math.max(...xs) + xRoom, xm.steps, W < 420 ? 4 : 6);
+  // Zoomed (zoom.js): only part of the bottom range, with finer marks, and the side scale fitted to the dots in view.
+  const zoomed = isZoomed(host);
+  if (zoomed) {
+    const { a, b } = xWindow(host), s = xa.max - xa.min, lo = xa.min + a * s, hi = xa.min + b * s;
+    xa = xm === X.date ? { min: lo, max: hi } : { ...axis(lo, hi, [0.1, 0.2, 0.5, 1, 2, 5, 10, 20], W < 420 ? 4 : 6), min: lo, max: hi };
+  }
+  const inView = (q) => { const v = xm.get(q); return v >= xa.min && v <= xa.max; };
+  const vis = zoomed ? pts.filter(inView) : pts, ys = (vis.length ? vis : pts).map((q) => q[ym.key]);
+  const yRoom = Math.max(zoomed ? ym.room / 2 : ym.room, (Math.max(...ys) - Math.min(...ys)) * 0.12);
   const ya = axis(Math.max(0, Math.min(...ys) - yRoom), Math.max(...ys) + yRoom, ym.steps, 5);
   const xSpan = xa.max - xa.min;
   const XP = (v) => m.l + ((v - xa.min) / xSpan) * (W - m.l - m.r);
@@ -304,8 +313,11 @@ function scatter(host, p, pts, xm, ym, fit, tags) {
   let g = "";
   for (let v = ya.min; v <= ya.max + 1e-9; v += ya.step) g += `<line class="grid" x1="${m.l}" x2="${W - m.r}" y1="${YP(v)}" y2="${YP(v)}"/><text x="${m.l - 6}" y="${YP(v) + 4}" text-anchor="end">${ym.low ? clock(v) : +v.toFixed(1)}</text>`;
   const xt = (v, t) => `<line class="grid" x1="${XP(v)}" x2="${XP(v)}" y1="${m.t}" y2="${H - m.b}"/><text x="${XP(v)}" y="${H - m.b + 16}" text-anchor="middle">${esc(t)}</text>`;
-  if (xm === X.date) g += monthTicks(xa.min, xa.max, W < 420 ? 4 : 7).map(([v, t]) => xt(v, t)).join("");
-  else for (let v = xa.min; v <= xa.max + 1e-9; v += xa.step) g += xt(v, +v.toFixed(1));
+  if (xm === X.date && xa.max - xa.min < 75) { // zoomed in to weeks: marks every few days
+    const every = [1, 2, 7, 14, 28].find((k) => (xa.max - xa.min) / k <= (W < 420 ? 4 : 6)) || 28;
+    for (let v = Math.ceil(xa.min / every) * every; v <= xa.max; v += every) g += xt(v, fmt(dayIso(v), { day: "numeric", month: "short" }));
+  } else if (xm === X.date) g += monthTicks(xa.min, xa.max, W < 420 ? 4 : 7).map(([v, t]) => xt(v, t)).join("");
+  else for (let v = Math.ceil(xa.min / xa.step - 1e-9) * xa.step; v <= xa.max + 1e-9; v += xa.step) g += xt(v, +v.toFixed(1));
   let line = "";
   if (fit) {
     const a = Math.min(...xs), b = Math.max(...xs);
@@ -338,7 +350,8 @@ function scatter(host, p, pts, xm, ym, fit, tags) {
     return `<circle class="${hollow(q) ? "dot near" : "dot"}" style="${hollow(q) ? "stroke" : "fill"}:${c}" cx="${px(q)}" cy="${py(q)}" r="5"/>`;
   }).join("");
   host.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(p.name)}'s ${ym.low ? "pace" : "distance"} against ${xm === X.weight ? "body weight" : "date"}, ${plural(pts.length, "run")}.">
-    ${g}${line}${labels}${rings}${dots}
+    <defs><clipPath id="clip-${host.id}"><rect x="${m.l - 8}" y="${m.t - 8}" width="${W - m.l - m.r + 16}" height="${H - m.t - m.b + 16}"/></clipPath></defs>
+    ${g}<g clip-path="url(#clip-${host.id})">${line}${labels}${rings}${dots}</g>
     <text x="${m.l}" y="14">${esc(ym.axis)}</text>
     <text x="${(m.l + W - m.r) / 2}" y="${H - 6}" text-anchor="middle">${esc(xm.axis)}</text>
     <circle class="ring" r="9" visibility="hidden"/>
@@ -346,9 +359,10 @@ function scatter(host, p, pts, xm, ym, fit, tags) {
 
   const svg = host.querySelector("svg"), tip = host.querySelector(".tip"), ring = host.querySelector(".ring");
   const show = (ev) => {
-    const { x: ex, y: ey } = toChart(svg, ev);
+    const r = svg.getBoundingClientRect(), ex = ev.clientX - r.left, ey = ev.clientY - r.top;
     const d = (q) => (px(q) - ex) ** 2 + (py(q) - ey) ** 2;
-    const q = pts.reduce((best, x) => (d(x) < d(best) ? x : best));
+    if (!vis.length) return;
+    const q = vis.reduce((best, x) => (d(x) < d(best) ? x : best));
     const cx = px(q), cy = py(q);
     ring.setAttribute("cx", cx); ring.setAttribute("cy", cy); ring.setAttribute("visibility", "visible");
     const kg = q.weightKg == null ? `No weigh-in within ${MAX_GAP_DAYS} days`
@@ -356,11 +370,12 @@ function scatter(host, p, pts, xm, ym, fit, tags) {
     const age = p.born ? ageText(ageOn(p.born, q.date)) : "";
     const lines = [long(q.date) + (age ? ` · age ${age}` : ""), `${q.km != null ? `${q.km} km at ` : ""}${clock(q.paceSec)} /km${q.hr ? `, avg ${q.hr} bpm` : ""}`, kg];
     if (q.note) lines.push(q.note.length > 80 ? q.note.slice(0, 79) + "…" : q.note);
-    const at = toScreen(svg, cx, cy); placeTip(tip, W, at.x, at.y, lines.join("\n"));
+    placeTip(tip, W, cx, cy, lines.join("\n"));
   };
   svg.addEventListener("pointermove", show);
   svg.addEventListener("pointerdown", show);
   svg.addEventListener("pointerleave", () => { tip.hidden = true; ring.setAttribute("visibility", "hidden"); });
+  zoomable(host, m.l, W - m.r, () => scatter(host, p, pts, xm, ym, fit, tags));
 }
 
 // Weight vs distance: one bar per weight band, height = average km per run, coloured by when those runs were.
@@ -396,7 +411,7 @@ function bars(host, p, bands, from, to) {
 
   const svg = host.querySelector("svg"), tip = host.querySelector(".tip"), hover = host.querySelector(".hover");
   const show = (ev) => {
-    const i = Math.floor((toChart(svg, ev).x - m.l) / slot), b = bands[i];
+    const r = svg.getBoundingClientRect(), i = Math.floor((ev.clientX - r.left - m.l) / slot), b = bands[i];
     if (!b) { tip.hidden = true; hover.setAttribute("visibility", "hidden"); return; }
     for (const [k, v] of Object.entries({ x: XL(i), y: m.t, width: slot, height: H - m.t - m.b })) hover.setAttribute(k, v);
     hover.setAttribute("visibility", "visible");
@@ -408,7 +423,7 @@ function bars(host, p, bands, from, to) {
       lines.push(b.from === b.to ? long(b.from) : `${long(b.from)} to ${long(b.to)}`);
       if (b.n < THIN) lines.push("Few runs, a rough guide");
     }
-    const at = toScreen(svg, XL(i) + slot / 2, b.n ? YP(b.avgKm) : H - m.b); placeTip(tip, W, at.x, at.y, lines.join("\n"));
+    placeTip(tip, W, XL(i) + slot / 2, b.n ? YP(b.avgKm) : H - m.b, lines.join("\n"));
   };
   svg.addEventListener("pointermove", show);
   svg.addEventListener("pointerdown", show);
