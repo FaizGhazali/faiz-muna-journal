@@ -61,7 +61,7 @@ export function initMood(opts) {
     }
     if (b.dataset.view) view = b.dataset.view;
     if (b.dataset.go) anchor = b.dataset.go;
-    if (b.dataset.close) mixOpen = false;
+    if ("close" in b.dataset) mixOpen = false;
     if (b.dataset.rate) { rate(pickDay, Number(b.dataset.rate)); return; }
     renderPage();
   });
