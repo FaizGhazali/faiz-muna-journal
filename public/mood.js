@@ -129,3 +129,19 @@ export function yearGrid(map, year, today) {
     });
   });
 }
+
+// Mood mix: how many days of each mood (1 hard … 5 great) in the week, month or year around `anchor`.
+// counts[1..5]; rated = days rated; days = days so far in the period (up to today).
+// prev / next: a day in the period before / after (next is null once it would start after today).
+export const VIEWS = ["week", "month", "year"];
+export function moodMix(map, view, anchor, today) {
+  const a = parse(anchor), y = a.getFullYear(), m = a.getMonth();
+  let from, to, prev, next;
+  if (view === "year") { from = `${y}-01-01`; to = `${y}-12-31`; prev = `${y - 1}-01-01`; next = `${y + 1}-01-01`; }
+  else if (view === "month") { from = iso(new Date(y, m, 1)); to = iso(new Date(y, m + 1, 0)); prev = iso(new Date(y, m - 1, 1)); next = iso(new Date(y, m + 1, 1)); }
+  else { from = mondayOf(anchor); to = addDays(from, 6); prev = addDays(from, -7); next = addDays(from, 7); }
+  const end = to < today ? to : today, vals = between(map, from, end), counts = [0, 0, 0, 0, 0, 0];
+  for (const v of vals) counts[v]++;
+  const days = from > today ? 0 : Math.round((parse(end) - parse(from)) / 864e5) + 1;
+  return { view, from, to, counts, rated: vals.length, days, avg: avg(vals), prev, next: next > today ? null : next };
+}

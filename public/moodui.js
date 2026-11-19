@@ -2,7 +2,7 @@
 // Each person rates their own day (1 to 5); it's saved as `mood` on entries/{person}_{date} (merged, so
 // weight, run and note on that day are untouched). The numbers are worked out in mood.js.
 import { doc, setDoc } from "./fs.js";
-import { MOODS, isMood, quoteFor, moodMap, lastSeven, periods, boosters, yearGrid, MIN_DAYS } from "./mood.js";
+import { MOODS, isMood, quoteFor, moodMap, lastSeven, periods, boosters, yearGrid, moodMix, VIEWS, MIN_DAYS } from "./mood.js";
 import { iso, parse, addDays } from "./suggest.js";
 
 const $ = (id) => document.getElementById(id);
@@ -13,6 +13,9 @@ const MONTHS = Array.from({ length: 12 }, (_, m) => new Date(2000, m, 1).toLocal
 
 let db, people, entries, me, habitFacts, commit;
 let pickDay = null, year = null, fromApp = false, lastPid = null;
+// Mood mix card inside Year in pixels: closed until a day is tapped. First tap → that month, same day again → its week.
+let mixOpen = false, view = "month", anchor = null;
+const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // A small face: colour and mouth by mood, an outline when not rated.
 const MOUTH = { 1: "M7.5 17 Q12 12.5 16.5 17", 2: "M8 16.5 Q12 14.2 16 16.5", 3: "M8 15.5 H16", 4: "M7.8 14.5 Q12 18 16.2 14.5", 5: "M7 13.6 Q12 20.5 17 13.6 Z" };
@@ -33,7 +36,7 @@ export function initMood(opts) {
   window.addEventListener("hashchange", (ev) => {
     if (location.hash !== "#mood") return;
     if (new URL(ev.oldURL).hash !== "#mood") { fromApp = true; window.scrollTo(0, 0); }
-    pickDay = null; year = null;
+    pickDay = null; year = null; mixOpen = false;
     refreshMood();
   });
   $("moodCard").addEventListener("click", (ev) => {
@@ -42,14 +45,23 @@ export function initMood(opts) {
   });
   $("mdBack").addEventListener("click", () => { if (fromApp) { fromApp = false; history.back(); } else location.hash = ""; });
   $("mdYear").addEventListener("click", (ev) => {
-    const b = ev.target.closest("[data-pick], [data-year], [data-rate], [data-step]");
+    const b = ev.target.closest("[data-pick], [data-year], [data-rate], [data-step], [data-view], [data-go], [data-close]");
     if (!b) return;
-    if (b.dataset.pick) pickDay = b.dataset.pick;
-    if (b.dataset.year) { year = Number(b.dataset.year); pickDay = null; }
+    if (b.dataset.pick) {
+      const d = b.dataset.pick, again = mixOpen && d === pickDay;
+      if (!again) view = "month";
+      else if (view === "month") view = "week";
+      pickDay = anchor = d;
+      if (!mixOpen) { mixOpen = true; requestAnimationFrame(() => $("mdMix").scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "nearest" })); }
+    }
+    if (b.dataset.year) { year = Number(b.dataset.year); pickDay = null; mixOpen = false; }
     if (b.dataset.step) {
       const d = addDays(pickDay, Number(b.dataset.step));
-      if (d <= today()) { pickDay = d; year = parse(d).getFullYear(); }
+      if (d <= today()) { pickDay = d; year = parse(d).getFullYear(); if (mixOpen) anchor = d; }
     }
+    if (b.dataset.view) view = b.dataset.view;
+    if (b.dataset.go) anchor = b.dataset.go;
+    if (b.dataset.close) mixOpen = false;
     if (b.dataset.rate) { rate(pickDay, Number(b.dataset.rate)); return; }
     renderPage();
   });
@@ -116,9 +128,10 @@ function renderPage() {
   const grid = yearGrid(map, year, t);
   const rated = Object.keys(map).filter((d) => d.startsWith(year + "-")).length;
   const pv = map[pickDay] ?? null;
-  $("mdYear").innerHTML = `<div class="fdhead"><h3 class="fdtitle">Year in pixels</h3>
+  if (!$("mdPix")) $("mdYear").innerHTML = `<div id="mdPix" class="fd"></div><div id="mdMix" class="mmix" hidden></div><div id="mdDay" class="mday"></div>`;
+  $("mdPix").innerHTML = `<div class="fdhead"><h3 class="fdtitle">Year in pixels</h3>
       <div class="myear"><button type="button" class="mini" data-year="${year - 1}"${year > first ? "" : " disabled"} aria-label="Previous year">‹</button><b>${year}</b><button type="button" class="mini" data-year="${year + 1}"${year < last ? "" : " disabled"} aria-label="Next year">›</button></div></div>
-    <p class="note">${rated ? `${rated} day${rated > 1 ? "s" : ""} rated. ` : ""}Tap a square to see or change that day.</p>
+    <p class="note">${rated ? `${rated} day${rated > 1 ? "s" : ""} rated. ` : ""}Tap a day to see the mood mix for its month, and again for its week.</p>
     <div class="pixels" role="grid" aria-label="Mood for each day of ${year}">
       <span class="pxmon"></span>${Array.from({ length: 31 }, (_, i) => `<span class="pxday">${[1, 10, 20, 30].includes(i + 1) ? i + 1 : ""}</span>`).join("")}
       ${grid.map((days, m) => `<span class="pxmon">${esc(MONTHS[m])}</span>${days.map((c) => c.future
@@ -126,12 +139,13 @@ function renderPage() {
         : `<button type="button" class="px${c.date === pickDay ? " on" : ""}" data-pick="${c.date}" style="${c.mood ? `background:var(--m${c.mood})` : ""}" aria-label="${esc(fmt(c.date, { day: "numeric", month: "long" }))}: ${c.mood ? MOODS[c.mood].word : "not rated"}"></button>`).join("")}`).join("")}
     </div>
     <div class="mlegend">${[5, 4, 3, 2, 1].map((v) => `<span><i style="background:var(--m${v})"></i>${MOODS[v].word}</span>`).join("")}<span><i class="none"></i>Not rated</span></div>
-    <div class="mday">
+`;
+  renderMix(map, t);
+  $("mdDay").innerHTML = `
       <div class="mdayhead"><button type="button" class="mini" data-step="-1" aria-label="Day before">‹</button>
         <div class="mnow">${face(pv, 34)}<div><strong>${esc(fmt(pickDay, { weekday: "long", day: "numeric", month: "long" }))}</strong><small>${pv ? MOODS[pv].label : "Not rated"}</small></div></div>
         <button type="button" class="mini" data-step="1"${pickDay < t ? "" : " disabled"} aria-label="Day after">›</button></div>
-      ${faces(pv, "data-rate")}
-    </div>`;
+      ${faces(pv, "data-rate")}`;
 
   // What goes with good days.
   const B = boosters(map, dayFacts(pid)), bar = (v, cls) => `<div class="mbar ${cls}"><i style="width:${((v - 1) / 4) * 100}%"></i></div><span>${v.toFixed(1)}</span>`;
@@ -145,4 +159,63 @@ function renderPage() {
           <div class="mbrow"><small>Without</small>${bar(r.without, "without")}</div>
         </div>`).join("") + `<p class="note">Based on ${B.days} rated days. It shows what tends to go together, not what causes what.</p>`
       : `<p class="mwait">Not enough mixed days yet. Keep rating and logging, and this fills in.</p>`}`;
+}
+
+// Mood mix card: one bar per mood (hard → great), height = how many days of it in the week, month or year.
+// Built once and then updated in place, so bars grow and numbers count smoothly when the period changes.
+function renderMix(map, t) {
+  const box = $("mdMix");
+  if (!mixOpen) { box.hidden = true; return; }
+  if (!box.firstChild) box.innerHTML = `<div class="fdhead"><h4 class="mmtitle">Mood mix</h4><button type="button" class="mini" data-close aria-label="Close mood mix">✕</button></div>
+    <div class="chips" role="group" aria-label="Show">${VIEWS.map((v) => `<button type="button" class="chip" data-view="${v}">${v[0].toUpperCase() + v.slice(1)}</button>`).join("")}</div>
+    <div class="myear"><button type="button" class="mini" data-go aria-label="Before">‹</button><b class="mmrange" aria-live="polite"></b><button type="button" class="mini" data-go aria-label="After">›</button></div>
+    <div class="mmbars">${[1, 2, 3, 4, 5].map((v) => `<div class="mmcol" data-v="${v}"><b class="mmn">0</b><span class="mmbar" style="background:var(--m${v})"></span>${face(v, 26)}<small>${MOODS[v].word}</small></div>`).join("")}</div>
+    <p class="note mmsum"></p>`;
+  const wasHidden = box.hidden;
+  box.hidden = false;
+  if (wasHidden && !calm()) box.animate([{ opacity: 0, transform: "translateY(-6px)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "ease-out" });
+
+  const c = moodMix(map, view, anchor || t, t), first = Object.keys(map).sort()[0] || t;
+  const range = view === "year" ? c.from.slice(0, 4)
+    : view === "month" ? fmt(c.from, { month: "long", year: "numeric" })
+    : `${fmt(c.from, { day: "numeric", month: "short" })} – ${fmt(c.to, { day: "numeric", month: "short" })}`;
+  box.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.view === view));
+  const [prev, next] = box.querySelectorAll("[data-go]");
+  prev.dataset.go = c.prev; prev.disabled = c.from <= first;
+  next.dataset.go = c.next || ""; next.disabled = !c.next;
+  swap(box.querySelector(".mmrange"), range);
+
+  // Opening: start every bar at zero so they grow in.
+  if (wasHidden) { box.querySelectorAll(".mmcol").forEach((col) => { col.querySelector(".mmbar").style.height = "calc((100% - 80px) * 0)"; col.querySelector(".mmn").textContent = "0"; }); box.offsetHeight; }
+  const top = Math.max(1, ...c.counts.slice(1));
+  box.querySelectorAll(".mmcol").forEach((col) => {
+    const v = Number(col.dataset.v), n = c.counts[v];
+    col.querySelector(".mmbar").style.height = `calc((100% - 80px) * ${(n / top).toFixed(3)})`;
+    col.classList.toggle("zero", !n);
+    count(col.querySelector(".mmn"), n);
+    col.setAttribute("aria-label", `${MOODS[v].word}: ${n} day${n === 1 ? "" : "s"}`);
+  });
+  const hint = view === "month" ? "Tap the same day again to see its week." : view === "week" ? "Tap another day to see its month." : "";
+  swap(box.querySelector(".mmsum"), c.rated
+    ? `${c.rated} of ${c.days} day${c.days === 1 ? "" : "s"} rated, average ${one(c.avg)} (${MOODS[Math.round(c.avg)].word.toLowerCase()}). ${hint}`
+    : `No days rated here yet. ${hint}`);
+}
+
+// Fade in new text only when it changes.
+function swap(el, text) {
+  if (el.textContent === text) return;
+  el.textContent = text;
+  if (!calm()) el.animate([{ opacity: 0, transform: "translateY(3px)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "ease-out" });
+}
+// Count a number up or down to its new value.
+function count(el, to) {
+  const from = Number(el.textContent) || 0;
+  cancelAnimationFrame(el._raf);
+  if (from === to || calm()) { el.textContent = to; return; }
+  const t0 = performance.now(), step = (now) => {
+    const k = Math.min(1, (now - t0) / 450), e = 1 - (1 - k) ** 3;
+    el.textContent = Math.round(from + (to - from) * e);
+    if (k < 1) el._raf = requestAnimationFrame(step);
+  };
+  el._raf = requestAnimationFrame(step);
 }

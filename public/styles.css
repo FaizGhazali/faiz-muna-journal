@@ -414,6 +414,20 @@ button.mface[aria-pressed="true"] { border-color: var(--ink) }
 .mlegend span { display: flex; align-items: center; gap: 4px }
 .mlegend i { width: 12px; height: 12px; border-radius: 3px }
 .mlegend i.none { background: var(--line) }
+.mmix { display: grid; gap: 10px; padding: 12px; background: var(--bg); border-radius: 10px; max-width: 620px }
+.mmix[hidden] { display: none }
+.mmtitle { margin: 0; font: 700 16px var(--display) }
+.mmix .chip { background: var(--surface) }
+.mmix .chip[aria-pressed="true"] { background: var(--accent) }
+.mmbars { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; height: 190px; align-items: end }
+.mmcol { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; min-width: 0 }
+.mmn { font: 700 18px var(--display); font-variant-numeric: tabular-nums; transition: opacity .3s }
+.mmcol.zero .mmn { opacity: .4 }
+.mmbar { width: 100%; max-width: 46px; flex: none; height: 0; min-height: 3px; border-radius: 6px 6px 2px 2px; transition: height .5s cubic-bezier(.2, .8, .2, 1), opacity .3s }
+.mmcol.zero .mmbar { opacity: .35 }
+.mmcol small { font-size: 12px; color: var(--muted) }
+.mmsum { margin: 0 }
+@media (prefers-reduced-motion: reduce) { .mmbar, .mmn { transition: none } }
 .mday { border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 10px; justify-items: start }
 .mdayhead { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 360px }
 .mdayhead .mnow { flex: 1 }

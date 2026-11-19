@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { QUOTES, quoteFor, moodMap, periods, boosters, yearGrid, lastSeven, mondayOf, MIN_DAYS } from "../public/mood.js";
+import { QUOTES, quoteFor, moodMap, periods, boosters, yearGrid, lastSeven, mondayOf, moodMix, MIN_DAYS } from "../public/mood.js";
 
 test("moodMap keeps one person's valid ratings only", () => {
   const map = moodMap([
@@ -73,4 +73,31 @@ test("year grid has every day of each month and marks the future", () => {
   assert.equal(g[10][18].future, false); // 19 Nov
   assert.equal(g[10][19].future, true); // 20 Nov
   assert.equal(yearGrid({}, 2028, "2028-01-01")[1].length, 29);
+});
+
+test("moodMix week: counts each mood Monday to Sunday, nothing after today", () => {
+  const map = { "2026-11-16": 4, "2026-11-17": 4, "2026-11-18": 2, "2026-11-15": 5, "2026-11-20": 1 };
+  const c = moodMix(map, "week", "2026-11-19", "2026-11-19");
+  assert.equal(c.from, "2026-11-16");
+  assert.equal(c.to, "2026-11-22");
+  assert.deepEqual(c.counts, [0, 0, 1, 0, 2, 0]);
+  assert.equal(c.rated, 3);
+  assert.equal(c.days, 4);
+  assert.equal(c.avg, 10 / 3);
+  assert.equal(c.prev, "2026-11-09");
+  assert.equal(c.next, null);
+  assert.equal(moodMix(map, "week", c.prev, "2026-11-19").next, "2026-11-16");
+});
+
+test("moodMix month and year", () => {
+  const map = { "2026-02-03": 3, "2026-02-28": 3, "2026-03-01": 5, "2025-12-31": 1 };
+  const m = moodMix(map, "month", "2026-02-15", "2026-11-19");
+  assert.deepEqual(m.counts, [0, 0, 0, 2, 0, 0]);
+  assert.equal(m.days, 28);
+  assert.equal(m.prev, "2026-01-01");
+  assert.equal(m.next, "2026-03-01");
+  const y = moodMix(map, "year", "2026-06-01", "2026-11-19");
+  assert.deepEqual(y.counts, [0, 0, 0, 2, 0, 1]);
+  assert.equal(y.next, null);
+  assert.equal(y.prev, "2025-01-01");
 });
