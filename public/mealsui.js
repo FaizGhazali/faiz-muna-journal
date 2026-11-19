@@ -463,7 +463,7 @@ function readSetRows() {
 }
 
 // ---------- journal wheel ----------
-// Hold the round button and slide to a journal, then let go; or tap it and tap a journal.
+// Tap the round button, then tap a journal. (Holding it and sliding to one, then letting go, also works.)
 export const JOURNALS = [
   { id: "meals", name: "Meals", icon: "🍽️" },
   { id: "weight", name: "Weight", icon: "⚖️" },
@@ -483,7 +483,10 @@ export function initWheel() {
   const R = () => Math.min(120, innerWidth / 2 - 50);
   ring.innerHTML = JOURNALS.map((j, i) => `<button type="button" class="wslot${j.soon ? " soon" : ""}" data-j="${j.id}" style="--i:${i}"><span aria-hidden="true">${j.icon}</span>${esc(j.name)}</button>`).join("");
   const slots = [...ring.querySelectorAll(".wslot")];
-  let open = false, hot = null, dragging = false, startX = 0, startY = 0;
+  let open = false, hot = null, dragging = false, startX = 0, startY = 0, openedAt = 0, liftedAt = 0;
+  // On a phone the browser sends a click where the finger lifted, and by then the open wheel covers that spot.
+  // Without this, that click lands on the dark backdrop and shuts the wheel the moment it opens.
+  const ghost = () => dragging || performance.now() - Math.max(openedAt, liftedAt) < 400;
 
   const current = () => (location.hash === "#soon" ? null : store.get("journal-type", "meals"));
   const paintFab = () => { const j = JOURNALS.find((x) => x.id === current()); fab.firstElementChild.textContent = j ? j.icon : "＋"; fab.setAttribute("aria-label", `Switch journal. Now: ${j ? j.name : "empty slot"}`); };
@@ -503,7 +506,7 @@ export function initWheel() {
   };
   function show() {
     if (open) return;
-    open = true; place(); setHot(null);
+    open = true; openedAt = performance.now(); place(); setHot(null);
     wheel.hidden = false;
     requestAnimationFrame(() => requestAnimationFrame(() => wheel.classList.add("open")));
   }
@@ -545,16 +548,17 @@ export function initWheel() {
   addEventListener("pointermove", (ev) => { if (dragging && open && Math.hypot(ev.clientX - startX, ev.clientY - startY) > 12) aim(ev.clientX, ev.clientY); });
   addEventListener("pointerup", (ev) => {
     if (!dragging) return;
-    dragging = false;
+    dragging = false; liftedAt = performance.now();
     // A slide that ends pointing at a journal picks it; a plain tap leaves the wheel open.
     if (Math.hypot(ev.clientX - startX, ev.clientY - startY) <= 12) return;
     aim(ev.clientX, ev.clientY);
     if (hot) choose(hot.dataset.j);
   });
-  addEventListener("pointercancel", () => { dragging = false; });
+  addEventListener("pointercancel", () => { if (dragging) liftedAt = performance.now(); dragging = false; });
+  fab.addEventListener("contextmenu", (ev) => ev.preventDefault()); // long press on Android
   fab.addEventListener("click", (ev) => { if (ev.detail === 0) { show(); slots[0].focus(); } }); // keyboard
-  ring.addEventListener("click", (ev) => { const s = ev.target.closest(".wslot"); if (s) choose(s.dataset.j); });
-  wheel.addEventListener("click", (ev) => { if (ev.target === wheel || ev.target === hub) hide(); });
+  ring.addEventListener("click", (ev) => { const s = ev.target.closest(".wslot"); if (s && !(ev.detail && ghost())) choose(s.dataset.j); });
+  wheel.addEventListener("click", (ev) => { if ((ev.target === wheel || ev.target === hub) && !(ev.detail && ghost())) hide(); });
   addEventListener("keydown", (ev) => { if (open && ev.key === "Escape") hide(); });
   addEventListener("hashchange", paintFab);
   $("soonBack").addEventListener("click", () => choose(store.get("journal-type", "meals")));
