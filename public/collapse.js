@@ -118,6 +118,7 @@ export function initCollapse() {
       stop();
       if (!target?.isConnected) return;
       navigator.vibrate?.(12);
+      getSelection()?.removeAllRanges(); // drop any word the long press picked
       swallowUntil = Date.now() + 600; // the click that follows lifting the finger does nothing
       setFold(target, !target.classList.contains("folded"));
     }, HOLD_MS);
@@ -135,6 +136,7 @@ export function initCollapse() {
   addEventListener("scroll", () => { if (card) stop(); }, { passive: true });
   // No text selection or long-press menu while holding a card's top.
   app.addEventListener("contextmenu", (ev) => { if (ev.target.closest(".fold, .pressing, .folded")) ev.preventDefault(); });
+  document.addEventListener("selectstart", (ev) => { const t = ev.target.nodeType === 1 ? ev.target : ev.target.parentElement; if (card && t?.closest(".pressing")) ev.preventDefault(); });
 
   // A folded card also opens with a tap anywhere on it; nothing inside it is pressed by that tap.
   app.addEventListener("click", (ev) => {

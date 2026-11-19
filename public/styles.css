@@ -635,7 +635,8 @@ button.mface[aria-pressed="true"] { border-color: var(--ink) }
 /* Holding a card's top: it sinks a little while the knob's ring fills. */
 .foldable { transition: transform .25s ease-out }
 .foldable.pressing { transform: scale(.985); transition: transform .55s ease-out }
-@media (pointer: coarse) { .foldable > .fold + *, .folded { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none } }
+@media (pointer: coarse) { .foldable > .fold + *, .foldable :is(h2, h3, .fdtitle, .eyebrow, .who), .folded { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none } }
+.foldable.pressing, .foldable.pressing * { -webkit-user-select: none !important; user-select: none !important; -webkit-touch-callout: none !important }
 /* Folded: one tidy line with the card's title. */
 .folded { display: flex !important; align-items: center; justify-content: space-between; gap: 12px; padding-block: 16px 14px; cursor: pointer; align-self: start;
   border-style: dashed }
