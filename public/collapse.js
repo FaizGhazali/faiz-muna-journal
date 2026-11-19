@@ -1,4 +1,4 @@
-// Fold any card: hold the round button at its top right until the ring fills; tap a folded card to open it.
+// Fold any card: hold the round knob on its top edge until the ring fills; tap a folded card to open it.
 // Which cards are folded is kept per device in localStorage "journal-folded". A tutorial card explains it
 // until the person ticks "Got it" ("journal-foldhint").
 // Cards are often redrawn with innerHTML, so a MutationObserver puts the button and the folded state back.
@@ -6,7 +6,6 @@
 const $ = (id) => document.getElementById(id);
 const CARDS = "#app .view .panel, #app .person";
 const HOLD_MS = 550;
-const FOLDED_H = 62;
 
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },
@@ -27,7 +26,15 @@ function keyOf(el) {
   return `${el.parentElement?.id || el.closest(".view")?.id || "x"}-${[...el.parentElement.children].indexOf(el)}`;
 }
 
-const BTN = `<svg viewBox="0 0 36 36" aria-hidden="true"><circle class="ftrack" cx="18" cy="18" r="16"/><circle class="fring" cx="18" cy="18" r="16" pathLength="100"/><path class="fchev" d="M12 15.5l6 6 6-6"/></svg>`;
+// The words shown on a folded card: its heading, else its small label, else a generic name.
+function titleOf(el) {
+  const label = el.getAttribute("aria-label");
+  const h = el.querySelector(":scope > h2, :scope > .who h2, :scope h2, .fdtitle, h3, .eyebrow");
+  const text = (h?.textContent || label || "Card").replace(/\s+/g, " ").trim();
+  return text.length > 40 ? `${text.slice(0, 38)}…` : text;
+}
+
+const BTN =`<svg viewBox="0 0 36 36" aria-hidden="true"><circle class="ftrack" cx="18" cy="18" r="16"/><circle class="fring" cx="18" cy="18" r="16" pathLength="100"/><path class="fchev" d="M12 15.5l6 6 6-6"/></svg>`;
 
 function scan() {
   document.querySelectorAll(CARDS).forEach((el) => {
@@ -40,6 +47,8 @@ function scan() {
     }
     const k = keyOf(el), on = folded.has(k);
     if (el.dataset.fold !== k) el.dataset.fold = k;
+    const t = titleOf(el);
+    if (el.dataset.title !== t) el.dataset.title = t;
     if (el.classList.contains("folded") !== on) el.classList.toggle("folded", on);
     const label = on ? "Folded card. Tap to open" : "Hold to fold this card";
     if (b.getAttribute("aria-label") !== label) { b.setAttribute("aria-label", label); b.setAttribute("aria-expanded", String(!on)); }
@@ -50,14 +59,17 @@ function setFold(el, on) {
   const k = el.dataset.fold || keyOf(el);
   if (on) folded.add(k); else folded.delete(k);
   save();
-  const from = el.getBoundingClientRect().height;
+  const top = el.getBoundingClientRect().top;
   el.classList.toggle("folded", on);
   scan();
+  // Keep the card where it was on screen, so the page doesn't jump under your finger.
+  const moved = el.getBoundingClientRect().top - top;
+  if (moved) scrollBy(0, moved);
   if (!reduced() && el.animate) {
-    const to = on ? FOLDED_H : el.scrollHeight;
-    el.style.overflow = "hidden";
-    el.animate([{ maxHeight: `${from}px` }, { maxHeight: `${to}px` }], { duration: on ? 320 : 380, easing: "cubic-bezier(.2,.8,.2,1)" })
-      .finished.finally(() => { el.style.overflow = ""; });
+    const ease = "cubic-bezier(.2,.9,.3,1.2)";
+    if (on) el.animate([{ transform: "scaleY(1.6)", transformOrigin: "top", opacity: 0.4 }, { transform: "none", transformOrigin: "top", opacity: 1 }], { duration: 320, easing: ease });
+    else [...el.children].filter((c) => !c.classList.contains("fold")).forEach((c, i) =>
+      c.animate([{ opacity: 0, transform: "translateY(-8px)" }, { opacity: 1, transform: "none" }], { duration: 300, delay: Math.min(i, 6) * 30, easing: "ease-out", fill: "backwards" }));
   }
   if (!on) dispatchEvent(new Event("resize")); // charts drawn while folded get their real width
 }
