@@ -101,3 +101,12 @@ test("moodMix month and year", () => {
   assert.equal(y.next, null);
   assert.equal(y.prev, "2025-01-01");
 });
+
+test("moodMix pct: share of rated days, whole numbers that add up to 100", () => {
+  const map = { "2026-11-16": 4, "2026-11-17": 4, "2026-11-18": 2 };
+  const c = moodMix(map, "week", "2026-11-19", "2026-11-19");
+  assert.deepEqual(c.pct, [0, 0, 33, 0, 67, 0]);
+  assert.deepEqual(moodMix({}, "week", "2026-11-19", "2026-11-19").pct, [0, 0, 0, 0, 0, 0]);
+  const three = moodMix({ "2026-11-16": 1, "2026-11-17": 3, "2026-11-18": 5 }, "week", "2026-11-19", "2026-11-19");
+  assert.equal(three.pct.reduce((s, n) => s + n, 0), 100);
+});

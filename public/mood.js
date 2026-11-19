@@ -143,5 +143,16 @@ export function moodMix(map, view, anchor, today) {
   const end = to < today ? to : today, vals = between(map, from, end), counts = [0, 0, 0, 0, 0, 0];
   for (const v of vals) counts[v]++;
   const days = from > today ? 0 : Math.round((parse(end) - parse(from)) / 864e5) + 1;
-  return { view, from, to, counts, rated: vals.length, days, avg: avg(vals), prev, next: next > today ? null : next };
+  return { view, from, to, counts, pct: shares(counts, vals.length), rated: vals.length, days, avg: avg(vals), prev, next: next > today ? null : next };
+}
+
+// Whole-number percentages of `total` for counts[1..5] that always add up to 100 (largest remainder).
+function shares(counts, total) {
+  const pct = [0, 0, 0, 0, 0, 0];
+  if (!total) return pct;
+  const raw = counts.map((n) => (n * 100) / total);
+  for (let v = 1; v <= 5; v++) pct[v] = Math.floor(raw[v]);
+  let left = 100 - pct.reduce((s, n) => s + n, 0);
+  [1, 2, 3, 4, 5].sort((a, b) => (raw[b] - pct[b]) - (raw[a] - pct[a]) || b - a).forEach((v) => { if (left > 0 && raw[v] > pct[v]) { pct[v]++; left--; } });
+  return pct;
 }

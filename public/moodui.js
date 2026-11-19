@@ -173,7 +173,7 @@ function renderMix(map, t) {
   if (!box.firstChild) box.innerHTML = `<div class="fdhead"><h4 class="mmtitle">Mood mix</h4><button type="button" class="mini" data-close aria-label="Close mood mix">✕</button></div>
     <div class="chips" role="group" aria-label="Show">${VIEWS.map((v) => `<button type="button" class="chip" data-view="${v}">${v[0].toUpperCase() + v.slice(1)}</button>`).join("")}</div>
     <div class="myear"><button type="button" class="mini" data-go aria-label="Before">‹</button><b class="mmrange" aria-live="polite"></b><button type="button" class="mini" data-go aria-label="After">›</button></div>
-    <div class="mmbars">${[1, 2, 3, 4, 5].map((v) => `<div class="mmcol" data-v="${v}"><b class="mmn">0</b><span class="mmbar" style="background:var(--m${v})"></span>${face(v, 26)}<small>${MOODS[v].word}</small></div>`).join("")}</div>
+    <div class="mmbars">${[1, 2, 3, 4, 5].map((v) => `<div class="mmcol" data-v="${v}"><b class="mmn">0%</b><span class="mmbar" style="background:var(--m${v})"></span>${face(v, 26)}<small>${MOODS[v].word}</small></div>`).join("")}</div>
     <p class="note mmsum"></p>`;
   const wasHidden = box.hidden;
   box.hidden = false;
@@ -190,14 +190,14 @@ function renderMix(map, t) {
   swap(box.querySelector(".mmrange"), range);
 
   // Opening: start every bar at zero so they grow in.
-  if (wasHidden) { box.querySelectorAll(".mmcol").forEach((col) => { col.querySelector(".mmbar").style.height = "calc((100% - 80px) * 0)"; col.querySelector(".mmn").textContent = "0"; }); box.offsetHeight; }
+  if (wasHidden) { box.querySelectorAll(".mmcol").forEach((col) => { col.querySelector(".mmbar").style.height = "calc((100% - 80px) * 0)"; col.querySelector(".mmn").textContent = "0%"; }); box.offsetHeight; }
   const top = Math.max(1, ...c.counts.slice(1));
   box.querySelectorAll(".mmcol").forEach((col) => {
-    const v = Number(col.dataset.v), n = c.counts[v];
+    const v = Number(col.dataset.v), n = c.counts[v], p = c.pct[v];
     col.querySelector(".mmbar").style.height = `calc((100% - 80px) * ${(n / top).toFixed(3)})`;
     col.classList.toggle("zero", !n);
-    count(col.querySelector(".mmn"), n);
-    col.setAttribute("aria-label", `${MOODS[v].word}: ${n} day${n === 1 ? "" : "s"}`);
+    count(col.querySelector(".mmn"), p, "%");
+    col.setAttribute("aria-label", `${MOODS[v].word}: ${p}% (${n} day${n === 1 ? "" : "s"})`);
   });
   const hint = view === "month" ? "Tap the same day again to see its week." : view === "week" ? "Tap another day to see its month." : "";
   swap(box.querySelector(".mmsum"), c.rated
@@ -212,13 +212,13 @@ function swap(el, text) {
   if (!calm()) el.animate([{ opacity: 0, transform: "translateY(3px)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "ease-out" });
 }
 // Count a number up or down to its new value.
-function count(el, to) {
-  const from = Number(el.textContent) || 0;
+function count(el, to, unit = "") {
+  const from = parseFloat(el.textContent) || 0;
   cancelAnimationFrame(el._raf);
-  if (from === to || calm()) { el.textContent = to; return; }
+  if (from === to || calm()) { el.textContent = to + unit; return; }
   const t0 = performance.now(), step = (now) => {
     const k = Math.min(1, (now - t0) / 450), e = 1 - (1 - k) ** 3;
-    el.textContent = Math.round(from + (to - from) * e);
+    el.textContent = Math.round(from + (to - from) * e) + unit;
     if (k < 1) el._raf = requestAnimationFrame(step);
   };
   el._raf = requestAnimationFrame(step);
