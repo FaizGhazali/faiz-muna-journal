@@ -368,3 +368,69 @@ details p { margin: 8px 0 0; color: var(--muted) }
 .demobar p { margin: 0; flex: 1 1 240px }
 .demobar .mini { color: var(--ink); background: var(--surface) }
 #loginMsg:empty { display: none }
+
+/* Mood: the "Yesterday" card and the Mood history page (#mood). Cool colours for hard days, warm for good ones. */
+:root { --m1: #4b4f9e; --m2: #8f97dc; --m3: #d8d2c0; --m4: #f2c14e; --m5: #f08a24 }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --m1: #6a70d8; --m2: #a2a9ee; --m3: #8a8473; --m4: #e9bb45; --m5: #f59a3e } }
+:root[data-theme="dark"] { --m1: #6a70d8; --m2: #a2a9ee; --m3: #8a8473; --m4: #e9bb45; --m5: #f59a3e }
+.move { grid-template-rows: auto 1fr }
+.move .next { grid-row: span 2 }
+@media (max-width: 760px) { .move { grid-template-rows: none } .move .next { grid-row: auto } }
+.mood { display: grid; gap: 10px; align-content: start }
+.mdate { font-size: 13px; color: var(--muted) }
+.face { display: block; flex: none }
+.mnow { display: flex; align-items: center; gap: 12px; min-width: 0 }
+.mnow strong { display: block; font: 700 18px/1.2 var(--display) }
+.mnow strong.unrated { color: var(--muted) }
+.mnow small { display: block; color: var(--muted); font-size: 13px }
+.mquote { margin: 0; font-style: italic; line-height: 1.5; border-left: 3px solid var(--line); padding-left: 10px; overflow-wrap: anywhere }
+.mpick { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 6px }
+.mask { margin: 0; font-size: 14px; color: var(--muted) }
+.mfaces { display: flex; justify-content: space-between; gap: 4px; max-width: 300px }
+button.mface { padding: 3px; border-radius: 50%; border: 2px solid transparent; line-height: 0 }
+button.mface[aria-pressed="true"] { border-color: var(--ink) }
+.mfaces:has([aria-pressed="true"]) .mface[aria-pressed="false"] { opacity: .5 }
+.mfoot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 8px; font-size: 14px; color: var(--muted) }
+.mfoot a { color: var(--accent); font-weight: 700; text-decoration: none; margin-left: auto }
+.mtile { display: flex; align-items: center; gap: 6px }
+.mtiles small { font-size: 12px; color: var(--muted) }
+.mtiles small.up, .mbhead b.up { color: var(--good) }
+.mtiles small.down, .mbhead b.down { color: var(--over) }
+.myear { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums }
+.pixels { display: grid; grid-template-columns: 30px repeat(31, minmax(0, 1fr)); gap: 2px; align-items: center; max-width: 620px }
+.pxmon { grid-column: 1; font-size: 11px; color: var(--muted) }
+.pxday { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: visible }
+.px { display: block; width: 100%; min-width: 0; aspect-ratio: 1; padding: 0; border: 0; border-radius: 2px; background: var(--line) }
+.px.future { background: transparent; box-shadow: inset 0 0 0 1px var(--line) }
+.px.on { outline: 2px solid var(--ink); outline-offset: 1px; position: relative; z-index: 1 }
+.mlegend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--muted) }
+.mlegend span { display: flex; align-items: center; gap: 4px }
+.mlegend i { width: 12px; height: 12px; border-radius: 3px }
+.mlegend i.none { background: var(--line) }
+.mday { border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 10px; justify-items: start }
+.mdayhead { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 360px }
+.mdayhead .mnow { flex: 1 }
+.mdayhead .mnow strong { font-size: 16px }
+.mboost { display: grid; gap: 4px; padding-top: 10px; border-top: 1px solid var(--line) }
+.mbhead { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 15px }
+.mbhead b { font-size: 14px; color: var(--muted) }
+.mbrow { display: grid; grid-template-columns: 56px minmax(0, 1fr) 30px; align-items: center; gap: 8px; font-size: 13px; font-variant-numeric: tabular-nums }
+.mbrow small { color: var(--muted) }
+.mbar { height: 10px; background: var(--bg); border-radius: 5px; overflow: hidden }
+.mbar i { display: block; height: 100%; border-radius: 5px }
+.mbar.with i { background: var(--m5) }
+.mbar.without i { background: color-mix(in srgb, var(--muted) 50%, transparent) }
+.mwait { margin: 0; padding: 12px; background: var(--bg); border-radius: 8px; font-size: 14px }
+
+/* Landing: mood card and year in pixels fill in. */
+.moodemo { display: grid; gap: 14px }
+.moodemo .panel { display: grid; gap: 12px; box-shadow: 0 18px 50px -24px rgb(23 29 51 / .35) }
+.mfs { display: flex; justify-content: space-between; gap: 6px; max-width: 320px }
+.mfs .mf { line-height: 0; padding: 3px; border-radius: 50%; border: 2px solid transparent }
+.mfs .mf svg { display: block }
+.mfs .pick.on { border-color: var(--ink) }
+#landing.live .moodemo .mfs:has(.pick.on) .mf:not(.pick) { opacity: .5 }
+.mq { margin: 0; font-style: italic; border-left: 3px solid var(--line); padding-left: 10px }
+.mgrid { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 4px }
+.mgrid i { aspect-ratio: 1; border-radius: 3px; background: var(--c) }
+#landing.live .mgrid i:not(.on) { background: var(--line); transform: scale(.7) }

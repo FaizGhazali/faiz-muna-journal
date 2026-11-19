@@ -17,12 +17,13 @@
 {"@context":"https://schema.org","@graph":[
  {"@type":"WebApplication","name":"Faiz & Muna's Journal","alternateName":"Our Journal","url":"https://faiz-muna-journal-c43ab.web.app/","applicationCategory":"HealthApplication","operatingSystem":"Any (web browser, installable PWA)","inLanguage":"en","dateModified":"2026-11-19",
   "description":"A private weight, BMI and running journal for two people, with run reading from a COROS watch picture, a fitness score, activity suggestions and a daily habit checklist.",
-  "featureList":["Weight and BMI tracking with WHO ranges","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file","Try-it demo with sample data"]},
+  "featureList":["Weight and BMI tracking with WHO ranges","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file","Try-it demo with sample data","Daily mood rating with a quote, year in pixels and what goes with good days"]},
  {"@type":"FAQPage","mainEntity":[
   {"@type":"Question","name":"What is Our Journal?","acceptedAnswer":{"@type":"Answer","text":"A private web app for two people to track weight, BMI, running and daily habits together. It runs in the browser and can be installed on a phone like an app."}},
   {"@type":"Question","name":"How does it read my run from a picture?","acceptedAnswer":{"@type":"Answer","text":"You choose the screenshot of your COROS run. Text recognition runs on your own phone to pick out distance, time, pace and heart rate. The picture is never uploaded or saved, and you check the numbers before saving."}},
   {"@type":"Question","name":"Which BMI ranges does it use?","acceptedAnswer":{"@type":"Answer","text":"The WHO adult ranges: under 18.5 is underweight, 18.5 to 24.9 is normal, 25 to 29.9 is overweight and 30 or more is obese. It also shows the lower Asian adult cut-off, where above 22.9 counts as overweight."}},
   {"@type":"Question","name":"Does it work without internet?","acceptedAnswer":{"@type":"Answer","text":"Yes. Once opened, it keeps working offline, and new entries sync when the connection comes back."}},
+  {"@type":"Question","name":"How does the mood card work?","acceptedAnswer":{"@type":"Answer","text":"Each person taps one of five faces to rate how yesterday felt, from hard to great, and gets a short quote to match. The app never guesses your mood. The Mood history page shows a year in pixels, weekly, monthly and yearly averages, and what tends to go with your good days, like exercise or habits."}},
   {"@type":"Question","name":"Can anyone sign up?","acceptedAnswer":{"@type":"Answer","text":"Not at the moment. This journal is private to one family, and only they can sign in. Anyone can open the demo to try every feature with sample data."}},
   {"@type":"Question","name":"Is anything I do in the demo saved?","acceptedAnswer":{"@type":"Answer","text":"No. The demo uses made-up sample data kept only in your browser tab. Nothing is sent to a server, and it is all gone when you close the tab."}}]}
 ]}
@@ -172,6 +173,27 @@ try {
     </div>
   </section>
 
+  <section class="scene" aria-labelledby="l-mood">
+    <div class="copy">
+      <p class="eyebrow">Mood journal</p>
+      <h2 id="l-mood">Rate how yesterday felt with one tap</h2>
+      <p>Each morning, pick one of five faces for yesterday, from hard to great, and get a short quote to match. The journal never guesses your mood. Over time you see your whole year in colour, how each week and month went, and what tends to go with your good days, like a run or your habits.</p>
+      <ul><li>Five faces, one tap, a kind quote</li><li>Year in pixels, week and month averages</li><li>What goes with your good days</li></ul>
+    </div>
+    <div class="demo moodemo" aria-hidden="true">
+      <div class="panel">
+        <div class="hhead"><b>How was yesterday?</b><span class="note">Sample</span></div>
+        <div class="mfs"><span class="mf"><svg viewBox="0 0 24 24" width="40" height="40"><circle cx="12" cy="12" r="11" fill="var(--m1)"/><circle cx="8.5" cy="10" r="1.3" fill="#fff"/><circle cx="15.5" cy="10" r="1.3" fill="#fff"/><path d="M7.5 17 Q12 12.5 16.5 17" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="mf"><svg viewBox="0 0 24 24" width="40" height="40"><circle cx="12" cy="12" r="11" fill="var(--m2)"/><circle cx="8.5" cy="10" r="1.3" fill="#1b1e2c"/><circle cx="15.5" cy="10" r="1.3" fill="#1b1e2c"/><path d="M8 16.5 Q12 14.2 16 16.5" fill="none" stroke="#1b1e2c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="mf"><svg viewBox="0 0 24 24" width="40" height="40"><circle cx="12" cy="12" r="11" fill="var(--m3)"/><circle cx="8.5" cy="10" r="1.3" fill="#1b1e2c"/><circle cx="15.5" cy="10" r="1.3" fill="#1b1e2c"/><path d="M8 15.5 H16" fill="none" stroke="#1b1e2c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="mf pick" data-at="0.3"><svg viewBox="0 0 24 24" width="40" height="40"><circle cx="12" cy="12" r="11" fill="var(--m4)"/><circle cx="8.5" cy="10" r="1.3" fill="#1b1e2c"/><circle cx="15.5" cy="10" r="1.3" fill="#1b1e2c"/><path d="M7.8 14.5 Q12 18 16.2 14.5" fill="none" stroke="#1b1e2c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="mf"><svg viewBox="0 0 24 24" width="40" height="40"><circle cx="12" cy="12" r="11" fill="var(--m5)"/><circle cx="8.5" cy="10" r="1.3" fill="#1b1e2c"/><circle cx="15.5" cy="10" r="1.3" fill="#1b1e2c"/><path d="M7 13.6 Q12 20.5 17 13.6 Z" fill="#1b1e2c" stroke="#1b1e2c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+        <p class="mq flip" data-at="0.45">“What made it good? Do a little more of that today.”</p>
+      </div>
+      <div class="panel">
+        <div class="hhead"><b>Year in pixels</b><span class="note">Sample</span></div>
+        <div class="mgrid"><i data-at="0.35" style="--c:var(--m3)"></i><i data-at="0.36" style="--c:var(--m2)"></i><i data-at="0.37" style="--c:var(--m4)"></i><i data-at="0.38" style="--c:var(--m2)"></i><i data-at="0.39" style="--c:var(--m4)"></i><i data-at="0.39" style="--c:var(--m3)"></i><i data-at="0.40" style="--c:var(--m2)"></i><i data-at="0.41" style="--c:var(--m4)"></i><i data-at="0.42" style="--c:var(--m2)"></i><i data-at="0.43" style="--c:var(--m4)"></i><i data-at="0.44" style="--c:var(--m2)"></i><i data-at="0.45" style="--c:var(--m2)"></i><i data-at="0.46" style="--c:var(--m4)"></i><i data-at="0.47" style="--c:var(--m5)"></i><i data-at="0.47" style="--c:var(--m2)"></i><i data-at="0.48" style="--c:var(--m3)"></i><i data-at="0.49" style="--c:var(--m4)"></i><i data-at="0.50" style="--c:var(--m5)"></i><i data-at="0.51" style="--c:var(--m4)"></i><i data-at="0.52" style="--c:var(--m4)"></i><i data-at="0.53" style="--c:var(--m5)"></i><i data-at="0.54" style="--c:var(--m2)"></i><i data-at="0.55" style="--c:var(--m5)"></i><i data-at="0.56" style="--c:var(--m3)"></i><i data-at="0.56" style="--c:var(--m3)"></i><i data-at="0.57" style="--c:var(--m3)"></i><i data-at="0.58" style="--c:var(--m4)"></i><i data-at="0.59" style="--c:var(--m5)"></i><i data-at="0.60" style="--c:var(--m3)"></i><i data-at="0.61" style="--c:var(--m4)"></i><i data-at="0.62" style="--c:var(--m4)"></i><i data-at="0.63" style="--c:var(--m4)"></i><i data-at="0.64" style="--c:var(--m4)"></i><i data-at="0.64" style="--c:var(--m3)"></i><i data-at="0.65" style="--c:var(--m3)"></i><i data-at="0.66" style="--c:var(--m3)"></i><i data-at="0.67" style="--c:var(--m5)"></i><i data-at="0.68" style="--c:var(--m4)"></i><i data-at="0.69" style="--c:var(--m4)"></i><i data-at="0.70" style="--c:var(--m4)"></i><i data-at="0.71" style="--c:var(--m4)"></i><i data-at="0.72" style="--c:var(--m4)"></i><i data-at="0.72" style="--c:var(--m5)"></i><i data-at="0.73" style="--c:var(--m5)"></i><i data-at="0.74" style="--c:var(--m4)"></i><i data-at="0.75" style="--c:var(--m5)"></i><i data-at="0.76" style="--c:var(--m4)"></i><i data-at="0.77" style="--c:var(--m5)"></i><i data-at="0.78" style="--c:var(--m5)"></i><i data-at="0.79" style="--c:var(--m4)"></i><i data-at="0.80" style="--c:var(--m5)"></i><i data-at="0.81" style="--c:var(--m3)"></i><i data-at="0.81" style="--c:var(--m4)"></i><i data-at="0.82" style="--c:var(--m5)"></i><i data-at="0.83" style="--c:var(--m4)"></i><i data-at="0.84" style="--c:var(--m4)"></i></div>
+        <p class="note flip" data-at="0.9">Good days go with exercise: <b class="ink">+1.1</b></p>
+      </div>
+    </div>
+  </section>
+
   <section class="scene" aria-labelledby="l-app">
     <div class="copy">
       <p class="eyebrow">Built for phones</p>
@@ -191,6 +213,7 @@ try {
   <section class="info" aria-labelledby="l-new">
     <h2 id="l-new">What's new</h2>
     <ol class="changes">
+      <li><time datetime="2026-11-19">19 Nov 2026</time> Mood: rate yesterday with one tap, get a quote, and see your year in pixels.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Try the demo: the whole journal with sample data, nothing saved.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> This page: a tour of the journal for new visitors.</li>
       <li><time datetime="2026-11-18">18 Nov 2026</time> Fitness detail page: weight vs pace, weight vs distance, pace and distance over time.</li>
@@ -206,6 +229,7 @@ try {
     <details><summary>How does it read my run from a picture?</summary><p>You choose the screenshot of your COROS run. Text recognition runs on your own phone to pick out distance, time, pace and heart rate. The picture is never uploaded or saved, and you check the numbers before saving.</p></details>
     <details><summary>Which BMI ranges does it use?</summary><p>The WHO adult ranges: under 18.5 is underweight, 18.5 to 24.9 is normal, 25 to 29.9 is overweight and 30 or more is obese. It also shows the lower Asian adult cut-off, where above 22.9 counts as overweight.</p></details>
     <details><summary>Does it work without internet?</summary><p>Yes. Once opened, it keeps working offline, and new entries sync when the connection comes back.</p></details>
+    <details><summary>How does the mood card work?</summary><p>Each person taps one of five faces to rate how yesterday felt, from hard to great, and gets a short quote to match. The app never guesses your mood. The Mood history page shows a year in pixels, weekly, monthly and yearly averages, and what tends to go with your good days, like exercise or habits.</p></details>
     <details><summary>Can anyone sign up?</summary><p>Not at the moment. This journal is private to one family, and only they can sign in. Anyone can open the demo to try every feature with sample data.</p></details>
     <details><summary>Is anything I do in the demo saved?</summary><p>No. The demo uses made-up sample data kept only in your browser tab. Nothing is sent to a server, and it is all gone when you close the tab.</p></details>
   </section>
@@ -262,6 +286,7 @@ try {
   <section class="move" aria-label="Your next move">
     <div class="panel next" id="next"></div>
     <div class="panel habits" id="habits"></div>
+    <div class="panel mood" id="moodCard" aria-label="Yesterday's mood"></div>
   </section>
   <section class="people" id="people" aria-label="Progress"></section>
   <div class="lower">
@@ -368,6 +393,17 @@ try {
     </section>
     <div class="fdcards" id="fdBody"></div>
     <p class="note">Heat, hills, sleep and how hard you push change pace and distance more than weight does. "Similar effort only" keeps runs within ±5 bpm of your usual average heart rate. Read these graphs as a rough guide.</p>
+  </div>
+  <div class="view" id="mood" hidden>
+    <div class="fdtop"><button type="button" id="mdBack">← Back</button></div>
+    <section class="panel fd" aria-labelledby="mdTitle">
+      <p class="eyebrow">Mood history</p>
+      <h2 id="mdTitle">Your mood</h2>
+      <div class="fdtiles mtiles" id="mdTiles"></div>
+    </section>
+    <section class="panel fd" id="mdYear"></section>
+    <section class="panel fd" id="mdBoost"></section>
+    <p class="note">Mood is how each of you rated your own day, from hard to great. Only you choose it; the app never guesses. The averages and comparisons are a rough guide to notice patterns, not a health measure.</p>
   </div>
 </div>
 <script type="module" src="/app.js"></script>

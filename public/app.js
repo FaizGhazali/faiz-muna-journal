@@ -8,9 +8,11 @@ import { openMemory } from "./memdb.js";
 import { sampleData } from "./sample.js";
 import { fitnessSeries, perBeat, paceOf, clock, toSecs } from "./fitness.js";
 import { readCoros, parseCoros } from "./coros.js";
-import { initActivities, startActivities, stopActivities, refresh as refreshActivities, refreshMove } from "./activities.js";
+import { initActivities, startActivities, stopActivities, refresh as refreshActivities, refreshMove, currentPerson, habitFacts } from "./activities.js";
 import { initBackup } from "./backup.js";
 import { initFitDetail, refreshFitDetail } from "./fitdetail.js";
+import { initMood, refreshMood } from "./moodui.js";
+import { MOODS, isMood } from "./mood.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const PACE = 0.5; // kg a week
@@ -243,6 +245,7 @@ function entryHtml(e) {
   if (typeof e.weight === "number") facts.push(`${e.weight.toFixed(1)} kg, BMI ${bmiOf(p, e.weight).toFixed(1)}`);
   if (e.run) facts.push(`${e.run.km} km run in ${clock(e.run.secs)}${e.run.hr ? `, ${e.run.hr} bpm` : ""}`);
   else if (typeof e.minutes === "number") facts.push(`${e.minutes} min exercise`);
+  if (isMood(e.mood)) facts.push(`${facts.length ? "felt" : "Felt"} ${MOODS[e.mood].word.toLowerCase()}`);
   const btns = confirmDelete === e.id
     ? `<button class="mini danger" data-act="del-yes" data-id="${esc(e.id)}">Delete</button><button class="mini" data-act="del-no">Keep</button>`
     : `<button class="mini" data-act="edit" data-id="${esc(e.id)}">Edit</button><button class="mini" data-act="del" data-id="${esc(e.id)}">Delete</button>`;
@@ -255,7 +258,7 @@ function renderFoot() {
     <p>The fitness score compares how fast a run was with how hard the heart worked for it, with a small bonus for quick heart rate recovery. Faster at the same heart rate, or the same pace at a lower one, moves it up. It's an estimate for watching your own trend, not a medical measure.</p>
     <p>BMI doesn't separate muscle from fat, so read it alongside how you feel and what a doctor tells you.</p>`;
 }
-function render() { renderPeople(); renderFeed(); refreshFitDetail(); }
+function render() { renderPeople(); renderFeed(); refreshFitDetail(); refreshMood(); }
 function banner(text) { $("banner").textContent = text || ""; $("banner").hidden = !text; }
 
 // The run boxes in the form. Paces and time are typed as 9:29 and 40:37.
@@ -360,6 +363,8 @@ $("form").addEventListener("submit", async (ev) => {
   if (run) body.run = run;
   if (Object.keys(body).length === 2 && !n) { msg.textContent = "Add a weight, a run picture or a note first."; return; }
   if (n) body.note = n;
+  const md = (wasEditing ? before : keep).mood; // the mood is rated on its own card, so keep it
+  if (isMood(md)) body.mood = md;
   $("save").disabled = true;
   await commit(() => setDoc(doc(entriesCol, id), body));
   if (wasEditing && wasEditing !== id) await commit(() => deleteDoc(doc(entriesCol, wasEditing)));
@@ -384,8 +389,9 @@ $("feed").addEventListener("click", async (ev) => {
 });
 
 const exercisedToday = (pid) => entries.some((e) => e.person === pid && e.date === today() && (e.minutes > 0 || e.run));
-initActivities({ db, people: () => PEOPLE, commit, exercisedToday });
+initActivities({ db, people: () => PEOPLE, commit, exercisedToday, onChange: () => refreshMood() });
 initBackup({ db });
+initMood({ db, people: () => PEOPLE, entries: () => entries, me: currentPerson, habitFacts, commit });
 initFitDetail({
   people: () => PEOPLE, entries: () => entries,
   saveBorn: (pid, born) => commit(() => setDoc(doc(db, "config", "people"), { people: PEOPLE.map((p) => (p.id === pid ? { ...p, born } : p)) })),

@@ -23,13 +23,13 @@ const store = {
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const TABS = { inbox: "Ideas", active: "Active", paused: "Paused", done: "Done" };
 
-let db, people, commit, exercisedToday, actsCol, daysCol, movesCol;
+let db, people, commit, exercisedToday, onChange, actsCol, daysCol, movesCol;
 let acts = [], dayDocs = [], moves = [], movesReady = false, unsubs = [];
 let me = null, tab = "inbox", typeFilter = "", editing = null, draft = null, confirmDel = null;
 let moveMsg = "", undoFn = null, undoId = null, addTypeTouched = false, lastDay = today();
 
 export function initActivities(opts) {
-  ({ db, people, commit, exercisedToday } = opts);
+  ({ db, people, commit, exercisedToday, onChange } = opts);
   actsCol = collection(db, "activities");
   daysCol = collection(db, "habitDays");
   movesCol = collection(db, "moves");
@@ -45,7 +45,7 @@ export function startActivities() {
   unsubs.push(onSnapshot(actsCol, (snap) => { acts = snap.docs.map((d) => ({ id: d.id, ...d.data() })); refresh(); }));
   unsubs.push(onSnapshot(daysCol, (snap) => { dayDocs = snap.docs.map((d) => d.data()); refresh(); }));
   // Only the last 180 days are used for learning, so older history isn't downloaded.
-  unsubs.push(onSnapshot(query(movesCol, where("date", ">=", addDays(today(), -180))), (snap) => { moves = snap.docs.map((d) => d.data()); movesReady = true; renderMove(); }));
+  unsubs.push(onSnapshot(query(movesCol, where("date", ">=", addDays(today(), -180))), (snap) => { moves = snap.docs.map((d) => d.data()); movesReady = true; renderMove(); onChange?.(); }));
 }
 // The journal calls this when entries change, so "already exercised today" stays current.
 export function refreshMove() { if (people().length && me) renderMove(); }
@@ -62,11 +62,29 @@ export function refresh() {
   renderMove();
   renderHabits();
   renderList();
+  onChange?.();
+}
+
+// The person picked with "For" at the top (the mood card and page follow it too).
+export const currentPerson = () => me;
+
+// Habits and Next Moves per day for one person, for the mood page: { date: { habitsDone, habitsDue, habits, move } }.
+// "habits" = at least half of that day's due habits were ticked.
+export function habitFacts(pid) {
+  const out = {}, hs = acts.filter((a) => a.owner === pid && a.type === "habit" && a.status !== "inbox");
+  for (const d of dayDocs) {
+    if (d.owner !== pid) continue;
+    const done = (d.done || []).length;
+    const due = Math.max(done, hs.filter((h) => (!h.created || h.created <= d.date) && isScheduled(h, d.date) && !(d.skipped || []).includes(h.id)).length);
+    out[d.date] = { habitsDone: done, habitsDue: due, habits: due > 0 && done / due >= 0.5 };
+  }
+  for (const m of moves) if (m.owner === pid && m.act === "done" && m.type !== "habit") (out[m.date] ||= {}).move = true;
+  return out;
 }
 
 function showView() {
-  const view = location.hash === "#activities" ? "activities" : location.hash.startsWith("#fitness") ? "fitness" : "home";
-  ["home", "activities", "fitness"].forEach((v) => { $(v).hidden = v !== view; });
+  const view = location.hash === "#activities" ? "activities" : location.hash.startsWith("#fitness") ? "fitness" : location.hash === "#mood" ? "mood" : "home";
+  ["home", "activities", "fitness", "mood"].forEach((v) => { $(v).hidden = v !== view; });
   $("meBox").hidden = view === "fitness"; // the fitness page has its own person switch
   document.querySelectorAll("#nav a").forEach((a) => a.toggleAttribute("aria-current", a.dataset.view === view));
 }

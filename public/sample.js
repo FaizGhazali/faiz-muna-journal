@@ -43,6 +43,11 @@ export function sampleData(now = new Date()) {
         };
         e.minutes = Math.round(secs / 60);
       }
+      // Mood 1-5: better on run days and weekends, a little better over the weeks. Today isn't over, and Lina hasn't rated yesterday yet.
+      if (i > 0 && !(i === 1 && p.id === "p2") && rnd() < 0.88) {
+        const lift = (e.run ? 0.7 : 0) + ([0, 6].includes(dow(d)) ? 0.5 : 0) + t * 0.4;
+        e.mood = Math.max(1, Math.min(5, Math.round(2.7 + lift + jitter(1.3))));
+      }
       if (i === DAYS) e.note = "Starting weight.";
       else if ((e.weight || e.run) && rnd() < 0.14) e.note = notes[Math.floor(rnd() * notes.length)];
       if (Object.keys(e).length > 2) entries[`${p.id}_${d}`] = e;
