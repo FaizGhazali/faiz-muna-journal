@@ -154,7 +154,8 @@ export function noteLang(note) {
 // Words a diary can add without adding a fact: linking words and everyday verbs of telling.
 const LINKS = new Set(("then after that later also again went go going came come there here when while because since really quite little bit just " +
   "today tonight morning evening myself were been being have having pastu lepas lepastu kemudian then lagi pun tapi sebab bila masa jadi " +
-  "honestly actually finally anyway okay simple straight only had memang betul agak harini hari sangat sikit makan pergi terus buat").split(" "));
+  "honestly actually finally anyway okay simple straight only had memang betul agak harini hari sangat sikit makan pergi terus buat " +
+  "atau sebelum selepas sambil mungkin baru kerana walaupun akibatnya tadi petangnya paginya malamnya untuk dari yang sahaja saja").split(" "));
 export const LANG_NAME = { ms: "Malay", en: "English", manglish: "Manglish" };
 // The whole set of notes: one language, or "mixed" when the notes differ.
 export function langOf(text) {
@@ -186,6 +187,23 @@ const EXAMPLES = {
   mixed: { notes: ["(English) gym aftr wrk", "(Malay) leg day, penat gila, esok confirm tak boleh jalam", "(Manglish) dinner roti canai only, so cheap one"],
     out: ["After work today I went straight to the gym.", "Leg day, memang penat gila, esok confirm tak boleh jalan.", "Then dinner roti canai only, so cheap one."] },
 };
+// Story mode (cloud writer only): each note becomes one to three sentences that tell that part of the day. Tested on
+// Sailor2-8B, the best Malay storyteller of the free models tried: it reads like a journal but adds small details
+// ("gepuk yang pedas sangat"), so the person is shown what was added and checks it before saving.
+const STORY_EXAMPLES = {
+  ms: { notes: EXAMPLES.ms.notes.slice(0, 3).concat("dinner roti canai je"),
+    out: ["Hari ni lepas kerja, walaupun badan dah letih, aku gagahkan diri jugak pergi gym.", "Leg day pulak tu, memang penat gila sampai rasa kaki dah tak nak bergerak.",
+      "Aku dah boleh agak, esok confirm tak boleh jalan dengan betul.", "Lepas semua tu, dinner aku simple je, roti canai, cukup untuk tutup hari yang panjang ni."] },
+  en: { notes: EXAMPLES.en.notes,
+    out: ["After work today I dragged myself to the gym, even though part of me just wanted to go home.", "Now my legs are so sore that every step reminds me of every set.",
+      "Dinner was just roti canai, so cheap, a simple end to a long day."] },
+  manglish: { notes: EXAMPLES.manglish.notes,
+    out: ["After work today I still went to the gym, even though I was quite tired already.", "Leg day lah, so tomorrow sure cannot walk one, confirm.",
+      "Then dinner roti canai only, so cheap one, simple but enough for me."] },
+  mixed: { notes: EXAMPLES.mixed.notes,
+    out: ["After work today I dragged myself to the gym, even though part of me just wanted to go home.", "Leg day pulak tu, memang penat gila, and esok confirm tak boleh jalan dengan betul.",
+      "Then dinner roti canai only, so cheap one, simple but enough for me."] },
+};
 const numbered = (xs) => xs.map((x, i) => `${i + 1}. ${x}`).join("\n");
 // The notes as the model sees them: one per line, short forms spelled out, bullets and trailing commas gone.
 export function noteLines(notes) {
@@ -194,7 +212,8 @@ export function noteLines(notes) {
 
 // The chat messages for the model. Nothing here leaves the device: the model runs in the browser.
 export const ABOUT_MAX = 600;
-export function buildMessages({ notes, profile = null, samples = [], name = "", about = "", compact = false }) {
+export function buildMessages({ notes, profile = null, samples = [], name = "", about = "", compact = false, story = false }) {
+  if (story) compact = false; // story mode is cloud only, so never the phone's short rules
   const lang = langOf(notes), target = targetWords(notes, profile);
   // Language always follows the notes, note by note: what was written in English stays English, Malay stays Malay.
   // The style profile never changes the language (its language line is left out of the prompt below).
@@ -214,7 +233,18 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
   const voice = "Each note becomes ONE complete diary sentence, as them (\"I\"/\"aku\"). You may start it with a small linking word (today, then, after that, hari ni, pastu, lepas tu, tapi, sebab tu) and add the small words a full sentence needs.";
   const format = "Reply with the same numbers, one sentence per line, and nothing else. Never merge, split, skip or add a number.";
   const facts = "Each sentence says only what its own note says. Never add events, people, places, times, food, feelings, tastes or opinions.";
-  const rules = compact ? [
+  const rules = story ? [
+    `You turn someone's short numbered notes into their own diary entry, told like a story. You are not chatting with them. Write as them, in the first person ("I"/"aku"/"saya", whichever the notes use).`,
+    "Each note becomes one to three sentences that tell that part of the day: what happened, what it was like, and how it leads to the next note.",
+    "You may colour what a note says: how it felt, what it was like, why it mattered. Never add anything that happened or that they did which no note says: no extra activities, people, places, food, times or plans. If a note doesn't give a feeling, keep any feeling mild and close to the note.",
+    "Reply with the same numbers, one line per number, and nothing else: no headings, no bold, no summary.",
+    "Keep their own words: slang, names and Malay words stay theirs. Never translate a word or explain it in brackets.",
+    fix,
+    langRule,
+    `No life lessons, no questions, no hashtags, and never talk to the reader ("you").`,
+    `Avoid chatbot words such as: ${AI_WORDS.slice(0, 10).join(", ")}.`,
+    profile?.emoji ? "Emojis are fine if they fit." : "No emojis.",
+  ] : compact ? [
     `You rewrite this person's numbered notes as their diary. You are not chatting.`,
     voice, format, facts,
     `Keep their words and slang. Never translate. ${shortLang}`,
@@ -241,11 +271,11 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
   // talk, what they call people). Background only: it never becomes something that happened today.
   const bio = String(about || "").trim().slice(0, compact ? 300 : ABOUT_MAX); // phones: shorter, for a lighter first step
   if (bio) style += `\n\nAbout the writer, in their own words. Use it only to sound like them and to know who people are (for example, use the name or nickname they use for someone a note mentions). Never add anything from here as something that happened today, and never mention a person, place or habit from here unless a note does:\n"""${bio}"""`;
-  const lines = noteLines(notes);
+  const lines = noteLines(notes), ex = (story ? STORY_EXAMPLES : EXAMPLES)[lang];
   return [
     { role: "system", content: rules.filter(Boolean).map((x) => `- ${x}`).join("\n") + style },
-    { role: "user", content: `My notes for today:\n${numbered(EXAMPLES[lang].notes)}` },
-    { role: "assistant", content: numbered(EXAMPLES[lang].out) },
+    { role: "user", content: `My notes for today:\n${numbered(ex.notes)}` },
+    { role: "assistant", content: numbered(ex.out) },
     { role: "user", content: "That was only an example. Now do mine, using nothing from the example." },
     { role: "assistant", content: "Okay. Send your notes." },
     { role: "user", content: `${name ? `My name is ${name}. ` : ""}My notes for today:\n${numbered(lines.map((l) => `${lang === "mixed" ? `(${LANG_NAME[noteLang(l)]}) ` : ""}${l}`))}` },
@@ -256,24 +286,35 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
 const asSentence = (s) => { const x = String(s).trim(); return x ? x[0].toUpperCase() + x.slice(1) + (/[.!?…]$/.test(x) ? "" : ".") : ""; };
 // A sentence that wandered from its note: two or more words the note never gave, much longer than the note, or in
 // another language (English notes turned Malay). Then the note itself goes in instead.
-export function strayed(note, s) {
-  if (!s || words(s) > words(note) * 2.5 + 8) return true;
-  if (unsupported(note, `${OPENING}\n\n${s}`).length >= 1) return true; // one is enough: "maybe" -> "mungkin" is one word
+// Story mode is meant to add words, so there only a language switch or a runaway line counts as straying.
+export function strayed(note, s, story = false) {
+  if (!s || words(s) > (story ? words(note) * 10 + 60 : words(note) * 2.5 + 8)) return true;
+  if (!story && unsupported(note, `${OPENING}\n\n${s}`).length >= 1) return true; // one is enough: "maybe" -> "mungkin" is one word
   return words(note) >= 4 && noteLang(note) !== noteLang(s) && !(noteLang(note) !== "ms" && noteLang(s) !== "ms");
 }
+// Story mode sometimes folds two notes into one line. A missing note is only added back when its words aren't
+// already in the entry.
+const coveredIn = (note, text) => {
+  const ws = tokens(note).filter((w) => w.length >= 4 && !STOP.has(w)), have = tokens(text);
+  return ws.length > 0 && ws.filter((w) => have.some((h) => sameWord(w, h))).length >= ws.length / 2;
+};
 // "1. ...\n2. ..." -> paragraphs, each sentence checked against its own note. While streaming (done = false) the last
 // line may be half-written, so it's shown as it is and only checked once the next line starts or writing ends.
-function fromNumbered(t, notes, done) {
+function fromNumbered(t, notes, done, story) {
   const ns = noteLines(notes), got = new Map(), order = [];
   for (const line of t.split("\n")) {
-    const m = line.match(/^\s*(\d{1,2})[.)]\s*(.*)$/);
+    const m = line.replace(/\*\*([^*]*)\*\*\s*[-:–]?\s*/g, "").match(/^\s*(\d{1,2})[.)]\s*(.*)$/); // bold headings some models add
     if (m && !got.has(+m[1])) { got.set(+m[1], m[2].trim()); order.push(+m[1]); }
   }
   const last = order[order.length - 1], out = [];
   for (let i = 1; i <= ns.length; i++) {
     const s = got.get(i), note = ns[i - 1];
-    if (s === undefined) { if (done) out.push(asSentence(note)); else break; continue; }
-    out.push(!done && i === last ? s : strayed(note, s) ? asSentence(note) : asSentence(s));
+    if (s === undefined) {
+      if (!done) break;
+      if (!story || !coveredIn(note, [...got.values()].join(" "))) out.push(asSentence(note));
+      continue;
+    }
+    out.push(!done && i === last ? s : strayed(note, s, story) ? asSentence(note) : asSentence(s));
   }
   // Paragraphs of about three sentences.
   const per = Math.ceil(out.length / Math.max(1, Math.round(out.length / 3)));
@@ -284,20 +325,25 @@ function fromNumbered(t, notes, done) {
 
 // Tidy what the model wrote: drop chatter around it and make sure it opens with "Dear Diary," once. done = false while
 // it's still streaming.
-export function cleanOutput(text, notes = "", done = true) {
+export function cleanOutput(text, notes = "", done = true, story = false) {
   let t = String(text || "").replace(/```[a-z]*\n?|```/gi, "").replace(/\r/g, "").trim();
   t = t.replace(/^(?:sure|okay|ok|here(?:'s| is)|berikut)[^\n]*:\s*\n+/i, "");
   t = t.replace(/^["“](.*)["”]$/s, "$1").trim();
   t = t.replace(/\n+(?:note|nota|\(note)[\s\S]*$/i, "").trim();
   t = t.replace(/^\s*\**\s*dear diary\s*,?\s*\**\s*,?\s*/i, "").trim();
   t = t.replace(/\((?:Malay|English|Manglish)\)\s*/g, ""); // language marks from the prompt never belong in the entry
-  if (notes && /^\s*\d{1,2}[.)]\s/m.test(t)) t = fromNumbered(t, notes, done);
+  if (notes && /^\s*\d{1,2}[.)]\s/m.test(t)) t = fromNumbered(t, notes, done, story);
   t = t.replace(/\n{3,}/g, "\n\n");
   // Small models like to gloss words "(tiredness)" and to end by talking to the reader. Neither belongs in a diary.
   const have = String(notes).toLowerCase();
   t = t.replace(/ ?\(([^()\n]{1,30})\)/g, (m, inner) => (have.includes(inner.toLowerCase()) ? m : ""));
   if (!/\byou\b/.test(have)) {
     const paras = t.split("\n\n").map((p) => sentences(p).filter((x) => !/\byou(?:'re|r|rs)?\b/i.test(x)).join(" ")).filter(Boolean);
+    if (paras.length) t = paras.join("\n\n");
+  }
+  // Story mode sometimes ends with a summary ("Jadi, kesimpulan: ...", "Overall, ..."): a diary doesn't sum itself up.
+  if (story && done) {
+    const paras = t.split("\n\n").map((p) => sentences(p).filter((x) => !/^(?:jadi,?\s*)?(?:kesimpulan(?:nya)?|secara keseluruhan|in summary|to sum up|overall|all in all)\b/i.test(x)).join(" ")).filter(Boolean);
     if (paras.length) t = paras.join("\n\n");
   }
   return t ? `${OPENING}\n\n${t}` : "";

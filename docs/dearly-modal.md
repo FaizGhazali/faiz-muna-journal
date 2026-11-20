@@ -1,7 +1,7 @@
 # Dearly's cloud writer on Modal (free)
 
 For phones whose graphics chip can't run the on-phone writer, like the Snapdragon 8 Gen 3. A small server on
-[Modal](https://modal.com) runs Qwen2.5-3B, about 6× the phone's Small model, so it writes better Malay and Manglish.
+[Modal](https://modal.com) runs Sailor2-8B, a free model trained for Southeast Asian languages, so it writes much better Malay and Manglish than the phone can.
 Nothing needs downloading on the phone.
 
 By default it runs on Modal's **CPUs** (llama.cpp, a 4-bit model of about 2 GB), because Modal asks for a card on file
@@ -19,8 +19,10 @@ as it's written.
 
 ## CPU or GPU?
 
-- **CPU + Qwen2.5-3B (the default).** No card needed. About 30–60 s per entry. For quicker but plainer writing, set
-  `GGUF_REPO = "Qwen/Qwen2.5-1.5B-Instruct-GGUF"` and `GGUF_FILE = "qwen2.5-1.5b-instruct-q4_k_m.gguf"`.
+- **CPU + Sailor2-8B (the default).** No card needed. About 5–25 s per entry once awake. Sailor2 is built on Qwen2.5 and
+  trained for Southeast Asian languages, and it told Malay stories best of the free models tried. For a smaller, faster,
+  plainer writer, set `GGUF_REPO = "Qwen/Qwen2.5-3B-Instruct-GGUF"`, `GGUF_FILE = "qwen2.5-3b-instruct-q4_k_m.gguf"` and
+  `CPU_MEMORY = 6144`.
 - **GPU (T4 + Qwen2.5-3B, or L4 + Qwen2.5-7B).** A few seconds per entry, and 7B writes the best Malay. Modal says
   "Please add a payment method to use T4/L4 GPU functions" first. With a card added and the spending limit at $0, it
   still runs on the free monthly credit. To switch, set `GPU` and `MODEL` at the top of `modal/dearly_writer.py`, then
@@ -41,7 +43,7 @@ as it's written.
    modal setup
    ```
 
-4. **Put the model in Modal's storage** (one time, ~2 GB on CPU, ~6 GB for 3B or ~15 GB for 7B on a GPU, a few minutes, uses a little free credit):
+4. **Put the model in Modal's storage** (one time, ~5 GB on CPU, ~6 GB for 3B or ~15 GB for 7B on a GPU, a few minutes, uses a little free credit):
 
    ```powershell
    modal run modal/dearly_writer.py::download

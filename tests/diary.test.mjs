@@ -136,6 +136,24 @@ test("numbered output: each sentence checked against its own note, then joined i
   assert.ok(live.endsWith("Then I had a mee") && !live.includes("hujan"), live);
 });
 
+test("story mode: tells each note in a few sentences, keeps what it added, drops summaries", () => {
+  const notes = "hantar kereta service pagi\nlunch nasi lemak dgn Muna\npetang hujan, tidur awal";
+  const msgs = buildMessages({ notes, story: true, compact: true });
+  assert.match(msgs[0].content, /told like a story/);
+  assert.match(msgs[2].content, /gagahkan diri/); // the Malay story example
+  assert.match(msgs.at(-1).content, /2\. lunch nasi lemak dengan Muna/);
+  const raw = "1. Pagi tadi hantar kereta service, lepas tu baru rasa lapar.\n2. Lunch dengan Muna, makan nasi lemak, best gila!\n3. Petang hujan lebat, terus tidur awal. Jadi, kesimpulan: hari yang tenang.";
+  const c = cleanOutput(raw, notes, true, true);
+  assert.match(c, /baru rasa lapar/); // story additions stay (they're listed for checking, not removed)
+  assert.doesNotMatch(c, /kesimpulan/);
+  assert.ok(unsupported(notes, c).includes("lapar"));
+  // Two notes folded into one line: the folded note isn't added again.
+  const folded = cleanOutput("1. Pagi tadi hantar kereta service, then lunch nasi lemak dengan Muna.\n2. Petang hujan, tidur awal.", notes, true, true);
+  assert.equal((folded.match(/nasi lemak/g) || []).length, 1, folded);
+  // Close-to-notes mode still puts the note back when a sentence adds anything.
+  assert.match(cleanOutput(raw, notes), /Hantar kereta service pagi\./);
+});
+
 test("buildMessages numbers the notes and adds style only when given", () => {
   const notes = "Went mamak with friends\n- Discussed career\nWorried about money";
   const msgs = buildMessages({ notes }), sys = msgs[0], user = msgs.at(-1);

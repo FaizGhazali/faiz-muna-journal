@@ -57,11 +57,20 @@ Optional, on **✨ AI & privacy**:
   words, or adds a word you never wrote. The editor flags these after every draft: **"Check these"** lists names,
   numbers, feelings and other words not in your notes, and **"Your own words that went missing"** lists Malay, Manglish
   or slang words that got lost. You always review before saving.
-- **Add words, not facts.** Notes become full diary sentences joined with linking words (harini, lepas tu, pastu, then),
-  with spelling and grammar corrected. Nothing new is added: no events, feelings, tastes or verdicts. Testing on Qwen2.5-3B
-  (cloud) showed it copies its worked example closely. A mixed-language example made all-Malay days drift into English
-  or formal Malay, and a verdict in the example ("murah gila") got copied into entries. So there's one plain example per
-  language. On 1.5B, "make it flow" invented outings, so the facts rule always stays.
+- **Two styles (cloud writer).** *Story* (the default) tells each point in one to three sentences, with how it felt and
+  how it leads on. *Close to my notes* tidies each point into one sentence and adds nothing. The on-device writer is always
+  Close to my notes, because the small models can't tell a story without making things up.
+- **One numbered sentence (or a few) per note, checked.** The model answers `1. … 2. …`. In Close mode, any sentence with
+  a word its note didn't give, or in another language, is replaced by the note itself. In Story mode, only a language
+  switch or a runaway line is replaced, and the words it added are listed under "Added by the writer" to check.
+- **What testing showed** (real runs on Modal, 20 Nov 2026):
+  - Free-form entries on Qwen2.5-3B translated English words inside Malay ("just boring" → "hanya bosan") and wrote
+    nonsense ("aku find diri sendiri"). Numbered and checked, nothing made up got through in 10 runs.
+  - The model copies its worked example. A Malay-only example turned English notes into Indonesian-style Malay, and a
+    mixed one made all-Malay days formal. So there is one example per language and per style.
+  - Storytelling: Qwen2.5-3B broke Malay ("itik kut puasa"), Qwen2.5-7B was OK but odd at times, and Sailor2-8B (trained
+    for Southeast Asian languages) told Malay stories best. Every model added small details ("gepuk yang pedas sangat",
+    "productive meeting"), which is why Story mode shows them. English-only output was worse: it got Malay food wrong.
 - **Language follows each note**, judged by its grammar words, not its vocabulary. "tadi aku mezmerize do, macam star
   align" is a Malay note, and its English words stay English. Manglish ("cannot lah", "late already") stays Manglish.
 - **Phone GPUs can drop long jobs.** On a Snapdragon 8 Gen 3 (Adreno 7xx, Chrome 156) the writer failed with

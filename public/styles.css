@@ -994,6 +994,10 @@ a.btn.mini { font-size: 13px; font-weight: 400; padding: 4px 10px; color: var(--
 .dy-modelline { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 10px; font-size: 13px; color: var(--paper-muted, var(--muted)) }
 .dy-modelline .btns { display: flex; gap: 6px }
 .dy-modelline .mini { min-height: 36px; padding: 6px 12px; border-color: var(--paper-line, var(--line)); color: var(--paper-ink, var(--ink)) }
+/* Story / Close to my notes: two pills, the chosen one filled. */
+.dy-style { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; color: var(--paper-muted, var(--muted)) }
+.dy-style .mini { min-height: 36px; padding: 6px 12px; border-color: var(--paper-line, var(--line)); color: var(--paper-ink, var(--ink)) }
+.dy-style .mini[aria-pressed="true"] { background: var(--paper-ink, var(--ink)); color: var(--paper, var(--bg)); border-color: transparent }
 .dy-sugg { display: grid; gap: 6px; margin: 6px 0 4px; padding: 12px; border: 1px dashed var(--line); border-radius: 12px }
 .dy-sugg ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px }
 .dy-sugg li { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line) }

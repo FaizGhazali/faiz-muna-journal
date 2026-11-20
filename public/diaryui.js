@@ -428,7 +428,7 @@ function paintAi() {
   if (aiState.msg) html += `<p class="note dy-err" role="alert">${esc(aiState.msg)}</p>`;
   if (aiState.detail && !aiState.busy) html += failHtml();
   if ((aiState.flags.length || aiState.lost?.length) && !aiState.busy) html += `<div class="dy-box dy-check">
-    ${aiState.flags.length ? `<p><b>Check these.</b> They weren't in your notes: ${aiState.flags.map((f) => `<mark>${esc(f)}</mark>`).join(" ")}</p>` : ""}
+    ${aiState.flags.length ? `<p><b>${aiState.story ? "Added by the writer.</b> Keep what's true, delete what didn't happen:" : "Check these.</b> They weren't in your notes:"} ${aiState.flags.map((f) => `<mark>${esc(f)}</mark>`).join(" ")}</p>` : ""}
     ${aiState.lost?.length ? `<p><b>Your own words that went missing:</b> ${aiState.lost.map((f) => `<mark>${esc(f)}</mark>`).join(" ")}</p>` : ""}
     <p class="note">The writer is small and makes slips. Change anything that didn't happen, isn't how you felt, or isn't how you'd say it.</p></div>`;
   host.innerHTML = html;
@@ -467,28 +467,37 @@ function cloudAskHtml() {
 function cloudLineHtml() {
   const where = (device?.mobile ?? /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) ? "phone" : "device";
   const left = demo && demoLeftN != null ? ` · ${demoLeftN} demo ${demoLeftN === 1 ? "write" : "writes"} left today` : "";
+  const story = storyOn();
   return aiState.busy ? "" : `<div class="dy-modelline"><span>Writer: <b>☁️ Cloud</b>${esc(left)}</span>
-    <span class="btns"><button type="button" class="mini" data-dy="device-use">Use this ${where} instead</button></span></div>`;
+    <span class="btns"><button type="button" class="mini" data-dy="device-use">Use this ${where} instead</button></span></div>
+    <div class="dy-style" role="group" aria-label="Writing style"><span>Style</span>
+      <button type="button" class="mini" data-dy="style-story" aria-pressed="${story}">📖 Story</button>
+      <button type="button" class="mini" data-dy="style-close" aria-pressed="${!story}">📝 Close to my notes</button></div>
+    <p class="note">${story ? "Tells your points as a story. It may add small details, so you'll see what it added to check." : "Tidies each point into a sentence, with nothing added."}</p>`;
 }
+// Story (default) or Close to my notes, per device. Story is cloud only: the on-phone models are too small to tell a
+// story without making things up.
+const storyOn = () => useCloud() && store.get("journal-ai-style", "story") === "story";
 async function writeInCloud(notes) {
   const st = styleOf(), src = st.on ? styleSource(list, pid(), st.since || "") : [];
   const profile = st.on ? styleProfile(src.map((e) => e.body)) : null, about = st.about || "";
   const tok = demo ? null : await getToken().catch(() => null);
   if (!demo && !tok) { aiState.msg = "The cloud writer only works when you're signed in to the journal."; paintAi(); return; }
   // Family: the full prompt, built here. Demo: only the notes; the server builds a fixed prompt.
-  const messages = tok ? buildMessages({ notes, profile, samples: profile ? samplesFor(src, 2) : [], name: person().name, about }) : null;
+  const story = storyOn();
+  const messages = tok ? buildMessages({ notes, profile, samples: profile ? samplesFor(src, 2) : [], name: person().name, about, story }) : null;
   const before = ed.body, page = $("dyBody");
-  aiState = { busy: true, phase: "write", progress: 0, msg: "", note: "Waking the cloud writer… the first write after a quiet spell can take up to a minute.", detail: "", flags: [], lost: [] };
+  aiState = { busy: true, phase: "write", progress: 0, msg: "", note: "Waking the cloud writer… the first write after a quiet spell can take up to a minute.", detail: "", flags: [], lost: [], story };
   paintAi();
   abort = new AbortController();
   let first = true;
   try {
-    const out = await cloud.cloudWrite({ token: tok, messages, notes, signal: abort.signal }, (t) => {
+    const out = await cloud.cloudWrite({ token: tok, messages, notes, story, signal: abort.signal }, (t) => {
       if (first && t.trim()) { first = false; aiState.note = ""; paintAi(); }
-      const c = cleanOutput(t, notes, false); if (c && page) page.value = c;
+      const c = cleanOutput(t, notes, false, story); if (c && page) page.value = c;
     });
     if (looksGarbled(out, notes)) throw new Error("jumbled");
-    const clean = cleanOutput(out, notes);
+    const clean = cleanOutput(out, notes, true, story);
     if (!clean || words(bodyText(clean)) < 3) throw new Error("empty");
     ed.body = clean; ed.ai = true;
     if (page) page.value = clean;
@@ -820,6 +829,7 @@ function wire() {
     if (act === "cloud-use") { aiState.msg = ""; aiState.detail = ""; if (store.get("journal-ai-cloud-ok", false)) { store.set("journal-ai-where", "cloud"); wakeCloud(); } else modelUi = "cloud-ask"; paintAi(); return; }
     if (act === "cloud-yes") { store.set("journal-ai-cloud-ok", true); store.set("journal-ai-where", "cloud"); modelUi = ""; aiState.note = "Using the cloud writer on this device."; paintAi(); wakeCloud(); return; }
     if (act === "cloud-no") { modelUi = ""; paintAi(); return; }
+    if (act === "style-story" || act === "style-close") { store.set("journal-ai-style", act === "style-story" ? "story" : "close"); paintAi(); return; }
     if (act === "device-use") { store.set("journal-ai-where", "device"); modelUi = ""; aiState.note = ""; paintAi(); if (!device) probe(); return; }
     if (act === "sizes-open") { modelUi = "sizes"; paintAi(); return; }
     if (act === "sizes-done") { modelUi = ""; paintAi(); return; }

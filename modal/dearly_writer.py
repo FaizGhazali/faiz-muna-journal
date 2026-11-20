@@ -13,7 +13,7 @@ logged (never the text). The model weights live in a Modal Volume so they downlo
 Setup (once, on a computer):  see docs/dearly-modal.md
     pip install modal
     modal setup                                   # sign in to your Modal account
-    modal run modal/dearly_writer.py::download    # puts the model in the volume (~2 GB on CPU, a few minutes)
+    modal run modal/dearly_writer.py::download    # puts the model in the volume (~5 GB on CPU, a few minutes)
     modal deploy modal/dearly_writer.py           # prints the address to paste into Dearly
 """
 import json
@@ -24,15 +24,18 @@ import time
 import modal
 
 # Where it runs. Edit these lines to switch, then run `download` and `deploy` again.
-#   GPU = ""   (default) CPU only, with llama.cpp and a 4-bit Qwen2.5-3B (GGUF, ~2 GB). Needs NO card on file.
-#              Slower: about 30-60 s per entry, streamed as it writes.
-#   GPU = "T4" + MODEL "Qwen/Qwen2.5-3B-Instruct", or "L4" + "Qwen/Qwen2.5-7B-Instruct" (better Malay): faster, but
-#              Modal asks for a payment method for any GPU. The free monthly credit still covers it (spending limit $0).
+#   GPU = ""   (default) CPU only, with llama.cpp and a 4-bit Sailor2-8B (GGUF, ~5 GB). Needs NO card on file.
+#              About 5-25 s per entry, streamed as it writes. Sailor2 is Qwen2.5-based and trained for Southeast Asian
+#              languages: of the free models tried (Qwen2.5 3B / 7B), it told Malay stories best.
+#              Smaller and faster: "Qwen/Qwen2.5-3B-Instruct-GGUF" + "qwen2.5-3b-instruct-q4_k_m.gguf" (memory 6144).
+#   GPU = "T4" + MODEL "Qwen/Qwen2.5-3B-Instruct", or "L4" + "Qwen/Qwen2.5-7B-Instruct": faster, but Modal asks for a
+#              payment method for any GPU. The free monthly credit still covers it (spending limit $0).
 GPU = ""
 MODEL = "Qwen/Qwen2.5-3B-Instruct"  # used when GPU is set
-GGUF_REPO = "Qwen/Qwen2.5-3B-Instruct-GGUF"  # used on CPU ("Qwen/Qwen2.5-1.5B-Instruct-GGUF" is ~2x faster, plainer)
-GGUF_FILE = "qwen2.5-3b-instruct-q4_k_m.gguf"
+GGUF_REPO = "bartowski/Sailor2-8B-Chat-GGUF"  # used on CPU
+GGUF_FILE = "Sailor2-8B-Chat-Q4_K_M.gguf"
 CPU_CORES = 8  # physical cores on CPU mode; more = faster writing, a little more credit per write
+CPU_MEMORY = 10240  # MB; an 8B model needs about 6 GB plus room for the prompt
 FIREBASE_PROJECT = "faiz-muna-journal-c43ab"
 FAMILY_UID = "wYR0YCfeWmVz6CvPeoqTViI8NRc2"  # the same single account firestore.rules allows
 ORIGINS = [
@@ -74,15 +77,40 @@ EXAMPLES = {
 }
 
 
+# Story mode (the app's default): each note becomes one to three sentences that tell that part of the day. Same as
+# STORY_EXAMPLES / the story rules in public/writestyle.js.
+STORY_RULES = """- You turn this person's short numbered notes into their diary entry, told like a story. You are not chatting. Write as them ("I"/"aku").
+- Each note becomes one to three sentences that tell that part of the day: what happened, what it was like, and how it leads to the next note.
+- You may colour what a note says: how it felt, what it was like, why it mattered. Never add anything that happened or that they did which no note says: no extra activities, people, places, food, times or plans. If a note doesn't give a feeling, keep any feeling mild and close to the note.
+- Reply with the same numbers, one line per number, and nothing else: no headings, no bold, no summary.
+- Keep their words and slang. Never translate. Each note stays in its own language (English, Malay or Manglish). Malay stays casual ("aku", "hari ni", "lunch"), never formal. English words inside a Malay note stay those English words, only spelled right.
+- Correct every spelling mistake and fix the grammar. Keep casual words and slang (gila, do, lah, best, jom).
+- No life lessons, no questions, never talk to "you". No emojis."""
+STORY_EXAMPLES = {
+    "ms": (["gym lepas kerja", "leg day, penat gila", "esok confirm tak boleh jalam", "dinner roti canai je"],
+           ["Hari ni lepas kerja, walaupun badan dah letih, aku gagahkan diri jugak pergi gym.", "Leg day pulak tu, memang penat gila sampai rasa kaki dah tak nak bergerak.",
+            "Aku dah boleh agak, esok confirm tak boleh jalan dengan betul.", "Lepas semua tu, dinner aku simple je, roti canai, cukup untuk tutup hari yang panjang ni."]),
+    "en": (EXAMPLES["en"][0],
+           ["After work today I dragged myself to the gym, even though part of me just wanted to go home.", "Now my legs are so sore that every step reminds me of every set.",
+            "Dinner was just roti canai, so cheap, a simple end to a long day."]),
+    "manglish": (EXAMPLES["manglish"][0],
+                 ["After work today I still went to the gym, even though I was quite tired already.", "Leg day lah, so tomorrow sure cannot walk one, confirm.",
+                  "Then dinner roti canai only, so cheap one, simple but enough for me."]),
+    "mixed": (EXAMPLES["mixed"][0],
+              ["After work today I dragged myself to the gym, even though part of me just wanted to go home.", "Leg day pulak tu, memang penat gila, and esok confirm tak boleh jalan dengan betul.",
+               "Then dinner roti canai only, so cheap one, simple but enough for me."]),
+}
+
+
 def numbered(xs: list) -> str:
     return "\n".join(f"{i + 1}. {x}" for i, x in enumerate(xs))
 
 
-def demo_messages(notes: str, lang: str = "mixed") -> list:
+def demo_messages(notes: str, lang: str = "mixed", story: bool = False) -> list:
     lines = [l.strip().lstrip("-*• ").strip()[:200] for l in notes.splitlines() if l.strip()][:12]
-    ex_notes, ex_out = EXAMPLES.get(lang, EXAMPLES["mixed"])
+    ex_notes, ex_out = (STORY_EXAMPLES if story else EXAMPLES).get(lang, EXAMPLES["mixed"])
     return [
-        {"role": "system", "content": DEMO_RULES},
+        {"role": "system", "content": STORY_RULES if story else DEMO_RULES},
         {"role": "user", "content": f"My notes for today:\n{numbered(ex_notes)}"},
         {"role": "assistant", "content": numbered(ex_out)},
         {"role": "user", "content": "That was only an example. Now do mine, using nothing from the example."},
@@ -138,7 +166,7 @@ def download():
 
 
 # CPU mode asks for cores and memory instead of a GPU (no card needed on Modal for that).
-hardware = dict(gpu=GPU) if GPU else dict(cpu=float(CPU_CORES), memory=6144)
+hardware = dict(gpu=GPU) if GPU else dict(cpu=float(CPU_CORES), memory=CPU_MEMORY)
 
 
 @app.cls(image=writer_image, volumes={"/models": models}, scaledown_window=SCALEDOWN, timeout=600, max_containers=1, **hardware)
@@ -169,7 +197,7 @@ class Writer:
         """Stream the entry back piece by piece."""
         if not GPU:
             n = 0
-            for chunk in self.llm.create_chat_completion(messages=messages, stream=True, max_tokens=600, temperature=0.3,
+            for chunk in self.llm.create_chat_completion(messages=messages, stream=True, max_tokens=900, temperature=0.3,
                                                          top_p=0.85, repeat_penalty=1.05):
                 piece = chunk["choices"][0]["delta"].get("content") or ""
                 n += len(piece)
@@ -275,7 +303,7 @@ def web():
             raise HTTPException(429, "you've used today's demo writes")
         bump(f"demo:{day}", DEMO_PER_DAY)
         lang = body.get("lang") if body.get("lang") in EXAMPLES else "mixed"
-        return StreamingResponse(Writer().generate.remote_gen(demo_messages(notes, lang)), media_type="text/plain; charset=utf-8",
+        return StreamingResponse(Writer().generate.remote_gen(demo_messages(notes, lang, body.get("story") is True)), media_type="text/plain; charset=utf-8",
                                  headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
     @api.post("/write")

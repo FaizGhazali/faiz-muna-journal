@@ -1,5 +1,5 @@
 // Dearly's cloud writer: the family's own Modal server (modal/dearly_writer.py), for phones whose graphics chip can't
-// run the writer. Free: Modal's monthly free credit, with a $0 spending limit. The model is open (Qwen2.5-3B, on Modal's CPUs by default).
+// run the writer. Free: Modal's monthly free credit, with a $0 spending limit. The model is open (Sailor2-8B, on Modal's CPUs by default).
 // Family writes send a sign-in token and the full prompt to /write. The demo has no sign-in: it sends only the notes to
 // /demo, which builds its own prompt and is capped per visitor and per day. Nothing is stored on the server.
 
@@ -7,10 +7,10 @@ import { noteLines, langOf, noteLang, LANG_NAME } from "./writestyle.js";
 
 // The demo's notes as the server's prompt wants them: one per line, short forms spelled out, each marked with its
 // language when the day mixes languages, plus the day's language so the server picks the matching example.
-export function demoBody(notes) {
+export function demoBody(notes, story = false) {
   const lang = langOf(notes), lines = noteLines(notes);
   const text = lines.map((l) => (lang === "mixed" ? `(${LANG_NAME[noteLang(l)]}) ${l}` : l)).join("\n");
-  return { notes: text.slice(0, 600), lang };
+  return { notes: text.slice(0, 600), lang, story };
 }
 
 // The address `modal deploy modal/dearly_writer.py` prints. Empty = the cloud writer is hidden.
@@ -33,8 +33,8 @@ async function post(path, body, token, signal) {
 }
 
 // Write, calling onText with everything so far. token = family sign-in; null = demo (notes only).
-export async function cloudWrite({ token, messages, notes, signal }, onText) {
-  const r = token ? await post("/write", { messages }, token, signal) : await post("/demo", demoBody(notes), null, signal);
+export async function cloudWrite({ token, messages, notes, story = false, signal }, onText) {
+  const r = token ? await post("/write", { messages }, token, signal) : await post("/demo", demoBody(notes, story), null, signal);
   const reader = r.body.getReader(), dec = new TextDecoder();
   let out = "";
   for (;;) {
