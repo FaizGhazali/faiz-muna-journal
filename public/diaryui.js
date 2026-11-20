@@ -10,6 +10,7 @@ import { PAGE, OPENING, words, bodyText, titleOf, preview, parseTags, live, diar
   prettyDate, ago, lineFor, greeting, iso } from "./diary.js";
 import { MIN_STYLE, ABOUT_MAX, aboutSuggestions, addToAbout, styleSource, styleProfile, describeStyle, samplesFor, buildMessages, cleanOutput, unsupported, dropped, looksGarbled } from "./writestyle.js";
 import * as ai from "./localai.js";
+import * as cloud from "./cloudai.js";
 import { MOODS, isMood } from "./mood.js";
 import { face } from "./moodui.js";
 
@@ -24,7 +25,7 @@ const store = {
 const MAX_PHOTOS = 4;
 const PAPERS = { cream: "Cream", rose: "Rose", sage: "Sage" };
 
-let db, commit, people, me, diaryCol, photosCol, styleCol, unsubs = [];
+let db, commit, people, me, getToken, demo, diaryCol, photosCol, styleCol, unsubs = [];
 let list = [], styles = {}, ready = false;
 // Dashboard filters (kept while the app is open) and how many memories are showing.
 const filt = { q: "", month: "", tag: "", fav: false, sort: "new" };
@@ -36,6 +37,7 @@ let device = null, aiState = { busy: false, progress: 0, mb: 0, phase: "", msg: 
 
 export function initDiary(opts) {
   ({ db, commit, people, me } = opts);
+  getToken = opts.token || (async () => null); demo = !!opts.demo;
   diaryCol = collection(opts.db, "diary");
   photosCol = collection(opts.db, "diaryPhotos");
   styleCol = collection(opts.db, "diaryStyle");
@@ -290,7 +292,7 @@ function renderEditor(id) {
       <p class="note" id="dyEdMsg" role="status"></p>
     </section>`;
   count(); paintPhotos(); paintAi();
-  if (ed.mode === "ai" && !device) probe();
+  if (ed.mode === "ai") { if (useCloud()) wakeCloud(); else if (!device) probe(); }
 }
 function count() {
   const n = words(bodyText(ed.body)), el = $("dyCount");
@@ -395,8 +397,10 @@ function paintAi() {
   const btn = $("dyWrite"), stop = $("dyStop");
   const m = ai.modelOf(aiKey());
   let html = "";
-  if (!device || device.checking) html = `<p class="note">Checking whether this device can run the writer…</p>`;
-  else if (!device.ok) html = `<div class="dy-box"><p><b>The writer can't run on this device.</b> ${esc(ai.whyText(device.why))}</p><p class="note">Everything else works. Tap "Write it myself" and your notes stay in the box above to help you.</p></div>`;
+  if (modelUi === "cloud-ask") html = cloudAskHtml();
+  else if (useCloud()) html = cloudLineHtml();
+  else if (!device || device.checking) html = `<p class="note">Checking whether this device can run the writer…</p>`;
+  else if (!device.ok) html = `<div class="dy-box"><p><b>The writer can't run on this device.</b> ${esc(ai.whyText(device.why))}</p><p class="note">Everything else works. Tap "Write it myself" and your notes stay in the box above to help you.</p>${cloudOffer()}</div>`;
   else if (aiState.phase === "download" || aiState.phase === "open") {
     html = `<div class="dy-box">${barHtml()}
       <p class="note">${aiState.phase === "download" ? "One time only. Stay on this page and keep writing if you like. If it stops, tap Download again: finished parts are kept." : "This takes a few seconds each time the app opens."}</p></div>`;
@@ -405,7 +409,7 @@ function paintAi() {
       <p class="note">Pick a size. It downloads once${device.mobile ? ", best on Wi-Fi" : ""}.</p>
       ${sizesHtml()}
       <p class="note">${esc(m.note)}</p>
-      <div class="actions"><button type="button" class="primary" data-dy="download">Download ${esc(sizeOf(m))}</button></div></div>`;
+      <div class="actions"><button type="button" class="primary" data-dy="download">Download ${esc(sizeOf(m))}</button></div>${cloudOffer("No download? ")}</div>`;
   } else if (modelUi === "sizes") {
     // Changing size while one is already downloaded: same buttons, right here.
     html = `<div class="dy-box"><p><b>Pick a writer size</b></p>${sizesHtml()}<p class="note">${esc(m.note)}</p>
@@ -418,7 +422,7 @@ function paintAi() {
     if (device.soft) html = `<p class="note">This device has no graphics chip for AI, so writing will be slow.</p>`;
     // One quiet line so the writer can be changed or removed without leaving the page.
     if (!aiState.busy) html += `<div class="dy-modelline"><span>Writer: <b>${esc(m.name)}</b> · about ${esc(sizeOf(m))} on this ${device.mobile ? "phone" : "device"}</span>
-      <span class="btns"><button type="button" class="mini" data-dy="sizes-open">Change size</button><button type="button" class="mini" data-dy="model-remove">Remove</button></span></div>`;
+      <span class="btns"><button type="button" class="mini" data-dy="sizes-open">Change size</button><button type="button" class="mini" data-dy="model-remove">Remove</button>${cloud.cloudReady() ? `<button type="button" class="mini" data-dy="cloud-use">Use cloud</button>` : ""}</span></div>`;
   }
   if (aiState.note) html = `<p class="note dy-note" role="status">✓ ${esc(aiState.note)}</p>` + html;
   if (aiState.msg) html += `<p class="note dy-err" role="alert">${esc(aiState.msg)}</p>`;
@@ -428,7 +432,7 @@ function paintAi() {
     ${aiState.lost?.length ? `<p><b>Your own words that went missing:</b> ${aiState.lost.map((f) => `<mark>${esc(f)}</mark>`).join(" ")}</p>` : ""}
     <p class="note">The writer is small and makes slips. Change anything that didn't happen, isn't how you felt, or isn't how you'd say it.</p></div>`;
   host.innerHTML = html;
-  if (btn) { btn.disabled = aiState.busy || (device && !device.checking && !device.ok); btn.textContent = aiState.busy && aiState.phase === "write" ? "Writing…" : ed && ed.ai && bodyText(ed.body) ? "✨ Write it again" : "✨ Write it for me"; }
+  if (btn) { btn.disabled = aiState.busy || (!useCloud() && device && !device.checking && !device.ok); btn.textContent = aiState.busy && aiState.phase === "write" ? "Writing…" : ed && ed.ai && bodyText(ed.body) ? "✨ Write it again" : "✨ Write it for me"; }
   if (stop) stop.hidden = !(aiState.busy && aiState.phase === "write");
 }
 // The model wrote scrambled text: this graphics chip mishandles the 16-bit build. Remember that on this device,
@@ -444,14 +448,74 @@ async function switchToSafe() {
     ? `This ${device.mobile ? "phone" : "device"}'s graphics chip scrambled the words. Nothing was saved. Dearly has switched to the safe version of the writer: download it once (about ${sizeOf(m)}) and try again.`
     : `The writer scrambled the words even with the safe build. Nothing was saved. Some phone graphics chips (Qualcomm Adreno included) don't run it reliably in the browser yet. You can write yourself here, or use the writer on a laptop. Copy the details below if you'd like it looked into.`;
 }
+// ---------- the cloud writer (cloudai.js): the family's own Modal server, for phones that can't run the writer ----------
+// Chosen per device ("journal-ai-where"); the first time, it says what leaves the phone and asks ("journal-ai-cloud-ok").
+const useCloud = () => cloud.cloudReady() && store.get("journal-ai-where", "device") === "cloud";
+let demoLeftN = null;
+async function wakeCloud() {
+  if (demo) { demoLeftN = await cloud.demoLeft(); paintAi(); }
+  else cloud.cloudWarm(await getToken().catch(() => null));
+}
+const cloudOffer = (lead = "") => cloud.cloudReady()
+  ? `<div class="dy-cloudoffer"><span class="note">${esc(lead)}The cloud writer works on any phone, with nothing to download.</span><button type="button" data-dy="cloud-use">☁️ Use the cloud writer</button></div>` : "";
+function cloudAskHtml() {
+  return `<div class="dy-box"><p><b>Use the cloud writer?</b></p>
+    <p class="note">${demo ? "In the demo, only your notes go to a shared server that writes the entry and keeps nothing. Everyone trying the demo shares a few writes a day."
+      : "This entry's notes, plus About you and your style if they're on, go to your family's own server on Modal. It writes the entry and keeps nothing. Nothing to download, and it's free."}</p>
+    <div class="actions"><button type="button" class="primary" data-dy="cloud-yes">Use the cloud writer</button><button type="button" data-dy="cloud-no">Not now</button></div></div>`;
+}
+function cloudLineHtml() {
+  const where = (device?.mobile ?? /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) ? "phone" : "device";
+  const left = demo && demoLeftN != null ? ` · ${demoLeftN} demo ${demoLeftN === 1 ? "write" : "writes"} left today` : "";
+  return aiState.busy ? "" : `<div class="dy-modelline"><span>Writer: <b>☁️ Cloud</b>${esc(left)}</span>
+    <span class="btns"><button type="button" class="mini" data-dy="device-use">Use this ${where} instead</button></span></div>`;
+}
+async function writeInCloud(notes) {
+  const st = styleOf(), src = st.on ? styleSource(list, pid(), st.since || "") : [];
+  const profile = st.on ? styleProfile(src.map((e) => e.body)) : null, about = st.about || "";
+  const tok = demo ? null : await getToken().catch(() => null);
+  if (!demo && !tok) { aiState.msg = "The cloud writer only works when you're signed in to the journal."; paintAi(); return; }
+  // Family: the full prompt, built here. Demo: only the notes; the server builds a fixed prompt.
+  const messages = tok ? buildMessages({ notes, profile, samples: profile ? samplesFor(src, 2) : [], name: person().name, about }) : null;
+  const before = ed.body, page = $("dyBody");
+  aiState = { busy: true, phase: "write", progress: 0, msg: "", note: "Waking the cloud writer… the first write after a quiet spell can take up to a minute.", detail: "", flags: [], lost: [] };
+  paintAi();
+  abort = new AbortController();
+  let first = true;
+  try {
+    const out = await cloud.cloudWrite({ token: tok, messages, notes, signal: abort.signal }, (t) => {
+      if (first && t.trim()) { first = false; aiState.note = ""; paintAi(); }
+      const c = cleanOutput(t, notes); if (c && page) page.value = c;
+    });
+    if (looksGarbled(out, notes)) throw new Error("jumbled");
+    const clean = cleanOutput(out, notes);
+    if (!clean || words(bodyText(clean)) < 3) throw new Error("empty");
+    ed.body = clean; ed.ai = true;
+    if (page) page.value = clean;
+    aiState.flags = unsupported(notes, clean, about);
+    aiState.lost = dropped(notes, clean);
+    undo(before);
+  } catch (e) {
+    if (page) page.value = ed.body;
+    const stopped = abort?.signal.aborted;
+    aiState.msg = stopped ? "" : e.message === "empty" ? "The writer came back empty. Try again, or add a little more to your notes."
+      : e.message === "jumbled" ? "The cloud writer's reply came out jumbled. Nothing was saved. Try again." : cloud.cloudErrorText(e, demo);
+    // Daily limits and sign-in problems explain themselves; details only for real failures.
+    if (!stopped && (!e.status || e.status >= 500) && !["empty", "jumbled"].includes(e.message)) aiState.detail = `Cloud writer: ${e.status ? `HTTP ${e.status} ${e.detail || ""}` : String(e.message || e)}\nBrowser: ${navigator.userAgent}`;
+  } finally {
+    aiState.busy = false; aiState.phase = ""; aiState.note = ""; abort = null;
+    count(); saveDraft(); paintAi();
+    if (demo) wakeCloud();
+  }
+}
 // When the writer won't start: offer the phone's other build right here, and the real error to copy and send.
 function failHtml() {
-  const other = device?.f16 ? "safe" : device?.f16raw ? "fast" : "";
+  const other = useCloud() ? "" : device?.f16 ? "safe" : device?.f16raw ? "fast" : ""; // builds are for the on-phone writer only
   return `<div class="dy-box dy-fail">
     ${other ? `<p class="note">${other === "fast" ? "This phone also has a faster build. It sometimes scrambles words on phones, but Dearly watches for that and stops it." : "Try the safe build instead. It's a little bigger but works on more graphics chips."}</p>
       <div class="actions"><button type="button" class="primary" data-dy="other-build">${other === "fast" ? "Try the faster build" : "Try the safe build"}</button></div>` : ""}
     <details><summary>Show technical details</summary><pre class="dy-detail">${esc(aiState.detail)}</pre>
-      <div class="actions"><button type="button" class="mini" data-dy="copy-detail">Copy details</button><span class="note" id="dyCopied" role="status"></span></div></details></div>`;
+      <div class="actions"><button type="button" class="mini" data-dy="copy-detail">Copy details</button><span class="note" id="dyCopied" role="status"></span></div></details>${useCloud() ? "" : cloudOffer()}</div>`;
 }
 // Download size for this device: the safe 32-bit build used on phones is about 15% bigger.
 const sizeOf = (x) => `${(x.gb * (device?.f16 === false ? 1.15 : 1)).toFixed(1)} GB`;
@@ -519,6 +583,7 @@ async function writeForMe() {
   if (!ed || aiState.busy) return;
   const notes = ed.notes.trim();
   if (words(notes) < 2) { aiState.msg = "Jot down a few words about your day first."; paintAi(); $("dyNotes")?.focus(); return; }
+  if (useCloud()) return writeInCloud(notes);
   if (!device || device.checking) await probe();
   if (!device.ok) return;
   if (!ai.isLoaded(aiKey(), device.f16) && !(await startModel())) return;
@@ -629,7 +694,8 @@ function renderAi() {
       <h2 id="dyPrivTitle">Privacy and your data</h2>
       <ul class="dy-priv">
         <li><b>Your entries</b> are saved in this journal's private database (Google Firebase), where only your family login can read them, with a copy on this device so it works offline.</li>
-        <li><b>The writer</b> runs on this device. Your notes and entries never go to an AI company or any other server. The only thing downloaded is the model itself, once.</li>
+        <li><b>The writer on this device</b> runs on its graphics chip. Your notes never leave it. The only thing downloaded is the model itself, once.</li>
+        <li><b>The cloud writer</b> (only if you pick it) sends that entry's notes, plus About you and your style if they're on, to the family's own server on Modal. It writes the entry and keeps nothing. No AI company sees it.</li>
         <li><b>Shared login:</b> both of you sign in with the same family password, so each of you could open the other's diary. Nobody outside the family can.</li>
         <li><b>No tracking:</b> no ads, no analytics, nothing about your diary is logged.</li>
         <li><b>Photos</b> are made smaller on this device and saved with the entry.</li>
@@ -702,7 +768,7 @@ function wire() {
       ed.mode = modeBtn.dataset.mode;
       host.querySelectorAll("[data-mode]").forEach((b) => { b.setAttribute("aria-pressed", b === modeBtn); b.setAttribute("aria-selected", b === modeBtn); });
       $("dyNotesBox").hidden = ed.mode !== "ai";
-      if (ed.mode === "ai" && !device) probe();
+      if (ed.mode === "ai") { if (useCloud()) wakeCloud(); else if (!device) probe(); }
       if (ed.mode === "self") $("dyBody").focus();
       saveDraft(); return;
     }
@@ -751,6 +817,10 @@ function wire() {
       catch (_) { $("dyCopied").textContent = "Couldn't copy. Take a screenshot instead."; }
       return;
     }
+    if (act === "cloud-use") { aiState.msg = ""; aiState.detail = ""; if (store.get("journal-ai-cloud-ok", false)) { store.set("journal-ai-where", "cloud"); wakeCloud(); } else modelUi = "cloud-ask"; paintAi(); return; }
+    if (act === "cloud-yes") { store.set("journal-ai-cloud-ok", true); store.set("journal-ai-where", "cloud"); modelUi = ""; aiState.note = "Using the cloud writer on this device."; paintAi(); wakeCloud(); return; }
+    if (act === "cloud-no") { modelUi = ""; paintAi(); return; }
+    if (act === "device-use") { store.set("journal-ai-where", "device"); modelUi = ""; aiState.note = ""; paintAi(); if (!device) probe(); return; }
     if (act === "sizes-open") { modelUi = "sizes"; paintAi(); return; }
     if (act === "sizes-done") { modelUi = ""; paintAi(); return; }
     if (act === "model-remove") { modelUi = "remove"; paintAi(); return; }

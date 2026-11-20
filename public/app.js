@@ -440,7 +440,7 @@ initWheel();
 initCollapse();
 initZoom();
 initGuides();
-initDiary({ db, people: () => PEOPLE, me: currentPerson, commit });
+initDiary({ db, people: () => PEOPLE, me: currentPerson, commit, demo: DEMO, token: async () => (auth?.currentUser ? auth.currentUser.getIdToken() : null) });
 initMood({ db, people: () => PEOPLE, entries: () => entries, me: currentPerson, habitFacts, commit });
 initFitDetail({
   people: () => PEOPLE, entries: () => entries,
