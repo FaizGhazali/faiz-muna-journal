@@ -140,7 +140,7 @@ export function targetWords(notes, profile) {
 
 // The chat messages for the model. Nothing here leaves the device: the model runs in the browser.
 export const ABOUT_MAX = 600;
-export function buildMessages({ notes, profile = null, samples = [], name = "", about = "" }) {
+export function buildMessages({ notes, profile = null, samples = [], name = "", about = "", compact = false }) {
   const lang = langOf(notes), target = targetWords(notes, profile);
   // Language always follows the notes, note by note: what was written in English stays English, Malay stays Malay.
   // The style profile never changes the language (its language line is left out of the prompt below).
@@ -150,7 +150,17 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
     : lang === "manglish" ? `The notes are in Manglish (Malaysian English), so write the entry in Manglish. ${manglishRule} Do not turn it into Malay.`
     : lang === "mixed" ? `Each note is marked with its language. Write each note's sentences in that note's language and never translate a note into another language. ${malayRule} ${manglishRule}`
     : "The notes are in English, so write the whole entry in English. Do not switch to Malay. A Malay or slang word that appears in the notes stays as it is.";
-  const rules = [
+  // Phones: the same rules in five short lines, so the first step on the phone's GPU is lighter.
+  const shortLang = lang === "mixed" ? "Each note is marked with its language: write it in that language."
+    : lang === "manglish" ? "The notes are Manglish: keep it Manglish (lah, already, cannot), never correct it."
+    : lang === "ms" ? "The notes are Malay: write in casual Malay; English words inside stay English." : "The notes are English: write in English.";
+  const rules = compact ? [
+    `Write this person's diary entry from their notes, as them ("I"/"aku"). You are not chatting.`,
+    "One or two plain sentences per note, same order. Never add events, people, places, times or feelings the notes don't say.",
+    `Keep their words, slang and short forms. Never translate. ${shortLang}`,
+    `No drama, no lessons, no questions, never talk to "you".${profile?.emoji ? "" : " No emojis."}`,
+    `Start with "${OPENING}" then short paragraphs, about ${target} words. Reply with the entry only.`,
+  ] : [
     `You turn someone's rough notes into their own diary entry. You are not chatting with them. Write as them, in the first person ("I"/"aku"/"saya", whichever the notes use).`,
     // Tested on Qwen2.5-1.5B: telling it to "make it flow" made it invent outings and feelings, so it stays close to the notes.
     "Turn each note into one or two plain sentences, in the same order. Every sentence must come from a note. Staying close to their words is better than adding anything.",
@@ -159,26 +169,26 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
     "Keep their own words: slang, short forms, names and Malay words stay exactly as written. Never translate a word or explain it in brackets.",
     langRule,
     `Sound like a real person writing in a diary: plain and casual. No drama, no poetry, no life lessons, no wishes, no questions, no hashtags, and never talk to the reader ("you").`,
-    `Avoid chatbot words such as: ${AI_WORDS.slice(0, 10).join(", ")}.`,
+    compact ? "" : `Avoid chatbot words such as: ${AI_WORDS.slice(0, 10).join(", ")}.`,
     profile?.emoji ? "Emojis are fine if they fit." : "No emojis.",
     `Start with "${OPENING}" on its own line, then ${target < 90 ? "one or two short paragraphs" : "two or three short paragraphs"}, about ${target} words in total.`,
     "Reply with the diary entry only. No title, no notes, no explanation.",
   ];
   let style = "";
   if (profile) {
-    const lines = describeStyle(profile).filter((l) => !/^Writes (mostly )?in|^Mixes Malay/.test(l)); // language comes from the notes, not the profile
+    const lines = describeStyle(profile).filter((l) => !/^Writes (mostly )?in|^Mixes Malay/.test(l)).slice(0, compact ? 4 : 99); // language comes from the notes, not the profile
     style = `\n\nHow this person writes. Copy the style only, never the language (that always follows the notes):\n- ${lines.join("\n- ")}`;
     if (samples.length) style += `\n\nShort examples of their writing, for style only. Do not reuse anything that happened in them:\n${samples.map((s) => `"""${s}"""`).join("\n")}`;
   }
   // "About you": what the person wrote about themselves, so the entry sounds like them (who "dia" or "sayang" is, how they
   // talk, what they call people). Background only: it never becomes something that happened today.
-  const bio = String(about || "").trim().slice(0, ABOUT_MAX);
+  const bio = String(about || "").trim().slice(0, compact ? 300 : ABOUT_MAX); // phones: shorter, for a lighter first step
   if (bio) style += `\n\nAbout the writer, in their own words. Use it only to sound like them and to know who people are (for example, use the name or nickname they use for someone a note mentions). Never add anything from here as something that happened today, and never mention a person, place or habit from here unless a note does:\n"""${bio}"""`;
   const lines = String(notes).split(/\n+/).map((l) => l.trim().replace(/^[-*•]\s*/, "")).filter(Boolean);
   // One worked example: small models copy what they see far better than they follow rules. It shows each note kept
   // in its own language (English, Malay, Manglish), nothing added, no feelings that weren't written.
   return [
-    { role: "system", content: rules.map((x) => `- ${x}`).join("\n") + style },
+    { role: "system", content: rules.filter(Boolean).map((x) => `- ${x}`).join("\n") + style },
     { role: "user", content: "My notes for today:\n- (English) gym after work\n- (Malay) leg day, penat gila, esok confirm x boleh jalan\n- (Manglish) dinner roti canai only, so cheap one\n\nWrite my diary entry." },
     { role: "assistant", content: `${OPENING}\n\nI went to the gym after work. Leg day, penat gila, esok confirm x boleh jalan.\n\nDinner roti canai only, so cheap one.` },
     { role: "user", content: "That was only an example. Now do mine, using nothing from the example." },

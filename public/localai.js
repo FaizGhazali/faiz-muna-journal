@@ -17,7 +17,7 @@ export const modelOf = (key) => MODELS.find((m) => m.key === key) || MODELS[1];
 // Phones without 16-bit GPU maths need the 32-bit build of the same model.
 export const idOf = (key, f16) => `${modelOf(key).base}-${f16 ? "q4f16_1" : "q4f32_1"}-MLC`;
 
-let wl = null, engine = null, loadedId = null, loading = null;
+let wl = null, engine = null, worker = null, loadedId = null, loading = null;
 const lib = async () => (wl ||= await import(LIB));
 
 // Can this browser run the writer? { ok, why?, f16, soft, memGB, mobile }
@@ -63,7 +63,7 @@ export async function load(key, f16, onProgress) {
   loading = (async () => {
     const w = await lib();
     if (!engine) {
-      const worker = new Worker(new URL("./aiworker.js", import.meta.url), { type: "module" });
+      worker = new Worker(new URL("./aiworker.js", import.meta.url), { type: "module" });
       engine = await w.CreateWebWorkerMLCEngine(worker, id, { initProgressCallback: report });
     } else {
       engine.setInitProgressCallback(report);
@@ -72,9 +72,15 @@ export async function load(key, f16, onProgress) {
     loadedId = id;
     return engine;
   })();
-  try { return await loading; } catch (e) { loadedId = null; throw e; } finally { loading = null; }
+  try { return await loading; } catch (e) { if (gpuLost(e)) { reset(); throw lostError(e); } loadedId = null; throw e; } finally { loading = null; }
 }
 export const isLoaded = (key, f16) => !!engine && loadedId === idOf(key, f16);
+
+// The GPU dropped the work: phone watchdogs kill long jobs, and the browser then unmaps buffers mid-read.
+// The engine can't be trusted after that, so it's thrown away and the next use starts a fresh worker.
+const gpuLost = (e) => /mapAsync|unmapped|device (?:was |is )?lost|DeviceLost|GPU device|context lost/i.test(String(e?.message || e));
+const lostError = (e) => Object.assign(new Error("gpu-lost"), { cause: e });
+function reset() { try { worker?.terminate(); } catch (_) {} worker = null; engine = null; loadedId = null; }
 
 // Write from chat messages, calling onText with everything so far. Abort the signal to stop early.
 export async function write(messages, onText, signal) {
@@ -89,8 +95,11 @@ export async function write(messages, onText, signal) {
       onText(out);
       if (signal?.aborted) break;
     }
+  } catch (e) {
+    if (gpuLost(e)) { reset(); throw lostError(e); }
+    throw e;
   } finally { signal?.removeEventListener("abort", stop); }
-  try { await engine.resetChat(); } catch (_) {} // each entry starts fresh; nothing is remembered between them
+  try { await engine.resetChat(); } catch (e) { if (gpuLost(e)) reset(); } // each entry starts fresh; nothing is remembered between them
   return out;
 }
 
@@ -119,6 +128,7 @@ export function errorText(e) {
   if (/fetch|network|Failed to load|NetworkError|offline/i.test(m) || !navigator.onLine) return "The download stopped. Check the connection and tap Download again: the parts already saved are kept.";
   if (/shader-f16|feature/i.test(m)) return "This graphics chip can't run that build of the writer. Try the other build below.";
   if (/maxBufferSize|maxStorageBufferBindingSize|maxComputeWorkgroupStorageSize|exposes/i.test(m)) return "This phone's browser doesn't give the writer enough graphics memory for this build. Try the other build below, or the Small size.";
+  if (m === "gpu-lost") return "The phone's graphics chip stopped the writer partway, twice. Close other apps, keep the screen on, and try again, or use the Small size.";
   if (/compil|pipeline|shader|WGSL|validation/i.test(m)) return "The writer couldn't set itself up on this graphics chip. Try the other build below.";
   return "The writer couldn't start on this device. You can still write yourself.";
 }

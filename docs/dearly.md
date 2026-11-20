@@ -62,6 +62,11 @@ Optional, on **✨ AI & privacy**:
   expected but wasn't tested here.
 - **Language follows each note**, judged by its grammar words, not its vocabulary. "tadi aku mezmerize do, macam star
   align" is a Malay note, and its English words stay English. Manglish ("cannot lah", "late already") stays Manglish.
+- **Phone GPUs can drop long jobs.** On a Snapdragon 8 Gen 3 (Adreno 7xx, Chrome 156) the writer failed with
+  `mapAsync … Buffer was unmapped before mapping was resolved`: the GPU dropped the work partway. WebLLM fixes the
+  step size inside the model files, so the app can't make it smaller. Instead, phones get a five-line version of the
+  rules (no writing samples, a shorter About you), and if the GPU drops a job the writer is restarted fresh and tries
+  once more. If it still fails, the editor offers the other build and "Copy details". It's not yet confirmed on that phone.
 - **Storage can be cleared.** Clearing site data or history, or the browser running out of space, removes the model,
   and it downloads again. The app asks the browser to keep it (`navigator.storage.persist()`). On iPhone, add the app
   to the home screen, or Safari may clear it after weeks without use.

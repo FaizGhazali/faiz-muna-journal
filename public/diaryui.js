@@ -442,7 +442,7 @@ async function switchToSafe() {
   const m = ai.modelOf(key);
   return wasF16
     ? `This ${device.mobile ? "phone" : "device"}'s graphics chip scrambled the words. Nothing was saved. Dearly has switched to the safe version of the writer: download it once (about ${sizeOf(m)}) and try again.`
-    : "The writer scrambled the words on this device. Nothing was saved. Try again; if it happens again, pick the Small size on the AI & privacy page.";
+    : `The writer scrambled the words even with the safe build. Nothing was saved. Some phone graphics chips (Qualcomm Adreno included) don't run it reliably in the browser yet. You can write yourself here, or use the writer on a laptop. Copy the details below if you'd like it looked into.`;
 }
 // When the writer won't start: offer the phone's other build right here, and the real error to copy and send.
 function failHtml() {
@@ -526,33 +526,55 @@ async function writeForMe() {
   const st = styleOf(), src = st.on ? styleSource(list, pid(), st.since || "") : [];
   const profile = st.on ? styleProfile(src.map((e) => e.body)) : null;
   const about = st.about || ""; // "About you" is always used: the person wrote it for exactly this
-  const messages = buildMessages({ notes, profile, samples: profile ? samplesFor(src, 2) : [], name: person().name, about });
+  // Phones get shorter instructions: a long first step can trip the phone GPU's watchdog, which drops the job.
+  const compact = !!device.mobile;
+  const messages = buildMessages({ notes, profile, samples: profile && !compact ? samplesFor(src, 2) : [], name: person().name, about, compact });
   const before = ed.body;
   aiState = { busy: true, phase: "write", progress: 0, msg: "", flags: [], lost: [] };
   paintAi();
-  abort = new AbortController();
   const page = $("dyBody");
-  try {
-    let garbled = false;
+  let garbled = false, sample = "";
+  // One go at writing. The scramble guard stops it the moment the text turns to junk.
+  const run = async () => {
+    abort = new AbortController();
+    garbled = false;
     const out = await ai.write(messages, (t) => {
       if (garbled) return;
-      if (looksGarbled(t, notes)) { garbled = true; abort.abort(); if (page) page.value = before; return; }
+      if (looksGarbled(t, notes)) { garbled = true; sample = bodyText(t).slice(0, 120); abort.abort(); if (page) page.value = before; return; }
       const c = cleanOutput(t, notes); if (c && page) page.value = c;
     }, abort.signal);
-    if (garbled || looksGarbled(out, notes)) throw new Error("garbled");
+    if (garbled || looksGarbled(out, notes)) { sample ||= bodyText(out).slice(0, 120); throw new Error("garbled"); }
+    return out;
+  };
+  try {
+    let out;
+    try { out = await run(); }
+    catch (e) {
+      // The GPU dropped the job (not our guard, not the Stop button): start the writer fresh and try once more.
+      if (garbled || e.message !== "gpu-lost") throw e;
+      if (page) page.value = before;
+      aiState.phase = ""; aiState.note = "The phone's graphics chip stopped the writer partway. Starting it fresh and trying once more…"; paintAi();
+      if (!(await startModel())) throw e;
+      aiState = { ...aiState, busy: true, phase: "write", note: "" }; paintAi();
+      out = await run();
+    }
     const clean = cleanOutput(out, notes);
     if (!clean || words(bodyText(clean)) < 3) throw new Error("empty");
     ed.body = clean; ed.ai = true;
     if (page) page.value = clean;
     aiState.flags = unsupported(notes, clean, about);
     aiState.lost = dropped(notes, clean);
+    aiState.note = "";
     undo(before);
-  } catch (e) {
+  } catch (e0) {
+    // Our own guard stopping a scrambled run can surface as a GPU error; it's still "scrambled".
+    const e = garbled ? new Error("garbled") : e0, stopped = abort?.signal.aborted && !garbled;
     if (page) page.value = ed.body;
+    aiState.note = "";
     aiState.msg = e.message === "garbled" ? await switchToSafe()
-      : e.message === "empty" ? "The writer came back empty. Try again, or add a little more to your notes." : abort?.signal.aborted ? "" : ai.errorText(e);
-    if (!["garbled", "empty"].includes(e.message) && !abort?.signal.aborted)
-      aiState.detail = `${String(e?.message || e || "unknown").slice(0, 500)}
+      : e.message === "empty" ? "The writer came back empty. Try again, or add a little more to your notes." : stopped ? "" : ai.errorText(e0);
+    if (e.message !== "empty" && !stopped)
+      aiState.detail = `${e.message === "garbled" ? `Scrambled output, e.g.: ${sample}` : String(e0?.cause?.message || e0?.message || e0 || "unknown").slice(0, 500)}
 
 Model: ${ai.idOf(aiKey(), device.f16)}
 GPU: ${device.gpu || "?"}

@@ -232,3 +232,15 @@ test("looksGarbled catches scrambled phone output, not real entries", () => {
   assert.equal(looksGarbled("Dear Diary,\n\n今天去了吉隆坡，很开心。", "今天去了吉隆坡，很开心"), false); // the notes were in Chinese
   assert.equal(looksGarbled("Dear Diary,\n\nshort"), false);
 });
+
+test("compact prompt (phones) is shorter but keeps the rules that matter", () => {
+  const about = "Aku Amir. ".repeat(60);
+  const full = buildMessages({ notes: "went mamak\nrisau pasal duit", profile: styleProfile(mine), samples: ["lepak mamak dengan geng."], about });
+  const small = buildMessages({ notes: "went mamak\nrisau pasal duit", profile: styleProfile(mine), about, compact: true });
+  const len = (m) => m.reduce((a, x) => a + x.content.length, 0);
+  assert.ok(len(small) < len(full) * 0.8, `${len(small)} vs ${len(full)}`);
+  assert.match(small[0].content, /Never add events/);
+  assert.match(small[0].content, /marked with its language/);
+  assert.match(small[0].content, /Never translate/);
+  assert.doesNotMatch(small[0].content, /chatbot words|\n- \n/);
+});
