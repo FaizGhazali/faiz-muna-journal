@@ -187,7 +187,7 @@ const EXAMPLES = {
   mixed: { notes: ["(English) gym aftr wrk", "(Malay) leg day, penat gila, esok confirm tak boleh jalam", "(Manglish) dinner roti canai only, so cheap one"],
     out: ["After work today I went straight to the gym.", "Leg day, memang penat gila, esok confirm tak boleh jalan.", "Then dinner roti canai only, so cheap one."] },
 };
-// Story mode (cloud writer only): each note becomes one to three sentences that tell that part of the day. Tested on
+// Story mode (cloud and device writer): each note becomes one to three sentences that tell that part of the day. Tested on
 // Sailor2-8B, the best Malay storyteller of the free models tried: it reads like a journal but adds small details
 // ("gepuk yang pedas sangat"), so the person is shown what was added and checks it before saving.
 const STORY_EXAMPLES = {
@@ -213,7 +213,7 @@ export function noteLines(notes) {
 // The chat messages for the model. Nothing here leaves the device: the model runs in the browser.
 export const ABOUT_MAX = 600;
 export function buildMessages({ notes, profile = null, samples = [], name = "", about = "", compact = false, story = false }) {
-  if (story) compact = false; // story mode is cloud only, so never the phone's short rules
+  if (story) compact = false; // story mode needs the full rules (phones don't run the device writer anyway)
   const lang = langOf(notes), target = targetWords(notes, profile);
   // Language always follows the notes, note by note: what was written in English stays English, Malay stays Malay.
   // The style profile never changes the language (its language line is left out of the prompt below).

@@ -402,18 +402,18 @@ function paintAi() {
   const m = ai.modelOf(aiKey());
   let html = "";
   if (modelUi === "cloud-ask") html = cloudAskHtml();
-  else if (useCloud()) html = cloudLineHtml();
-  else if (!device || device.checking) html = `<p class="note">Checking whether this device can run the writer…</p>`;
-  else if (!device.ok) html = `<div class="dy-box"><p><b>The writer can't run on this device.</b> ${esc(ai.whyText(device.why))}</p><p class="note">Everything else works. Tap "Write it myself" and your notes stay in the box above to help you.</p>${cloudOffer()}</div>`;
+  else if (useCloud()) html = whereHtml() + cloudLineHtml();
+  else if (!device || device.checking) html = whereHtml() + `<p class="note">Checking whether this device can run the writer…</p>`;
+  else if (!device.ok) html = whereHtml() + `<div class="dy-box"><p><b>The writer can't run on this device.</b> ${esc(ai.whyText(device.why))}</p><p class="note">Everything else works. Tap "Write it myself" and your notes stay in the box above to help you.</p>${cloudOffer()}</div>`;
   else if (aiState.phase === "download" || aiState.phase === "open") {
     html = `<div class="dy-box">${barHtml()}
       <p class="note">${aiState.phase === "download" ? "One time only. Stay on this page and keep writing if you like. If it stops, tap Download again: finished parts are kept." : "This takes a few seconds each time the app opens."}</p></div>`;
   } else if (!device.downloaded && !ai.isLoaded(aiKey(), device.f16)) {
-    html = `<div class="dy-box"><p><b>Turn on Dearly's writer.</b> It runs entirely on this ${device.mobile ? "phone" : "device"}: your notes never leave it, and it's free.</p>
+    html = whereHtml() + `<div class="dy-box"><p><b>Turn on Dearly's writer.</b> It runs entirely on this ${device.mobile ? "phone" : "device"}: your notes never leave it, and it's free.</p>
       <p class="note">Pick a size. It downloads once${device.mobile ? ", best on Wi-Fi" : ""}.</p>
       ${sizesHtml()}
       <p class="note">${esc(m.note)}</p>
-      <div class="actions"><button type="button" class="primary" data-dy="download">Download ${esc(sizeOf(m))}</button></div>${cloudOffer("No download? ")}</div>`;
+      <div class="actions"><button type="button" class="primary" data-dy="download">Download ${esc(sizeOf(m))}</button></div>${cloud.cloudReady() ? `<p class="note">No download? Pick ☁️ Cloud above.</p>` : ""}</div>`;
   } else if (modelUi === "sizes") {
     // Changing size while one is already downloaded: same buttons, right here.
     html = `<div class="dy-box"><p><b>Pick a writer size</b></p>${sizesHtml()}<p class="note">${esc(m.note)}</p>
@@ -423,10 +423,11 @@ function paintAi() {
       <p class="note">Frees about ${esc(sizeOf(m))}. Your diary isn't touched, and you can download it again any time.</p>
       <div class="actions"><button type="button" class="danger" data-dy="remove-here">Remove it</button><button type="button" data-dy="model-keep">Keep it</button></div></div>`;
   } else {
-    if (device.soft) html = `<p class="note">This device has no graphics chip for AI, so writing will be slow.</p>`;
+    if (!aiState.busy) html += whereHtml();
+    if (device.soft) html += `<p class="note">This device has no graphics chip for AI, so writing will be slow.</p>`;
     // One quiet line so the writer can be changed or removed without leaving the page.
-    if (!aiState.busy) html += `<div class="dy-modelline"><span>Writer: <b>${esc(m.name)}</b> · about ${esc(sizeOf(m))} on this ${device.mobile ? "phone" : "device"}</span>
-      <span class="btns"><button type="button" class="mini" data-dy="sizes-open">Change size</button><button type="button" class="mini" data-dy="model-remove">Remove</button>${cloud.cloudReady() ? `<button type="button" class="mini" data-dy="cloud-use">Use cloud</button>` : ""}</span></div>`;
+    if (!aiState.busy) html += `<div class="dy-modelline"><span>Model: <b>${esc(m.name)}</b> · about ${esc(sizeOf(m))} on this ${device.mobile ? "phone" : "device"}</span>
+      <span class="btns"><button type="button" class="mini" data-dy="sizes-open">Change size</button><button type="button" class="mini" data-dy="model-remove">Remove</button></span></div>` + styleHtml();
   }
   if (aiState.note) html = `<p class="note dy-note" role="status">✓ ${esc(aiState.note)}</p>` + html;
   if (aiState.msg) html += `<p class="note dy-err" role="alert">${esc(aiState.msg)}</p>`;
@@ -468,20 +469,30 @@ function cloudAskHtml() {
       : "This entry's notes, plus About you and your style if they're on, go to your family's own server on Modal. It writes the entry and keeps nothing. Nothing to download, and it's free."}</p>
     <div class="actions"><button type="button" class="primary" data-dy="cloud-yes">Use the cloud writer</button><button type="button" data-dy="cloud-no">Not now</button></div></div>`;
 }
+// Which writer: this device (WebLLM) or the cloud. Always shown at the top of the writer box (when the cloud is set
+// up), so either one can be picked at any time. Phones can't run the device writer (localai.js checkSupport).
+function whereHtml() {
+  if (!cloud.cloudReady() || aiState.busy) return "";
+  const c = useCloud(), phone = (device?.mobile ?? /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent));
+  return `<div class="dy-style dy-where" role="group" aria-label="Which writer"><span>Writer</span>
+    <button type="button" class="mini" data-dy="device-use" aria-pressed="${!c}"${phone ? ` disabled title="Not on phones"` : ""}>💻 This ${phone ? "phone" : "device"}${phone ? " (off on phones)" : ""}</button>
+    <button type="button" class="mini" data-dy="cloud-use" aria-pressed="${c}">☁️ Cloud</button></div>`;
+}
 function cloudLineHtml() {
-  const where = (device?.mobile ?? /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) ? "phone" : "device";
-  const left = demo && demoLeftN != null ? ` · ${demoLeftN} demo ${demoLeftN === 1 ? "write" : "writes"} left today` : "";
+  const left = demo && demoLeftN != null ? `${demoLeftN} demo ${demoLeftN === 1 ? "write" : "writes"} left today` : "";
+  return aiState.busy ? "" : (left ? `<p class="note">${esc(left)}</p>` : "") + styleHtml();
+}
+// Story or Close to my notes: the same two styles on the cloud writer and the device writer.
+function styleHtml() {
+  if (aiState.busy) return "";
   const story = storyOn();
-  return aiState.busy ? "" : `<div class="dy-modelline"><span>Writer: <b>☁️ Cloud</b>${esc(left)}</span>
-    <span class="btns"><button type="button" class="mini" data-dy="device-use">Use this ${where} instead</button></span></div>
-    <div class="dy-style" role="group" aria-label="Writing style"><span>Style</span>
+  return `<div class="dy-style" role="group" aria-label="Writing style"><span>Style</span>
       <button type="button" class="mini" data-dy="style-story" aria-pressed="${story}">📖 Story</button>
       <button type="button" class="mini" data-dy="style-close" aria-pressed="${!story}">📝 Close to my notes</button></div>
-    <p class="note">${story ? "Tells your points as a story. It may add small details, so you'll see what it added to check." : "Tidies each point into a sentence, with nothing added."}</p>`;
+    <p class="note">${story ? `Tells your points as a story. It may add small details${useCloud() ? "" : " (more often with the small model on this device)"}, so you'll see what it added to check.` : "Tidies each point into a sentence, with nothing added."}</p>`;
 }
-// Story (default) or Close to my notes, per device. Story is cloud only: the on-phone models are too small to tell a
-// story without making things up.
-const storyOn = () => useCloud() && store.get("journal-ai-style", "story") === "story";
+// Story (default) or Close to my notes, per device ("journal-ai-style"), for both writers.
+const storyOn = () => store.get("journal-ai-style", "story") === "story";
 async function writeInCloud(notes) {
   const st = styleOf(), src = st.on ? styleSource(list, pid(), st.since || "") : [];
   const profile = st.on ? styleProfile(src.map((e) => e.body)) : null, about = st.about || "";
@@ -605,10 +616,10 @@ async function writeForMe() {
   const profile = st.on ? styleProfile(src.map((e) => e.body)) : null;
   const about = st.about || ""; // "About you" is always used: the person wrote it for exactly this
   // Phones get shorter instructions: a long first step can trip the phone GPU's watchdog, which drops the job.
-  const compact = !!device.mobile;
-  const messages = buildMessages({ notes, profile, samples: profile && !compact ? samplesFor(src, 2) : [], name: person().name, about, compact });
+  const compact = !!device.mobile, story = storyOn();
+  const messages = buildMessages({ notes, profile, samples: profile && !compact ? samplesFor(src, 2) : [], name: person().name, about, compact, story });
   const before = ed.body;
-  aiState = { busy: true, phase: "write", progress: 0, msg: "", flags: [], lost: [] };
+  aiState = { busy: true, phase: "write", progress: 0, msg: "", flags: [], lost: [], story };
   paintAi();
   const page = $("dyBody");
   let garbled = false, sample = "";
@@ -619,8 +630,8 @@ async function writeForMe() {
     const out = await ai.write(messages, (t) => {
       if (garbled) return;
       if (looksGarbled(t, notes)) { garbled = true; sample = bodyText(t).slice(0, 120); abort.abort(); if (page) page.value = before; return; }
-      const c = cleanOutput(t, notes, false); if (c && page) page.value = c;
-    }, abort.signal);
+      const c = cleanOutput(t, notes, false, story); if (c && page) page.value = c;
+    }, abort.signal, { story });
     if (garbled || looksGarbled(out, notes)) { sample ||= bodyText(out).slice(0, 120); throw new Error("garbled"); }
     return out;
   };
@@ -636,7 +647,7 @@ async function writeForMe() {
       aiState = { ...aiState, busy: true, phase: "write", note: "" }; paintAi();
       out = await run();
     }
-    const clean = cleanOutput(out, notes);
+    const clean = cleanOutput(out, notes, true, story);
     if (!clean || words(bodyText(clean)) < 3) throw new Error("empty");
     ed.body = clean; ed.ai = true;
     if (page) page.value = clean;
@@ -678,6 +689,7 @@ function renderAi() {
     <section class="panel" aria-labelledby="dyAiTitle" data-title="Dearly's writer">
       <p class="eyebrow">Dearly AI</p><h2 id="dyAiTitle">Your writing helper</h2>
       <p class="note">Turns a few words about your day into a diary entry that sounds like you. It runs on this device's graphics chip, inside the browser. Nothing you write is sent anywhere, there's no account or key, and it's free to use as much as you like.</p>
+      <div id="dyAiWhere"></div>
       <div id="dyAiPage"></div>
       <fieldset class="dy-models"><legend>Model size</legend>
         ${ai.MODELS.map((x) => `<label class="dy-model"><input type="radio" name="dyModel" value="${x.key}"${x.key === m.key ? " checked" : ""}>
@@ -729,6 +741,7 @@ function renderAi() {
 }
 function paintAiPage() {
   const host = $("dyAiPage"), acts = $("dyAiActs"); if (!host) return;
+  if ($("dyAiWhere")) $("dyAiWhere").innerHTML = modelUi === "cloud-ask" ? cloudAskHtml() : whereHtml() + styleHtml();
   const key = aiKey(), m = ai.modelOf(key);
   let s = "";
   if (!device || device.checking) s = `<p class="note">Checking this device…</p>`;
@@ -830,11 +843,11 @@ function wire() {
       catch (_) { $("dyCopied").textContent = "Couldn't copy. Take a screenshot instead."; }
       return;
     }
-    if (act === "cloud-use") { aiState.msg = ""; aiState.detail = ""; if (store.get("journal-ai-cloud-ok", false)) { store.set("journal-ai-where", "cloud"); wakeCloud(); } else modelUi = "cloud-ask"; paintAi(); return; }
-    if (act === "cloud-yes") { store.set("journal-ai-cloud-ok", true); store.set("journal-ai-where", "cloud"); modelUi = ""; aiState.note = "Using the cloud writer on this device."; paintAi(); wakeCloud(); return; }
-    if (act === "cloud-no") { modelUi = ""; paintAi(); return; }
-    if (act === "style-story" || act === "style-close") { store.set("journal-ai-style", act === "style-story" ? "story" : "close"); paintAi(); return; }
-    if (act === "device-use") { store.set("journal-ai-where", "device"); modelUi = ""; aiState.note = ""; paintAi(); if (!device) probe(); return; }
+    if (act === "cloud-use") { aiState.msg = ""; aiState.detail = ""; if (store.get("journal-ai-cloud-ok", false)) { store.set("journal-ai-where", "cloud"); modelUi = ""; wakeCloud(); } else modelUi = "cloud-ask"; paintAi(); paintAiPage(); return; }
+    if (act === "cloud-yes") { store.set("journal-ai-cloud-ok", true); store.set("journal-ai-where", "cloud"); modelUi = ""; aiState.note = "Using the cloud writer on this device."; paintAi(); paintAiPage(); wakeCloud(); return; }
+    if (act === "cloud-no") { modelUi = ""; paintAi(); paintAiPage(); return; }
+    if (act === "style-story" || act === "style-close") { store.set("journal-ai-style", act === "style-story" ? "story" : "close"); paintAi(); paintAiPage(); return; }
+    if (act === "device-use") { store.set("journal-ai-where", "device"); modelUi = ""; aiState.note = ""; aiState.msg = ""; aiState.detail = ""; paintAi(); paintAiPage(); if (!device) probe(); return; }
     if (act === "sizes-open") { modelUi = "sizes"; paintAi(); return; }
     if (act === "sizes-done") { modelUi = ""; paintAi(); return; }
     if (act === "model-remove") { modelUi = "remove"; paintAi(); return; }

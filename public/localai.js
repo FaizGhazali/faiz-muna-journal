@@ -97,13 +97,14 @@ const lostError = (e) => Object.assign(new Error("gpu-lost"), { cause: e });
 function reset() { try { worker?.terminate(); } catch (_) {} worker = null; engine = null; loadedId = null; }
 
 // Write from chat messages, calling onText with everything so far. Abort the signal to stop early.
-export async function write(messages, onText, signal) {
+// opts.story: a little more freedom for Story mode (Close to my notes stays strict).
+export async function write(messages, onText, signal, opts = {}) {
   if (!engine) throw new Error("not-loaded");
   const stop = () => { try { engine.interruptGenerate(); } catch (_) {} };
   signal?.addEventListener("abort", stop);
   let out = "";
   try {
-    const stream = await engine.chat.completions.create({ messages, stream: true, temperature: 0.3, top_p: 0.85, frequency_penalty: 0.2, max_tokens: 700 });
+    const stream = await engine.chat.completions.create({ messages, stream: true, temperature: opts.story ? 0.5 : 0.3, top_p: opts.story ? 0.9 : 0.85, frequency_penalty: 0.2, max_tokens: opts.story ? 900 : 700 });
     for await (const c of stream) {
       out += c.choices?.[0]?.delta?.content || "";
       onText(out);
