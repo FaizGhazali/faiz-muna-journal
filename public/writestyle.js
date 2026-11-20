@@ -153,7 +153,8 @@ export function noteLang(note) {
 }
 // Words a diary can add without adding a fact: linking words and everyday verbs of telling.
 const LINKS = new Set(("then after that later also again went go going came come there here when while because since really quite little bit just " +
-  "today tonight morning evening myself were been being have having pastu lepas lepastu kemudian then lagi pun tapi sebab bila masa jadi").split(" "));
+  "today tonight morning evening myself were been being have having pastu lepas lepastu kemudian then lagi pun tapi sebab bila masa jadi " +
+  "honestly actually finally anyway okay simple straight only had memang betul agak harini hari sangat sikit makan pergi terus buat").split(" "));
 export const LANG_NAME = { ms: "Malay", en: "English", manglish: "Manglish" };
 // The whole set of notes: one language, or "mixed" when the notes differ.
 export function langOf(text) {
@@ -166,9 +167,23 @@ export function langOf(text) {
 
 // Roughly how long the entry should be: a few words per word of notes, nudged toward their usual length.
 export function targetWords(notes, profile) {
-  const n = words(notes), base = Math.min(220, Math.max(45, n * 3.2));
+  const n = words(notes), base = Math.min(240, Math.max(60, n * 4.2));
   return Math.round(profile ? Math.min(260, Math.max(40, base * 0.6 + profile.avgWords * 0.4)) : base);
 }
+
+// One worked example per language: small models copy the example far more than they follow rules, so an all-Malay
+// day gets a Malay example (a mixed one made Qwen2.5-3B drift into English or formal Malay). Each shows typos fixed,
+// notes joined into diary sentences, and nothing added: no new events, feelings or verdicts.
+const EXAMPLES = {
+  ms: { notes: "- gym lepas kerja\n- leg day, penat gila, esok confirm tak boleh jalam\n- dinner roti canai je",
+    entry: "Harini lepas kerja aku terus pergi gym. Leg day, memang penat gila. Esok confirm tak boleh jalan.\n\nPastu dinner aku makan roti canai je." },
+  en: { notes: "- gym aftr wrk, legs so sor\n- dinner was just roti canai, so cheap",
+    entry: "After work today I went straight to the gym, and now my legs are so sore.\n\nThen dinner was just roti canai, so cheap." },
+  manglish: { notes: "- gym aftr work, leg day, tmr sure cannot walk one\n- dinner roti canai only, so cheap one",
+    entry: "After work today I went to the gym. Leg day lah, tomorrow sure cannot walk one.\n\nThen dinner roti canai only, so cheap one." },
+  mixed: { notes: "- (English) gym aftr wrk, legs so sor\n- (Malay) leg day, penat gila, esok confirm tak boleh jalam\n- (Manglish) dinner roti canai only, so cheap one",
+    entry: "After work today I went straight to the gym, and now my legs are so sore.\n\nHarini leg day, memang penat gila. Esok confirm tak boleh jalan.\n\nThen dinner roti canai only, so cheap one." },
+};
 
 // The chat messages for the model. Nothing here leaves the device: the model runs in the browser.
 export const ABOUT_MAX = 600;
@@ -176,7 +191,7 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
   const lang = langOf(notes), target = targetWords(notes, profile);
   // Language always follows the notes, note by note: what was written in English stays English, Malay stays Malay.
   // The style profile never changes the language (its language line is left out of the prompt below).
-  const malayRule = "Malay notes become casual Malay sentences, the way people text, not formal Malay. English words used inside a Malay note (like \"mesmerised\", \"star align\", \"meeting\") stay in English.";
+  const malayRule = "Malay notes become casual Malay sentences, the way people text, not formal Malay: \"aku\" (not \"saya\" unless the notes say saya), \"lunch\", \"harini\", not \"makan siang\" or \"hari ini\". English words used inside a Malay note (like \"mezmerize\", \"star align\", \"meeting\") stay those same English words: only fix their spelling (mezmerize → mesmerised), never swap them for a Malay word.";
   const manglishRule = "Manglish notes stay Manglish, the way Malaysians talk: keep particles like lah, lor, leh, meh, liao, words like makan, tapau, jom, alamak, and grammar like \"got\", \"already\", \"cannot\", \"one\" at the end. Fix the spelling, but never turn it into standard English.";
   const langRule = lang === "ms" ? `The notes are in Malay, so write the whole entry in Malay. ${malayRule} Do not turn it into English.`
     : lang === "manglish" ? `The notes are in Manglish (Malaysian English), so write the entry in Manglish. ${manglishRule} Do not turn it into Malay.`
@@ -187,17 +202,21 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
     : lang === "manglish" ? "The notes are Manglish: keep it Manglish (lah, already, cannot), never correct it."
     : lang === "ms" ? "The notes are Malay: write in casual Malay; English words inside stay English." : "The notes are English: write in English.";
     const fix = "Correct every spelling mistake and fix the grammar (offise → office, gud → good, tdur → tidur). Keep casual words and slang (gila, do, lah, best, jom): corrected, not formal.";
+  // Diary voice: full sentences joined up, with small personal touches (lepas tu, honestly, memang, rasa macam), but only
+  // from what the notes say. Tested on Qwen2.5-3B: it adds wording, not events, as long as the facts rule stays.
+  const voice = "Write it like a real diary, not a list: full sentences with \"I\"/\"aku\", joined with linking words (today, then, after that, harini, lepas tu, pastu, tapi, sebab). The personal touch comes from how it's told, not from new feelings or opinions: never add a feeling, taste or verdict (good, lame, sedap, takut) a note didn't give. Every sentence must make sense; no filler phrases.";
   const rules = compact ? [
     `Write this person's diary entry from their notes, as them ("I"/"aku"). You are not chatting.`,
-    "One or two plain sentences per note, same order. Never add events, people, places, times or feelings the notes don't say.",
+    voice,
+    "Same order as the notes. Never add events, people, places, times, food or feelings the notes don't say.",
     `Keep their words and slang. Never translate. ${shortLang}`,
     fix,
     `No drama, no lessons, no questions, never talk to "you".${profile?.emoji ? "" : " No emojis."}`,
     `Start with "${OPENING}" then short paragraphs, about ${target} words. Reply with the entry only.`,
   ] : [
     `You turn someone's rough notes into their own diary entry. You are not chatting with them. Write as them, in the first person ("I"/"aku"/"saya", whichever the notes use).`,
-    // Tested on Qwen2.5-1.5B: telling it to "make it flow" made it invent outings and feelings, so it stays close to the notes.
-    "Turn each note into one or two plain sentences, in the same order. Every sentence must come from a note. Staying close to their words is better than adding anything.",
+    voice,
+    "Keep the notes' order. Add words, not facts: every event, person, place, time, food and feeling must come from a note.",
     "Never add events, people, places, times, food, reasons, results or feelings that the notes do not mention.",
     "Only say how they felt where a note says it, in the note's words. Do not call the day good, bad, chaotic, stressful or anything else unless a note does.",
     "Keep their own words: slang, names and Malay words stay theirs. Never translate a word or explain it in brackets.",
@@ -224,8 +243,8 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
   // in its own language (English, Malay, Manglish), nothing added, no feelings that weren't written.
   return [
     { role: "system", content: rules.filter(Boolean).map((x) => `- ${x}`).join("\n") + style },
-    { role: "user", content: "My notes for today:\n- (English) gym aftr wrk, legs so sor\n- (Malay) leg day, penat gila, esok confirm tak boleh jalam\n- (Manglish) dinner roti canai only, so cheap one\n\nWrite my diary entry." },
-    { role: "assistant", content: `${OPENING}\n\nI went to the gym after work, legs so sore. Leg day, penat gila, esok confirm tak boleh jalan.\n\nDinner roti canai only, so cheap one.` },
+    { role: "user", content: `My notes for today:\n${EXAMPLES[lang].notes}\n\nWrite my diary entry.` },
+    { role: "assistant", content: `${OPENING}\n\n${EXAMPLES[lang].entry}` },
     { role: "user", content: "That was only an example. Now do mine, using nothing from the example." },
     { role: "assistant", content: "Okay. Send your notes." },
     { role: "user", content: `${name ? `My name is ${name}. ` : ""}My notes for today:\n${lines.map((l) => `- ${lang === "mixed" ? `(${LANG_NAME[noteLang(l)]}) ` : ""}${l}`).join("\n")}\n\nWrite my diary entry.` },

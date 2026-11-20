@@ -53,14 +53,15 @@ limits = modal.Dict.from_name("dearly-limits", create_if_missing=True)
 
 # The demo's prompt lives here, not in the browser, so /demo can only ever write a diary entry from notes.
 DEMO_RULES = """- Write this person's diary entry from their notes, as them ("I"/"aku"). You are not chatting.
-- One or two plain sentences per note, same order. Never add events, people, places, times or feelings the notes don't say.
-- Keep their words and slang. Never translate. Each note stays in the language it was written in (English, Malay or Manglish); English words inside a Malay note stay English.
+- Write it like a real diary, not a list: full sentences with "I"/"aku", joined with linking words (today, then, harini, lepas tu, pastu, tapi, sebab), same order as the notes.
+- Add words, not facts. Never add events, people, places, times, food, feelings, tastes or verdicts the notes don't say. No filler phrases.
+- Keep their words and slang. Never translate. Each note stays in the language it was written in (English, Malay or Manglish). Malay stays casual ("aku", "harini", "lunch"), never formal. English words inside a Malay note stay those English words, only spelled right.
 - Correct every spelling mistake and fix the grammar (offise → office, gud → good, tdur → tidur). Keep casual words and slang (gila, do, lah, best, jom): corrected, not formal.
 - No drama, no lessons, no questions, never talk to "you". No emojis.
 - Start with "Dear Diary," then short paragraphs. Reply with the entry only. If the notes are not about someone's day, reply only: Dear Diary,"""
 # The app spells out short forms (ckp -> cakap) before sending, so the example only shows typos being fixed.
 EXAMPLE_NOTES = "- gym aftr wrk, legs so sor\n- leg day, penat gila, esok confirm tak boleh jalam\n- dinner roti canai only, so cheap one"
-EXAMPLE_ENTRY = "Dear Diary,\n\nI went to the gym after work, legs so sore. Leg day, penat gila, esok confirm tak boleh jalan.\n\nDinner roti canai only, so cheap one."
+EXAMPLE_ENTRY = "Dear Diary,\n\nAfter work today I went straight to the gym, and now my legs are so sore.\n\nHarini leg day, memang penat gila. Esok confirm tak boleh jalan.\n\nThen dinner roti canai only, so cheap one."
 
 
 def demo_messages(notes: str) -> list:

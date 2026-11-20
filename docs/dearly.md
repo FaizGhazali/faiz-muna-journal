@@ -57,9 +57,11 @@ Optional, on **✨ AI & privacy**:
   words, or adds a word you never wrote. The editor flags these after every draft: **"Check these"** lists names,
   numbers, feelings and other words not in your notes, and **"Your own words that went missing"** lists Malay, Manglish
   or slang words that got lost. You always review before saving.
-- **Faithful beats fancy.** Testing showed that asking the 1.5B model to "make it flow" made it invent outings and
-  feelings. So it stays close to your words: lightly tidied, not rewritten. The Large (3B) model writes more naturally. That's
-  expected but wasn't tested here.
+- **Add words, not facts.** Notes become full diary sentences joined with linking words (harini, lepas tu, pastu, then),
+  with spelling and grammar corrected. Nothing new is added: no events, feelings, tastes or verdicts. Testing on Qwen2.5-3B
+  (cloud) showed it copies its worked example closely. A mixed-language example made all-Malay days drift into English
+  or formal Malay, and a verdict in the example ("murah gila") got copied into entries. So there's one plain example per
+  language. On 1.5B, "make it flow" invented outings, so the facts rule always stays.
 - **Language follows each note**, judged by its grammar words, not its vocabulary. "tadi aku mezmerize do, macam star
   align" is a Malay note, and its English words stay English. Manglish ("cannot lah", "late already") stays Manglish.
 - **Phone GPUs can drop long jobs.** On a Snapdragon 8 Gen 3 (Adreno 7xx, Chrome 156) the writer failed with
