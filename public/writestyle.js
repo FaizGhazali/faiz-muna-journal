@@ -295,8 +295,9 @@ export function strayed(note, s, story = false) {
 // Story mode sometimes folds two notes into one line. A missing note is only added back when its words aren't
 // already in the entry.
 const coveredIn = (note, text) => {
-  const ws = tokens(note).filter((w) => w.length >= 4 && !STOP.has(w)), have = tokens(text);
-  return ws.length > 0 && ws.filter((w) => have.some((h) => sameWord(w, h))).length >= ws.length / 2;
+  // All the note's words of 3+ letters: filtering out "little" words dropped too much (harini, takde, mood).
+  const ws = tokens(note).filter((w) => w.length >= 3), have = tokens(text);
+  return ws.length > 0 && ws.filter((w) => have.some((h) => sameWord(w, h))).length >= ws.length * 0.4;
 };
 // "1. ...\n2. ..." -> paragraphs, each sentence checked against its own note. While streaming (done = false) the last
 // line may be half-written, so it's shown as it is and only checked once the next line starts or writing ends.
