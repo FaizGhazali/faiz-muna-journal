@@ -31,7 +31,7 @@ const filt = { q: "", month: "", tag: "", fav: false, sort: "new" };
 let shown = PAGE, route = "", painted = "", confirm = null, flash = null; // flash: { id, text } shown on that entry until you leave it
 let ed = null, saveTimer = 0, abort = null, photoCache = new Map();
 let aboutMsg = ""; // "Saved" under About you, kept through the redraw that saving causes
-let device = null, aiState = { busy: false, progress: 0, phase: "", msg: "", flags: [], lost: [] };
+let device = null, aiState = { busy: false, progress: 0, mb: 0, phase: "", msg: "", flags: [], lost: [] };
 
 export function initDiary(opts) {
   ({ db, commit, people, me } = opts);
@@ -383,12 +383,13 @@ function paintAi() {
   if (!device || device.checking) html = `<p class="note">Checking whether this device can run the writer…</p>`;
   else if (!device.ok) html = `<div class="dy-box"><p><b>The writer can't run on this device.</b> ${esc(ai.whyText(device.why))}</p><p class="note">Everything else works. Tap "Write it myself" and your notes stay in the box above to help you.</p></div>`;
   else if (aiState.phase === "download" || aiState.phase === "open") {
-    html = `<div class="dy-box"><p><b>${aiState.phase === "download" ? `Downloading the writer (${esc(m.size)})` : "Getting the writer ready…"}</b></p>
-      <progress max="1" value="${aiState.progress}"></progress>
-      <p class="note">${aiState.phase === "download" ? "One time only. You can keep writing meanwhile. If it stops, tap the button again: finished parts are kept." : "This takes a few seconds each time the app opens."}</p></div>`;
+    html = `<div class="dy-box">${barHtml()}
+      <p class="note">${aiState.phase === "download" ? "One time only. Stay on this page and keep writing if you like. If it stops, tap Download again: finished parts are kept." : "This takes a few seconds each time the app opens."}</p></div>`;
   } else if (!device.downloaded && !ai.isLoaded(aiKey(), device.f16)) {
-    html = `<div class="dy-box"><p><b>Turn on Dearly's writer.</b> It runs entirely on this device: your notes never leave it, and it's free.</p>
-      <p class="note">One-time download: ${esc(m.name)} model, ${esc(m.size)}${device.mobile ? ", best on Wi-Fi" : ""}. <a href="#diary/ai">Other sizes</a></p>
+    html = `<div class="dy-box"><p><b>Turn on Dearly's writer.</b> It runs entirely on this ${device.mobile ? "phone" : "device"}: your notes never leave it, and it's free.</p>
+      <p class="note">Pick a size. It downloads once${device.mobile ? ", best on Wi-Fi" : ""}.</p>
+      ${sizesHtml()}
+      <p class="note">${esc(m.note)}</p>
       <div class="actions"><button type="button" class="primary" data-dy="download">Download ${esc(m.size.replace("about ", ""))}</button></div></div>`;
   } else if (device.soft) html = `<p class="note">This device has no graphics chip for AI, so writing will be slow.</p>`;
   if (aiState.msg) html += `<p class="note dy-err" role="alert">${esc(aiState.msg)}</p>`;
@@ -400,13 +401,52 @@ function paintAi() {
   if (btn) { btn.disabled = aiState.busy || (device && !device.checking && !device.ok); btn.textContent = aiState.busy && aiState.phase === "write" ? "Writing…" : ed && ed.ai && bodyText(ed.body) ? "✨ Write it again" : "✨ Write it for me"; }
   if (stop) stop.hidden = !(aiState.busy && aiState.phase === "write");
 }
+// Size picker shown right in the editor, so choosing a size never leaves the page you're writing on.
+function sizesHtml() {
+  const key = aiKey(), fit = ai.suggestKey(device);
+  return `<div class="dy-sizes" role="radiogroup" aria-label="Model size">${ai.MODELS.map((x) => `<button type="button" role="radio" class="dy-size" data-size="${x.key}" aria-checked="${x.key === key}">
+    <b>${esc(x.name)}</b><small>${esc(x.size.replace("about ", ""))}</small>${x.key === fit ? `<em>Suits this ${device?.mobile ? "phone" : "device"}</em>` : ""}</button>`).join("")}</div>`;
+}
+// The download / opening bar: a big percentage, a thick bar and how many MB so far. Updated in place while it runs.
+const barTotal = () => Math.round(ai.modelOf(aiKey()).gb * 1000 * (device?.f16 === false ? 1.15 : 1));
+function barText() {
+  const dl = aiState.phase === "download", pct = Math.round(aiState.progress * 100);
+  return { pct, title: dl ? "Downloading the writer" : "Getting the writer ready",
+    detail: dl ? (aiState.mb ? `${Math.round(aiState.mb)} of about ${barTotal()} MB` : "Starting the download…") : "Opening it from this device…" };
+}
+function barHtml() {
+  const t = barText();
+  return `<div class="dy-prog" data-prog>
+    <div class="dy-proghead"><b data-prog-title>${esc(t.title)}</b><span class="dy-pct" data-prog-pct>${t.pct}%</span></div>
+    <div class="dy-bar${t.pct ? "" : " wait"}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${t.pct}" aria-label="${esc(t.title)}"><i style="width:${t.pct}%"></i></div>
+    <p class="note" data-prog-detail>${esc(t.detail)}</p></div>`;
+}
+// Move the bars without redrawing the box, so it doesn't flicker on a phone.
+function updateBars() {
+  const bars = document.querySelectorAll("#diary [data-prog]");
+  if (!bars.length) return false;
+  const t = barText();
+  bars.forEach((b) => {
+    b.querySelector("[data-prog-title]").textContent = t.title;
+    b.querySelector("[data-prog-pct]").textContent = `${t.pct}%`;
+    b.querySelector("[data-prog-detail]").textContent = t.detail;
+    const bar = b.querySelector(".dy-bar"); bar.classList.toggle("wait", !t.pct); bar.setAttribute("aria-valuenow", t.pct); bar.setAttribute("aria-label", t.title);
+    bar.firstElementChild.style.width = `${t.pct}%`;
+  });
+  return true;
+}
 async function startModel() {
   const key = aiKey();
-  aiState = { ...aiState, busy: true, phase: device.downloaded ? "open" : "download", progress: 0, msg: "" };
+  aiState = { ...aiState, busy: true, phase: device.downloaded ? "open" : "download", progress: 0, mb: 0, msg: "" };
   paintAi();
   ai.keepStorage();
   try {
-    await ai.load(key, device.f16, (r) => { aiState.phase = device.downloaded ? "open" : r.phase === "download" ? "download" : aiState.phase; aiState.progress = r.progress; paintAi(); paintAiPage(); });
+    await ai.load(key, device.f16, (r) => {
+      const was = aiState.phase, mb = /([\d.]+)\s*MB fetched/i.exec(r.text);
+      aiState.phase = device.downloaded ? "open" : r.phase === "download" ? "download" : aiState.phase;
+      aiState.progress = r.progress; if (mb) aiState.mb = +mb[1];
+      if (aiState.phase !== was || !updateBars()) { paintAi(); paintAiPage(); }
+    });
     device.downloaded = true;
     store.set("journal-ai-model", key);
     return true;
@@ -523,7 +563,7 @@ function paintAiPage() {
   else {
     const loaded = ai.isLoaded(key, device.f16);
     s = `<p class="dy-status"><span class="dy-dot ${device.downloaded ? "on" : ""}"></span>${device.downloaded ? `${esc(m.name)} model is on this device${loaded ? " and ready" : ""}.` : "Not downloaded on this device yet."}${device.soft ? " No graphics chip was found, so it will be slow." : ""}${device.memGB ? ` This device reports about ${device.memGB} GB of memory.` : ""}</p>`;
-    if (aiState.phase === "download" || aiState.phase === "open") s += `<progress max="1" value="${aiState.progress}"></progress><p class="note">${aiState.phase === "download" ? `Downloading ${esc(m.size)}… ${Math.round(aiState.progress * 100)}%` : "Getting ready…"}</p>`;
+    if (aiState.phase === "download" || aiState.phase === "open") s += barHtml();
     if (aiState.msg) s += `<p class="note dy-err" role="alert">${esc(aiState.msg)}</p>`;
   }
   host.innerHTML = s;
@@ -577,6 +617,14 @@ function wire() {
       const v = +moodBtn.dataset.mood; ed.mood = ed.mood === v ? null : v;
       host.querySelectorAll("[data-mood]").forEach((b) => b.setAttribute("aria-pressed", +b.dataset.mood === ed.mood));
       saveDraft(); return;
+    }
+    const size = ev.target.closest("button[data-size]");
+    if (size) {
+      if (aiState.busy) return;
+      store.set("journal-ai-model", size.dataset.size); aiState.msg = "";
+      paintAi();
+      if (device?.ok) { device.downloaded = await ai.isDownloaded(size.dataset.size, device.f16); paintAi(); }
+      return;
     }
     const pap = ev.target.closest("button[data-paper]"); // #diary itself carries data-paper, so match the buttons only
     if (pap) { store.set("journal-paper", pap.dataset.paper); paper(); host.querySelectorAll("[data-paper]").forEach((b) => b.setAttribute("aria-pressed", b === pap)); return; }

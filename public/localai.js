@@ -6,11 +6,11 @@ const LIB = "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.86/lib/index.js";
 
 // Small instruction models that handle English and Malay. Sizes are the one-time download; memory is what the GPU needs.
 export const MODELS = [
-  { key: "tiny", base: "Qwen2.5-0.5B-Instruct", name: "Tiny", size: "about 0.3 GB", gb: 0.3, mem: 1.0,
+  { key: "tiny", base: "Qwen2.5-0.5B-Instruct", name: "Small", size: "about 0.3 GB", gb: 0.3, mem: 1.0,
     note: "For phones and older computers. Quick, but plainer writing and more slips, so read it carefully." },
-  { key: "small", base: "Qwen2.5-1.5B-Instruct", name: "Recommended", size: "about 0.9 GB", gb: 0.9, mem: 1.7,
+  { key: "small", base: "Qwen2.5-1.5B-Instruct", name: "Medium", size: "about 0.9 GB", gb: 0.9, mem: 1.7,
     note: "The best balance. Works on most laptops and newer phones." },
-  { key: "better", base: "Qwen2.5-3B-Instruct", name: "Better", size: "about 1.7 GB", gb: 1.7, mem: 2.6,
+  { key: "better", base: "Qwen2.5-3B-Instruct", name: "Large", size: "about 1.7 GB", gb: 1.7, mem: 2.6,
     note: "Most natural writing, Malay included. For a laptop or desktop with 8 GB of memory or more." },
 ];
 export const modelOf = (key) => MODELS.find((m) => m.key === key) || MODELS[1];
@@ -111,7 +111,7 @@ export async function storageInfo() {
 export function errorText(e) {
   const m = String(e?.message || e || "");
   if (/quota|storage|space/i.test(m)) return "There isn't enough free space on this device to keep the model. Free some space or pick a smaller size.";
-  if (/memory|OOM|allocate|device was lost|device lost|out of/i.test(m)) return "This device ran out of graphics memory. Close other tabs and try again, or pick the Tiny size.";
+  if (/memory|OOM|allocate|device was lost|device lost|out of/i.test(m)) return "This device ran out of graphics memory. Close other tabs and try again, or pick the Small size.";
   if (/fetch|network|Failed to load|NetworkError|offline/i.test(m) || !navigator.onLine) return "The download stopped. Check the connection and tap Download again: the parts already saved are kept.";
   if (/shader-f16|feature/i.test(m)) return "This graphics chip can't run that build. Reload the page and try again.";
   return "The writer couldn't start on this device. You can still write yourself.";

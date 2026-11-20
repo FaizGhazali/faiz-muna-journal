@@ -31,9 +31,9 @@ Optional, on **✨ AI & privacy**:
 
 | Size | Model (WebLLM id) | Download | GPU memory | For |
 |---|---|---|---|---|
-| Tiny | Qwen2.5-0.5B-Instruct `q4f16_1` / `q4f32_1` | ~0.3 GB | ~1.0 GB | phones, older laptops |
-| **Recommended** | Qwen2.5-1.5B-Instruct | ~0.9 GB | ~1.7 GB | most laptops, newer phones |
-| Better | Qwen2.5-3B-Instruct | ~1.7 GB | ~2.6 GB | laptops/desktops with 8 GB+ RAM |
+| Small | Qwen2.5-0.5B-Instruct `q4f16_1` / `q4f32_1` | ~0.3 GB | ~1.0 GB | phones, older laptops |
+| **Medium** (suggested) | Qwen2.5-1.5B-Instruct | ~0.9 GB | ~1.7 GB | most laptops, newer phones |
+| Large | Qwen2.5-3B-Instruct | ~1.7 GB | ~2.6 GB | laptops/desktops with 8 GB+ RAM |
 
 - Download sizes are approximate. Memory figures come from WebLLM 0.2.86's model list.
 - Phones without the GPU's `shader-f16` feature get the `q4f32_1` build automatically (a bit bigger).
@@ -55,7 +55,7 @@ Optional, on **✨ AI & privacy**:
   numbers, feelings and other words not in your notes, and **"Your own words that went missing"** lists Malay, Manglish
   or slang words that got lost. You always review before saving.
 - **Faithful beats fancy.** Testing showed that asking the 1.5B model to "make it flow" made it invent outings and
-  feelings. So it stays close to your words: lightly tidied, not rewritten. The 3B model writes more naturally. That's
+  feelings. So it stays close to your words: lightly tidied, not rewritten. The Large (3B) model writes more naturally. That's
   expected but wasn't tested here.
 - **Language follows each note**, judged by its grammar words, not its vocabulary. "tadi aku mezmerize do, macam star
   align" is a Malay note, and its English words stay English. Manglish ("cannot lah", "late already") stays Manglish.
@@ -102,5 +102,5 @@ of writes a day, far below the free tier (20,000 writes and 50,000 reads a day).
   in their own languages. Earlier prompt versions invented feelings and translated words. Those runs drove the
   current prompt and checks.
 - **Not tested:** real phones, the installed PWA, an iPhone, a device without WebGPU (that path is code-reviewed, and
-  its message is the one from `whyText()`), the Tiny and Better models, a download cut off halfway, and storage
+  its message is the one from `whyText()`), the Small and Large models, a download cut off halfway, and storage
   eviction.

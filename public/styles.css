@@ -967,6 +967,23 @@ a.btn.mini { font-size: 13px; font-weight: 400; padding: 4px 10px; color: var(--
 .dy-bin { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px }
 .dy-bin li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line) }
 .dy-bin li small { display: block; color: var(--muted) }
+/* Download / opening progress and the size picker in the editor (phone-first: big numbers, thick bar, big tap targets). */
+.dy-prog { display: grid; gap: 8px }
+.dy-prog .note { margin: 0 }
+.dy-proghead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px }
+.dy-pct { font: 700 22px/1 var(--display); font-variant-numeric: tabular-nums; color: var(--paper-accent, var(--accent)) }
+.dy-bar { position: relative; height: 14px; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--paper-accent, var(--accent)) 16%, transparent) }
+.dy-bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--paper-accent, var(--accent)); transition: width .4s ease }
+.dy-bar.wait i { width: 30% !important; animation: dyslide 1.3s ease-in-out infinite }
+@keyframes dyslide { from { transform: translateX(-100%) } to { transform: translateX(340%) } }
+@media (prefers-reduced-motion: reduce) { .dy-bar i { transition: none } .dy-bar.wait i { animation: none; width: 100% !important; opacity: .35 } }
+.dy-sizes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px }
+.dy-size { display: grid; gap: 2px; align-content: start; justify-items: center; text-align: center; min-height: 64px; padding: 10px 4px; border: 1px solid var(--paper-line, var(--line)); border-radius: 12px; font-weight: 400; color: var(--paper-ink, var(--ink)) }
+.dy-size b { font-size: 14px; overflow-wrap: anywhere }
+.dy-size small { font-size: 13px; color: var(--paper-muted, var(--muted)) }
+.dy-size em { font-size: 11px; font-style: normal; font-weight: 700; color: var(--good) }
+.dy-size[aria-checked="true"] { border-color: var(--paper-accent, var(--accent)); box-shadow: inset 0 0 0 1px var(--paper-accent, var(--accent)); background: color-mix(in srgb, var(--paper-accent, var(--accent)) 10%, transparent) }
+.dy-box .actions .primary { flex: 1 1 auto }
 .dy-sugg { display: grid; gap: 6px; margin: 6px 0 4px; padding: 12px; border: 1px dashed var(--line); border-radius: 12px }
 .dy-sugg ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px }
 .dy-sugg li { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line) }
