@@ -941,6 +941,7 @@ a.btn.mini { font-size: 13px; font-weight: 400; padding: 4px 10px; color: var(--
 .dy-box { display: grid; gap: 6px; padding: 12px; border-radius: 10px; background: var(--paper); border: 1px solid var(--paper-line) }
 .dy-box p { margin: 0 }
 .dy-err { color: var(--obese) !important }
+.dy-note { color: var(--paper-ink, var(--ink)) !important; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--good) 14%, transparent) }
 .dy-check mark { background: color-mix(in srgb, #d99a1c 30%, transparent); color: inherit; padding: 0 4px; border-radius: 4px; margin-right: 2px }
 .dy-edphotos { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
 .dy-thumb { position: relative; line-height: 0 }
@@ -984,6 +985,10 @@ a.btn.mini { font-size: 13px; font-weight: 400; padding: 4px 10px; color: var(--
 .dy-size em { font-size: 11px; font-style: normal; font-weight: 700; color: var(--good) }
 .dy-size[aria-checked="true"] { border-color: var(--paper-accent, var(--accent)); box-shadow: inset 0 0 0 1px var(--paper-accent, var(--accent)); background: color-mix(in srgb, var(--paper-accent, var(--accent)) 10%, transparent) }
 .dy-box .actions .primary { flex: 1 1 auto }
+.dy-box .actions button { min-height: 44px }
+.dy-modelline { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 10px; font-size: 13px; color: var(--paper-muted, var(--muted)) }
+.dy-modelline .btns { display: flex; gap: 6px }
+.dy-modelline .mini { min-height: 36px; padding: 6px 12px; border-color: var(--paper-line, var(--line)); color: var(--paper-ink, var(--ink)) }
 .dy-sugg { display: grid; gap: 6px; margin: 6px 0 4px; padding: 12px; border: 1px dashed var(--line); border-radius: 12px }
 .dy-sugg ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px }
 .dy-sugg li { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line) }

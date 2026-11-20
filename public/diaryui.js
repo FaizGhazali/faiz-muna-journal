@@ -30,8 +30,9 @@ let list = [], styles = {}, ready = false;
 const filt = { q: "", month: "", tag: "", fav: false, sort: "new" };
 let shown = PAGE, route = "", painted = "", confirm = null, flash = null; // flash: { id, text } shown on that entry until you leave it
 let ed = null, saveTimer = 0, abort = null, photoCache = new Map();
+let modelUi = ""; // editor writer line: "" | "sizes" (picking a size) | "remove" (confirming removal)
 let aboutMsg = ""; // "Saved" under About you, kept through the redraw that saving causes
-let device = null, aiState = { busy: false, progress: 0, mb: 0, phase: "", msg: "", flags: [], lost: [] };
+let device = null, aiState = { busy: false, progress: 0, mb: 0, phase: "", msg: "", note: "", flags: [], lost: [] }; // msg = problem (red), note = calm news
 
 export function initDiary(opts) {
   ({ db, commit, people, me } = opts);
@@ -84,7 +85,7 @@ function render(data = false) {
   const r = parseRoute(), key = `${r.page}/${r.id || ""}/${pid()}`;
   // The editor is drawn once per opening, so new data never wipes what is being typed.
   if (data && (r.page === "write" || r.page === "edit") && painted === key && ed) return;
-  if (painted !== key) { confirm = null; aboutMsg = ""; if (flash && flash.id !== r.id) flash = null; if (r.page !== "dash") scrollTo({ top: 0 }); }
+  if (painted !== key) { confirm = null; aboutMsg = ""; modelUi = ""; if (flash && flash.id !== r.id) flash = null; if (r.page !== "dash") scrollTo({ top: 0 }); }
   route = r.page;
   if (r.page === "dash") renderDash(painted !== key);
   else if (r.page === "read") renderRead(r.id);
@@ -378,7 +379,7 @@ async function probe() {
     if (had16 && !device.f16) {
       let removed = false;
       for (const x of ai.MODELS) if (await ai.isDownloaded(x.key, true)) { try { await ai.remove(x.key, true); removed = true; } catch (_) {} }
-      if (removed) aiState.msg = "Dearly now uses a safer version of the writer on this phone (the old one could scramble words). Please download it once more.";
+      if (removed) aiState.note = "Dearly now uses a safer version of the writer on this phone (the old one could scramble words). Please download it once more.";
     }
   }
   const key = aiKey();
@@ -403,7 +404,21 @@ function paintAi() {
       ${sizesHtml()}
       <p class="note">${esc(m.note)}</p>
       <div class="actions"><button type="button" class="primary" data-dy="download">Download ${esc(sizeOf(m))}</button></div></div>`;
-  } else if (device.soft) html = `<p class="note">This device has no graphics chip for AI, so writing will be slow.</p>`;
+  } else if (modelUi === "sizes") {
+    // Changing size while one is already downloaded: same buttons, right here.
+    html = `<div class="dy-box"><p><b>Pick a writer size</b></p>${sizesHtml()}<p class="note">${esc(m.note)}</p>
+      <div class="actions"><button type="button" class="primary" data-dy="sizes-done">Done</button></div></div>`;
+  } else if (modelUi === "remove") {
+    html = `<div class="dy-box"><p><b>Remove the ${esc(m.name)} writer from this ${device.mobile ? "phone" : "device"}?</b></p>
+      <p class="note">Frees about ${esc(sizeOf(m))}. Your diary isn't touched, and you can download it again any time.</p>
+      <div class="actions"><button type="button" class="danger" data-dy="remove-here">Remove it</button><button type="button" data-dy="model-keep">Keep it</button></div></div>`;
+  } else {
+    if (device.soft) html = `<p class="note">This device has no graphics chip for AI, so writing will be slow.</p>`;
+    // One quiet line so the writer can be changed or removed without leaving the page.
+    if (!aiState.busy) html += `<div class="dy-modelline"><span>Writer: <b>${esc(m.name)}</b> · about ${esc(sizeOf(m))} on this ${device.mobile ? "phone" : "device"}</span>
+      <span class="btns"><button type="button" class="mini" data-dy="sizes-open">Change size</button><button type="button" class="mini" data-dy="model-remove">Remove</button></span></div>`;
+  }
+  if (aiState.note) html = `<p class="note dy-note" role="status">✓ ${esc(aiState.note)}</p>` + html;
   if (aiState.msg) html += `<p class="note dy-err" role="alert">${esc(aiState.msg)}</p>`;
   if ((aiState.flags.length || aiState.lost?.length) && !aiState.busy) html += `<div class="dy-box dy-check">
     ${aiState.flags.length ? `<p><b>Check these.</b> They weren't in your notes: ${aiState.flags.map((f) => `<mark>${esc(f)}</mark>`).join(" ")}</p>` : ""}
@@ -464,7 +479,7 @@ function updateBars() {
 }
 async function startModel() {
   const key = aiKey();
-  aiState = { ...aiState, busy: true, phase: device.downloaded ? "open" : "download", progress: 0, mb: 0, msg: "" };
+  aiState = { ...aiState, busy: true, phase: device.downloaded ? "open" : "download", progress: 0, mb: 0, msg: "", note: "" };
   paintAi();
   ai.keepStorage();
   try {
@@ -657,7 +672,7 @@ function wire() {
       if (aiState.busy) return;
       store.set("journal-ai-model", size.dataset.size); aiState.msg = "";
       paintAi();
-      if (device?.ok) { device.downloaded = await ai.isDownloaded(size.dataset.size, device.f16); paintAi(); }
+      if (device?.ok) { device.downloaded = await ai.isDownloaded(size.dataset.size, device.f16); if (!device.downloaded) modelUi = ""; paintAi(); }
       return;
     }
     const pap = ev.target.closest("button[data-paper]"); // #diary itself carries data-paper, so match the buttons only
@@ -678,6 +693,17 @@ function wire() {
     if (act === "write") writeForMe();
     if (act === "stop") abort?.abort();
     if (act === "download" || act === "test") { if (!device || device.checking) await probe(); if (device.ok) await startModel(); }
+    if (act === "sizes-open") { modelUi = "sizes"; paintAi(); return; }
+    if (act === "sizes-done") { modelUi = ""; paintAi(); return; }
+    if (act === "model-remove") { modelUi = "remove"; paintAi(); return; }
+    if (act === "model-keep") { modelUi = ""; paintAi(); return; }
+    if (act === "remove-here") {
+      const m = ai.modelOf(aiKey());
+      b.disabled = true; b.textContent = "Removing…";
+      try { await ai.remove(aiKey(), device.f16); device.downloaded = false; aiState.msg = ""; aiState.note = `Removed. The ${m.name} writer is off this ${device.mobile ? "phone" : "device"}. Download any size below when you want it back.`; }
+      catch (_) { aiState.msg = "Couldn't remove it. Try again."; }
+      modelUi = ""; paintAi(); return;
+    }
     if (act === "remove") {
       aiState.busy = true; paintAiPage();
       try { await ai.remove(aiKey(), device.f16); device.downloaded = false; aiState.msg = ""; } catch (_) { aiState.msg = "Couldn't remove it. Try again."; }
