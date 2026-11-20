@@ -55,6 +55,7 @@ header p { margin: 0; color: var(--muted) }
 .chart text { font: 12px var(--body); fill: var(--muted); font-variant-numeric: tabular-nums }
 .chart text.val { fill: var(--ink); font-weight: 700; font-size: 13px }
 .chart .grid { stroke: var(--line); stroke-width: 1 }
+.chart .vgrid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 4 }
 .chart .band { fill: var(--good-soft) }
 .chart .goalline { stroke: var(--good); stroke-width: 1.5; stroke-dasharray: 5 4 }
 .chart .ln { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round }

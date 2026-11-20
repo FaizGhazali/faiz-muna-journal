@@ -195,12 +195,37 @@ function niceScale(lo, hi, minRoom) {
   const step = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20].find((n) => (hi - lo + 2 * room) / n <= 4) || 50;
   return { step, min: Math.floor((lo - room) / step) * step, max: Math.ceil((hi + room) / step) * step };
 }
-// Dates along the bottom: the two ends, plus the middle when zoomed in.
-function dateMarks(x0, x1, H, m, W, zoomed) {
-  const xl = (n) => new Date(Math.round(n) * 864e5).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
-  let out = `<text x="${m.l}" y="${H - 6}">${esc(xl(x0))}</text><text x="${W - m.r}" y="${H - 6}" text-anchor="end">${esc(xl(x1))}</text>`;
-  if (zoomed && W > 240) out += `<text x="${(m.l + W - m.r) / 2}" y="${H - 6}" text-anchor="middle">${esc(xl((x0 + x1) / 2))}</text>`;
-  return out;
+// A real time axis along the bottom: evenly spaced days / weeks / months / years (whichever fits the width),
+// with faint up-down lines, so the gaps between weigh-ins show and zooming in brings finer dates.
+function dateMarks(x0, x1, H, m, W) {
+  const span = x1 - x0, room = W - m.l - m.r, fit = Math.max(2, Math.floor(room / 64));
+  const X = (n) => m.l + ((n - x0) / span) * room;
+  const D = (n) => new Date(Math.round(n) * 864e5);
+  const lbl = (n, o) => D(n).toLocaleDateString(undefined, { ...o, timeZone: "UTC" });
+  const ticks = [];
+  const daySteps = [1, 2, 7, 14].find((s) => span / s <= fit);
+  if (daySteps) {
+    // weeks start on Monday (1970-01-01, day 0, was a Thursday)
+    let n = daySteps >= 7 ? Math.ceil((x0 - 4) / 7) * 7 + 4 : Math.ceil(x0);
+    if (daySteps === 14 && Math.floor((n - 4) / 7) % 2) n += 7;
+    for (; n <= x1 + 1e-9; n += daySteps) ticks.push([n, lbl(n, { day: "numeric", month: "short" })]);
+  } else {
+    const ms = [1, 2, 3, 6, 12, 24, 60].find((s) => span / (30.44 * s) <= fit) || 120;
+    const s = D(x0); let y = s.getUTCFullYear(), mo = s.getUTCMonth();
+    if (Date.UTC(y, mo, 1) / 864e5 < x0 - 1e-9) mo++;
+    mo = Math.ceil(mo / ms) * ms; // line up on Jan / Apr / Jul…
+    for (let i = 0; i < 400; i++, mo += ms) {
+      const n = Date.UTC(y, mo, 1) / 864e5;
+      if (n > x1 + 1e-9) break;
+      const d = D(n), first = !ticks.length;
+      ticks.push([n, ms >= 12 ? String(d.getUTCFullYear())
+        : d.getUTCMonth() === 0 || first ? lbl(n, { month: "short", year: "numeric" }) : lbl(n, { month: "short" })]);
+    }
+  }
+  return ticks.map(([n, t]) => {
+    const x = X(n), anchor = x < m.l + 24 ? "start" : x > W - m.r - 24 ? "end" : "middle";
+    return `<line class="vgrid" x1="${x}" x2="${x}" y1="${m.t}" y2="${H - m.b}"/><text x="${x}" y="${H - 6}" text-anchor="${anchor}">${esc(t)}</text>`;
+  }).join("");
 }
 const clipRect = (id, m, W, H) => `<defs><clipPath id="${id}"><rect x="${m.l - 6}" y="${m.t - 8}" width="${W - m.l - m.r + 12}" height="${H - m.t - m.b + 16}"/></clipPath></defs>`;
 
@@ -227,11 +252,10 @@ function drawFit(host, p) {
   const last = all[all.length - 1], tag = z.zoomed ? z.vis[z.vis.length - 1] : last;
   const lx = tag ? X(tag.date) : 0, ly = tag ? Y(tag.trend) : 0, clip = `clip-${host.id}`;
   host.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(p.name)}'s fitness score over time. Now ${last.trend.toFixed(1)}.">
-    ${clipRect(clip, m, W, H)}${g}<g clip-path="url(#${clip})">${rings}
+    ${clipRect(clip, m, W, H)}${g}${dateMarks(z.x0, z.x1, H, m, W)}<g clip-path="url(#${clip})">${rings}
     <path class="ln" d="${path}"/></g>
     ${tag ? `<circle class="pt" cx="${lx}" cy="${ly}" r="5"/>
     <text class="val" x="${lx}" y="${ly - 10}" text-anchor="${lx > W / 2 ? "end" : "start"}">${tag.trend.toFixed(z.zoomed ? 2 : 1)}</text>` : ""}
-    ${dateMarks(z.x0, z.x1, H, m, W, z.zoomed)}
     <line class="cross" y1="${m.t}" y2="${H - m.b}" visibility="hidden"/>
   </svg><div class="tip" hidden></div>`;
   hover(host, W, z.vis, X, (e) => `fitness ${e.trend.toFixed(2)}. This run ${e.score.toFixed(1)}, ${e.run.km} km at ${clock(paceOf(e.run))} per km, ${e.run.hr} bpm`);
@@ -242,7 +266,8 @@ function drawChart(host, p) {
   const all = weighIns(p), W = host.clientWidth || 320, H = 170;
   if (!all.length) { host.innerHTML = `<p class="note">Your weight line starts with the first weigh-in.</p>`; return; }
   const { lo, hi } = range(p), m = { l: 34, r: 10, t: 22, b: 24 };
-  const f0 = dayNum(all[0].date), f1 = Math.max(dayNum(all[all.length - 1].date), f0 + 28);
+  // the time axis runs to today, so a long gap since the last weigh-in shows as a gap
+  const f0 = dayNum(all[0].date), f1 = Math.max(dayNum(all[all.length - 1].date), dayNum(iso(new Date())), f0 + 28);
   const z = zoomSpan(host, all, f0, f1), pts = z.vis, seen = pts.length ? pts : z.line;
   const ws = seen.map((e) => e.weight), wMin = Math.min(...ws), wMax = Math.max(...ws);
   let yMin, yMax, step;
@@ -266,11 +291,10 @@ function drawChart(host, p) {
   const dots = pts.length <= 40 ? pts.filter((e) => e !== tag).map((e) => `<circle class="pt" cx="${X(e.date)}" cy="${Y(e.weight)}" r="4"/>`).join("") : "";
   const lx = tag ? X(tag.date) : 0, ly = tag ? Y(tag.weight) : 0, clip = `clip-${host.id}`;
   host.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(p.name)}'s weight over time. Latest ${last.weight.toFixed(1)} kg. Normal range ${lo.toFixed(1)} to ${hi.toFixed(1)} kg.">
-    ${clipRect(clip, m, W, H)}${band}${g}
+    ${clipRect(clip, m, W, H)}${band}${g}${dateMarks(z.x0, z.x1, H, m, W)}
     <g clip-path="url(#${clip})"><path class="ln" d="${path}"/>${dots}</g>
     ${tag ? `<circle class="pt" cx="${lx}" cy="${ly}" r="5"/>
     <text class="val" x="${lx}" y="${ly - 10}" text-anchor="${lx > W / 2 ? "end" : "start"}">${tag.weight.toFixed(1)} kg</text>` : ""}
-    ${dateMarks(z.x0, z.x1, H, m, W, z.zoomed)}
     <line class="cross" y1="${m.t}" y2="${H - m.b}" visibility="hidden"/>
   </svg><div class="tip" hidden></div>`;
   hover(host, W, pts, X, (e) => `${e.weight.toFixed(1)} kg, BMI ${bmiOf(p, e.weight).toFixed(1)}`);
