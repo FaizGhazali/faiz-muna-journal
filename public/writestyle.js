@@ -106,6 +106,38 @@ export function samplesFor(list, n = 2, maxChars = 420) {
 const MS_GRAMMAR = new Set([...MS_FUNC, "tadi", "dapat", "pastu", "lepastu", "tiber", "tibe", "gak", "kan", "pulak", "dgn", "ckp", "sbb", "tgk", "nk", "dh",
   "blh", "x", "tk", "utk", "mcm", "yg", "kt", "jgk", "pon", "bila", "masa", "nanti", "sebab", "sampai", "terus", "dekat", "punya", "kalau", "kalo", "walaupun",
   "tetapi", "akan", "telah", "sedang", "tengah", "semua", "ke", "di", "pada", "oleh", "jadi", "pegi", "pergi", "datang", "balik"]);
+// Texting short forms the writer spells out in full ("ckp dgn dia" -> "cakap dengan dia"). Shown to the model as examples
+// and used by the checks, so a spelled-out word never counts as invented or lost.
+export const SHORT_FORMS = { dgn: "dengan", ckp: "cakap", x: "tak", tk: "tak", sbb: "sebab", tgk: "tengok", nk: "nak", dh: "dah", blh: "boleh",
+  utk: "untuk", mcm: "macam", yg: "yang", kt: "kat", jgk: "juga", jgak: "juga", pon: "pun", tiber: "tiba-tiba", tibe: "tiba-tiba", bg: "bagi",
+  tp: "tapi", tpi: "tapi", sy: "saya", org: "orang", lps: "lepas", sgt: "sangat", bkn: "bukan", byk: "banyak", skrg: "sekarang", ckit: "sikit",
+  sket: "sikit", jln: "jalan", mkn: "makan", blk: "balik", msk: "masuk", klu: "kalau", kalo: "kalau", camne: "macam mana", mlm: "malam",
+  tdur: "tidur", tdo: "tidur", blm: "belum", smpai: "sampai", sampe: "sampai", krja: "kerja", kje: "kerja", rmh: "rumah", ptg: "petang",
+  bru: "baru", lg: "lagi", lgi: "lagi", dlm: "dalam", sma: "sama", smua: "semua", mmg: "memang", trus: "terus", pkai: "pakai", bli: "beli",
+  u: "you", ur: "your", b4: "before", pls: "please", tmr: "tomorrow", tmrw: "tomorrow", bcs: "because", bcoz: "because", coz: "because",
+  wif: "with", abt: "about", thru: "through", ppl: "people", gd: "good", rly: "really" };
+// Two spellings of the same word: about one typo per three letters, up to three ("mezmerize" / "mesmerised").
+function lev(a, b) {
+  if (Math.abs(a.length - b.length) > 3) return 9;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+const sameWord = (a, b) => { const n = Math.min(a.length, b.length); return a === b || (n >= 4 && lev(a, b) <= Math.min(3, Math.max(1, Math.floor(n / 3)))); };
+// Every way a note word may legitimately appear in the entry: as written, spelled out, or with a typo fixed.
+const expansions = (notes) => new Set(tokens(notes).flatMap((t) => [t, ...(SHORT_FORMS[t] ? tokens(SHORT_FORMS[t]) : [])]));
+// Spell out short forms in the notes before the model sees them: small models copy what they're given, so this is
+// far more reliable than asking. Capitals are kept ("Dgn" -> "Dengan").
+export function expandShort(text) {
+  return String(text).replace(/[\p{L}\p{N}]+/gu, (w) => {
+    const full = SHORT_FORMS[w.toLowerCase()];
+    return !full ? w : /^\p{Lu}/u.test(w) ? full[0].toUpperCase() + full.slice(1) : full;
+  });
+}
 const EN_GRAMMAR = new Set([...ENGLISH].filter((w) => !["got", "so"].includes(w)));
 export function noteLang(note) {
   const t = tokens(note);
@@ -144,8 +176,8 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
   const lang = langOf(notes), target = targetWords(notes, profile);
   // Language always follows the notes, note by note: what was written in English stays English, Malay stays Malay.
   // The style profile never changes the language (its language line is left out of the prompt below).
-  const malayRule = "Malay notes become casual Malay sentences, the way people text, not formal Malay. English words used inside a Malay note (like \"mezmerize\", \"star align\", \"meeting\") stay in English, exactly as written, and short forms like dgn, ckp, x, sbb stay too.";
-  const manglishRule = "Manglish notes stay Manglish, the way Malaysians talk: keep particles like lah, lor, leh, meh, liao, words like makan, tapau, jom, alamak, and grammar like \"got\", \"already\", \"cannot\", \"one\" at the end. Never correct it into standard English.";
+  const malayRule = "Malay notes become casual Malay sentences, the way people text, not formal Malay. English words used inside a Malay note (like \"mesmerised\", \"star align\", \"meeting\") stay in English.";
+  const manglishRule = "Manglish notes stay Manglish, the way Malaysians talk: keep particles like lah, lor, leh, meh, liao, words like makan, tapau, jom, alamak, and grammar like \"got\", \"already\", \"cannot\", \"one\" at the end. Fix the spelling, but never turn it into standard English.";
   const langRule = lang === "ms" ? `The notes are in Malay, so write the whole entry in Malay. ${malayRule} Do not turn it into English.`
     : lang === "manglish" ? `The notes are in Manglish (Malaysian English), so write the entry in Manglish. ${manglishRule} Do not turn it into Malay.`
     : lang === "mixed" ? `Each note is marked with its language. Write each note's sentences in that note's language and never translate a note into another language. ${malayRule} ${manglishRule}`
@@ -154,10 +186,12 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
   const shortLang = lang === "mixed" ? "Each note is marked with its language: write it in that language."
     : lang === "manglish" ? "The notes are Manglish: keep it Manglish (lah, already, cannot), never correct it."
     : lang === "ms" ? "The notes are Malay: write in casual Malay; English words inside stay English." : "The notes are English: write in English.";
+    const fix = "Correct every spelling mistake and fix the grammar (offise → office, gud → good, tdur → tidur). Keep casual words and slang (gila, do, lah, best, jom): corrected, not formal.";
   const rules = compact ? [
     `Write this person's diary entry from their notes, as them ("I"/"aku"). You are not chatting.`,
     "One or two plain sentences per note, same order. Never add events, people, places, times or feelings the notes don't say.",
-    `Keep their words, slang and short forms. Never translate. ${shortLang}`,
+    `Keep their words and slang. Never translate. ${shortLang}`,
+    fix,
     `No drama, no lessons, no questions, never talk to "you".${profile?.emoji ? "" : " No emojis."}`,
     `Start with "${OPENING}" then short paragraphs, about ${target} words. Reply with the entry only.`,
   ] : [
@@ -166,7 +200,8 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
     "Turn each note into one or two plain sentences, in the same order. Every sentence must come from a note. Staying close to their words is better than adding anything.",
     "Never add events, people, places, times, food, reasons, results or feelings that the notes do not mention.",
     "Only say how they felt where a note says it, in the note's words. Do not call the day good, bad, chaotic, stressful or anything else unless a note does.",
-    "Keep their own words: slang, short forms, names and Malay words stay exactly as written. Never translate a word or explain it in brackets.",
+    "Keep their own words: slang, names and Malay words stay theirs. Never translate a word or explain it in brackets.",
+    fix,
     langRule,
     `Sound like a real person writing in a diary: plain and casual. No drama, no poetry, no life lessons, no wishes, no questions, no hashtags, and never talk to the reader ("you").`,
     compact ? "" : `Avoid chatbot words such as: ${AI_WORDS.slice(0, 10).join(", ")}.`,
@@ -184,13 +219,13 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
   // talk, what they call people). Background only: it never becomes something that happened today.
   const bio = String(about || "").trim().slice(0, compact ? 300 : ABOUT_MAX); // phones: shorter, for a lighter first step
   if (bio) style += `\n\nAbout the writer, in their own words. Use it only to sound like them and to know who people are (for example, use the name or nickname they use for someone a note mentions). Never add anything from here as something that happened today, and never mention a person, place or habit from here unless a note does:\n"""${bio}"""`;
-  const lines = String(notes).split(/\n+/).map((l) => l.trim().replace(/^[-*•]\s*/, "")).filter(Boolean);
+  const lines = expandShort(notes).split(/\n+/).map((l) => l.trim().replace(/^[-*•]\s*/, "")).filter(Boolean);
   // One worked example: small models copy what they see far better than they follow rules. It shows each note kept
   // in its own language (English, Malay, Manglish), nothing added, no feelings that weren't written.
   return [
     { role: "system", content: rules.filter(Boolean).map((x) => `- ${x}`).join("\n") + style },
-    { role: "user", content: "My notes for today:\n- (English) gym after work\n- (Malay) leg day, penat gila, esok confirm x boleh jalan\n- (Manglish) dinner roti canai only, so cheap one\n\nWrite my diary entry." },
-    { role: "assistant", content: `${OPENING}\n\nI went to the gym after work. Leg day, penat gila, esok confirm x boleh jalan.\n\nDinner roti canai only, so cheap one.` },
+    { role: "user", content: "My notes for today:\n- (English) gym aftr wrk, legs so sor\n- (Malay) leg day, penat gila, esok confirm tak boleh jalam\n- (Manglish) dinner roti canai only, so cheap one\n\nWrite my diary entry." },
+    { role: "assistant", content: `${OPENING}\n\nI went to the gym after work, legs so sore. Leg day, penat gila, esok confirm tak boleh jalan.\n\nDinner roti canai only, so cheap one.` },
     { role: "user", content: "That was only an example. Now do mine, using nothing from the example." },
     { role: "assistant", content: "Okay. Send your notes." },
     { role: "user", content: `${name ? `My name is ${name}. ` : ""}My notes for today:\n${lines.map((l) => `- ${lang === "mixed" ? `(${LANG_NAME[noteLang(l)]}) ` : ""}${l}`).join("\n")}\n\nWrite my diary entry.` },
@@ -221,7 +256,8 @@ export function cleanOutput(text, notes = "") {
 export function unsupported(notes, out, about = "") {
   const known = String(about).toLowerCase();
   const have = String(notes).toLowerCase(), stem = (w) => w.slice(0, Math.max(4, Math.min(w.length - 1, 6)));
-  const seen = (w) => have.includes(w.toLowerCase()) || have.includes(stem(w.toLowerCase()));
+  const exp = [...expansions(notes)];
+  const seen = (w) => { const l = w.toLowerCase(); return have.includes(l) || have.includes(stem(l)) || exp.some((x) => sameWord(x, l) || (x.length >= 5 && l.startsWith(x.slice(0, -1)))); };
   const flags = new Set(), aboutNames = new Set();
   const body = bodyText(out);
   for (const s of sentences(body)) {
@@ -289,7 +325,8 @@ export function addToAbout(about, line) {
 export function dropped(notes, out) {
   const have = new Set(tokens(bodyText(out)));
   const own = tokens(notes).filter((t) => t.length >= 3 && (MALAY.has(t) || MANGLISH.has(t) || SLANG.includes(t)) && !MS_FUNC.includes(t));
-  return [...new Set(own)].filter((t) => !have.has(t)).slice(0, 8);
+  const kept = (t) => have.has(t) || [...have].some((h) => sameWord(t, h)) || (SHORT_FORMS[t] && tokens(SHORT_FORMS[t]).every((x) => have.has(x)));
+  return [...new Set(own)].filter((t) => !kept(t)).slice(0, 8);
 }
 
 // Scrambled output: some phone graphics chips break the model's maths and it spits out mixed scripts and code bits

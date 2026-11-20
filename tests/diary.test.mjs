@@ -180,6 +180,20 @@ test("unsupported also catches invented Malay content words", () => {
   assert.deepEqual(unsupported(notes, "Dear Diary,\n\nTadi aku mezmerize do, macam star align, tiber je dapat ckp dgn dia. Then I went mamak with friends after work."), []);
 });
 
+test("fixed spelling and spelled-out short forms are not flagged", () => {
+  const notes = "tadi aku mezmerize do, macam star align, tiber je dapat ckp dgn dia\nbalik rumah terus tdur, esok x blh lmbat";
+  const out = "Dear Diary,\n\nTadi aku mesmerised do, macam star align, tiba-tiba je dapat cakap dengan dia. Balik rumah terus tidur, esok tak boleh lambat.";
+  assert.deepEqual(unsupported(notes, out), []);
+  assert.deepEqual(dropped(notes, out), []);
+  // A real new word is still caught.
+  assert.ok(unsupported(notes, out + " Aku pergi kenduri.").includes("kenduri"));
+  const msgs = buildMessages({ notes });
+  assert.match(msgs[0].content, /Correct every spelling mistake/);
+  // Short forms are spelled out before the model sees them.
+  assert.match(msgs.at(-1).content, /tiba-tiba je dapat cakap dengan dia/);
+  assert.match(msgs.at(-1).content, /esok tak boleh lmbat/);
+});
+
 test("dropped lists the person's own Malay / Manglish words the draft lost", () => {
   const notes = "boss belanja nasi lemak, shiok\nbalik rumah terus tidur";
   assert.deepEqual(dropped(notes, "Dear Diary,\n\nBoss belanja nasi lemak. Shiny. Went home and slept."), ["shiok", "balik", "rumah", "terus", "tidur"]);
