@@ -941,6 +941,9 @@ a.btn.mini { font-size: 13px; font-weight: 400; padding: 4px 10px; color: var(--
 .dy-box { display: grid; gap: 6px; padding: 12px; border-radius: 10px; background: var(--paper); border: 1px solid var(--paper-line) }
 .dy-box p { margin: 0 }
 .dy-err { color: var(--obese) !important }
+.dy-fail details { border: 0; padding: 0 }
+.dy-fail summary { cursor: pointer; font-size: 14px; min-height: 36px; display: flex; align-items: center }
+.dy-detail { margin: 6px 0; padding: 10px; border-radius: 8px; background: var(--bg); color: var(--ink); font: 12px/1.45 ui-monospace, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto }
 .dy-note { color: var(--paper-ink, var(--ink)) !important; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--good) 14%, transparent) }
 .dy-check mark { background: color-mix(in srgb, #d99a1c 30%, transparent); color: inherit; padding: 0 4px; border-radius: 4px; margin-right: 2px }
 .dy-edphotos { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }

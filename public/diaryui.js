@@ -374,7 +374,9 @@ async function probe() {
   // (and any device where scrambling was seen, journal-ai-f32) use the 32-bit build. A bit bigger, always correct.
   if (device.ok) {
     const had16 = device.f16;
-    device.f16 = device.f16 && !device.mobile && !store.get("journal-ai-f32", false);
+    // "journal-ai-build": "f16" when the person chose the faster build on a phone (with the scramble guard watching).
+    device.f16raw = had16;
+    device.f16 = device.f16 && (!device.mobile || store.get("journal-ai-build", "") === "f16") && !store.get("journal-ai-f32", false);
     // A phone that downloaded the 16-bit build before this change: remove it and say why, once.
     if (had16 && !device.f16) {
       let removed = false;
@@ -420,6 +422,7 @@ function paintAi() {
   }
   if (aiState.note) html = `<p class="note dy-note" role="status">✓ ${esc(aiState.note)}</p>` + html;
   if (aiState.msg) html += `<p class="note dy-err" role="alert">${esc(aiState.msg)}</p>`;
+  if (aiState.detail && !aiState.busy) html += failHtml();
   if ((aiState.flags.length || aiState.lost?.length) && !aiState.busy) html += `<div class="dy-box dy-check">
     ${aiState.flags.length ? `<p><b>Check these.</b> They weren't in your notes: ${aiState.flags.map((f) => `<mark>${esc(f)}</mark>`).join(" ")}</p>` : ""}
     ${aiState.lost?.length ? `<p><b>Your own words that went missing:</b> ${aiState.lost.map((f) => `<mark>${esc(f)}</mark>`).join(" ")}</p>` : ""}
@@ -432,7 +435,7 @@ function paintAi() {
 // throw away the broken download, and offer the safe 32-bit build. Returns the message to show.
 async function switchToSafe() {
   const key = aiKey(), wasF16 = device.f16;
-  store.set("journal-ai-f32", true);
+  store.set("journal-ai-f32", true); store.set("journal-ai-build", "");
   device.f16 = false;
   if (wasF16) { try { await ai.remove(key, true); } catch (_) {} }
   device.downloaded = await ai.isDownloaded(key, false);
@@ -440,6 +443,15 @@ async function switchToSafe() {
   return wasF16
     ? `This ${device.mobile ? "phone" : "device"}'s graphics chip scrambled the words. Nothing was saved. Dearly has switched to the safe version of the writer: download it once (about ${sizeOf(m)}) and try again.`
     : "The writer scrambled the words on this device. Nothing was saved. Try again; if it happens again, pick the Small size on the AI & privacy page.";
+}
+// When the writer won't start: offer the phone's other build right here, and the real error to copy and send.
+function failHtml() {
+  const other = device?.f16 ? "safe" : device?.f16raw ? "fast" : "";
+  return `<div class="dy-box dy-fail">
+    ${other ? `<p class="note">${other === "fast" ? "This phone also has a faster build. It sometimes scrambles words on phones, but Dearly watches for that and stops it." : "Try the safe build instead. It's a little bigger but works on more graphics chips."}</p>
+      <div class="actions"><button type="button" class="primary" data-dy="other-build">${other === "fast" ? "Try the faster build" : "Try the safe build"}</button></div>` : ""}
+    <details><summary>Show technical details</summary><pre class="dy-detail">${esc(aiState.detail)}</pre>
+      <div class="actions"><button type="button" class="mini" data-dy="copy-detail">Copy details</button><span class="note" id="dyCopied" role="status"></span></div></details></div>`;
 }
 // Download size for this device: the safe 32-bit build used on phones is about 15% bigger.
 const sizeOf = (x) => `${(x.gb * (device?.f16 === false ? 1.15 : 1)).toFixed(1)} GB`;
@@ -479,7 +491,7 @@ function updateBars() {
 }
 async function startModel() {
   const key = aiKey();
-  aiState = { ...aiState, busy: true, phase: device.downloaded ? "open" : "download", progress: 0, mb: 0, msg: "", note: "" };
+  aiState = { ...aiState, busy: true, phase: device.downloaded ? "open" : "download", progress: 0, mb: 0, msg: "", note: "", detail: "" };
   paintAi();
   ai.keepStorage();
   try {
@@ -494,6 +506,11 @@ async function startModel() {
     return true;
   } catch (e) {
     aiState.msg = ai.errorText(e);
+    aiState.detail = `${String(e?.message || e || "unknown").slice(0, 500)}
+
+Model: ${ai.idOf(key, device.f16)}
+GPU: ${device.gpu || "?"}
+Browser: ${navigator.userAgent}`;
     device.downloaded = await ai.isDownloaded(key, device.f16);
     return false;
   } finally { aiState.busy = false; aiState.phase = ""; paintAi(); paintAiPage(); }
@@ -534,6 +551,12 @@ async function writeForMe() {
     if (page) page.value = ed.body;
     aiState.msg = e.message === "garbled" ? await switchToSafe()
       : e.message === "empty" ? "The writer came back empty. Try again, or add a little more to your notes." : abort?.signal.aborted ? "" : ai.errorText(e);
+    if (!["garbled", "empty"].includes(e.message) && !abort?.signal.aborted)
+      aiState.detail = `${String(e?.message || e || "unknown").slice(0, 500)}
+
+Model: ${ai.idOf(aiKey(), device.f16)}
+GPU: ${device.gpu || "?"}
+Browser: ${navigator.userAgent}`;
   } finally {
     aiState.busy = false; aiState.phase = ""; abort = null;
     count(); saveDraft(); paintAi();
@@ -693,6 +716,19 @@ function wire() {
     if (act === "write") writeForMe();
     if (act === "stop") abort?.abort();
     if (act === "download" || act === "test") { if (!device || device.checking) await probe(); if (device.ok) await startModel(); }
+    if (act === "other-build") {
+      const fast = !device.f16;
+      store.set("journal-ai-build", fast ? "f16" : ""); store.set("journal-ai-f32", !fast);
+      device.f16 = fast; aiState.msg = ""; aiState.detail = "";
+      device.downloaded = await ai.isDownloaded(aiKey(), device.f16);
+      aiState.note = `Switched to the ${fast ? "faster" : "safe"} build. ${device.downloaded ? "Tap Write it for me." : "Download it below, then try again."}`;
+      paintAi(); return;
+    }
+    if (act === "copy-detail") {
+      try { await navigator.clipboard.writeText(aiState.detail); $("dyCopied").textContent = "Copied. Paste it in a message to whoever helps you with the app."; }
+      catch (_) { $("dyCopied").textContent = "Couldn't copy. Take a screenshot instead."; }
+      return;
+    }
     if (act === "sizes-open") { modelUi = "sizes"; paintAi(); return; }
     if (act === "sizes-done") { modelUi = ""; paintAi(); return; }
     if (act === "model-remove") { modelUi = "remove"; paintAi(); return; }

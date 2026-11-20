@@ -30,7 +30,11 @@ export async function checkSupport() {
   try { adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" }); } catch (_) {}
   if (!adapter) return { ok: false, why: "noadapter", mobile, memGB };
   const soft = !!(adapter.info?.isFallbackAdapter ?? adapter.isFallbackAdapter);
-  return { ok: true, f16: adapter.features.has("shader-f16"), soft, mobile, memGB, maxBuffer: adapter.limits.maxStorageBufferBindingSize };
+  const L = adapter.limits, info = adapter.info || {};
+  // gpu: plain facts for "Copy details" when something fails (chip and limits only, never diary text).
+  const gpu = `${info.vendor || "?"} ${info.architecture || ""} ${info.device || ""}`.trim() + ` · f16 ${adapter.features.has("shader-f16") ? "yes" : "no"}`
+    + ` · maxBuffer ${Math.round(L.maxBufferSize / 2 ** 20)}MB · maxStorageBinding ${Math.round(L.maxStorageBufferBindingSize / 2 ** 20)}MB · workgroupStorage ${L.maxComputeWorkgroupStorageSize}`;
+  return { ok: true, f16: adapter.features.has("shader-f16"), soft, mobile, memGB, maxBuffer: L.maxStorageBufferBindingSize, gpu };
 }
 // The size to suggest for this device.
 export function suggestKey(s) {
@@ -113,6 +117,8 @@ export function errorText(e) {
   if (/quota|storage|space/i.test(m)) return "There isn't enough free space on this device to keep the model. Free some space or pick a smaller size.";
   if (/memory|OOM|allocate|device was lost|device lost|out of/i.test(m)) return "This device ran out of graphics memory. Close other tabs and try again, or pick the Small size.";
   if (/fetch|network|Failed to load|NetworkError|offline/i.test(m) || !navigator.onLine) return "The download stopped. Check the connection and tap Download again: the parts already saved are kept.";
-  if (/shader-f16|feature/i.test(m)) return "This graphics chip can't run that build. Reload the page and try again.";
+  if (/shader-f16|feature/i.test(m)) return "This graphics chip can't run that build of the writer. Try the other build below.";
+  if (/maxBufferSize|maxStorageBufferBindingSize|maxComputeWorkgroupStorageSize|exposes/i.test(m)) return "This phone's browser doesn't give the writer enough graphics memory for this build. Try the other build below, or the Small size.";
+  if (/compil|pipeline|shader|WGSL|validation/i.test(m)) return "The writer couldn't set itself up on this graphics chip. Try the other build below.";
   return "The writer couldn't start on this device. You can still write yourself.";
 }
