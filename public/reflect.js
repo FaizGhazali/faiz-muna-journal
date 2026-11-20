@@ -3,7 +3,7 @@
 // picked by pickReflection(); the Mood history page lists them all. Our own words, never the model's.
 // Each card: { key, kind, score, title, text, date?, entry? (diary id), mood? (1..5) }. Higher score = shown first.
 import { MOODS, periods, boosters, MIN_DAYS } from "./mood.js";
-import { onThisDay, diaryStats, titleOf, preview, live } from "./diary.js";
+import { onThisDay, diaryStats, titleOf, preview, live, tagStats, showTags } from "./diary.js";
 import { addDays, parse } from "./suggest.js";
 
 const short = (d) => parse(d).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
@@ -67,8 +67,8 @@ export function reflections({ map = {}, diary = [], facts = {}, today }) {
   }
 
   // A tag that keeps turning up on good days.
-  const good = list.filter((e) => map[e.date] >= 4), count = {};
-  for (const e of good) for (const t of new Set(e.tags || [])) count[t] = (count[t] || 0) + 1;
+  const good = list.filter((e) => map[e.date] >= 4), count = {}, stats = tagStats(list);
+  for (const e of good) for (const t of new Set(showTags(e.tags, stats))) count[t] = (count[t] || 0) + 1;
   const tag = Object.keys(count).filter((t) => count[t] >= 2).sort((a, b) => count[b] - count[a] || a.localeCompare(b))[0];
   if (tag) add({ key: `tag-${tag}`, kind: "pattern", score: 55, title: `“${tag}” and your good days`, text: `${plural(count[tag], "good day")} you wrote about ${count[tag] === 1 ? "has" : "have"} the tag “${tag}”.` });
 

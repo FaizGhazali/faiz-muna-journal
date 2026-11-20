@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { words, titleOf, preview, parseTags, diaryStats, onThisDay, filterEntries, neighbours, tagsOf, expired, KEEP_DELETED_DAYS, ago } from "../public/diary.js";
+import { words, titleOf, preview, parseTags, tagKey, tagStats, showTags, tagMatches, looksLike, diaryStats, onThisDay, filterEntries, neighbours, tagsOf, expired, KEEP_DELETED_DAYS, ago } from "../public/diary.js";
 import { styleProfile, styleSource, describeStyle, samplesFor, buildMessages, cleanOutput, unsupported, dropped, langOf, noteLang, targetWords, MIN_STYLE, aboutSuggestions, addToAbout, looksGarbled } from "../public/writestyle.js";
 
 const e = (id, date, body, more = {}) => ({ id, person: "p1", date, body, created: 0, ...more });
@@ -26,6 +26,31 @@ test("preview cuts at a word", () => {
 test("parseTags splits, lowercases, dedupes and caps", () => {
   assert.deepEqual(parseTags("Friends, #work, friends,  Family time "), ["friends", "work", "family time"]);
   assert.equal(parseTags("a,b,c,d,e,f,g,h,i,j").length, 8);
+});
+
+test("near-copy tags are one tag: part time / Part-time / parts times", () => {
+  assert.equal(tagKey("part time"), tagKey("Part-time"));
+  assert.equal(tagKey("part time"), tagKey("parts times"));
+  assert.equal(tagKey("part time"), tagKey("parttime"));
+  assert.notEqual(tagKey("class"), tagKey("cla")); // "ss" isn't a plural
+  assert.deepEqual(parseTags("parts times, Part-Time, work", ["part time"]), ["part time", "work"]);
+  const list = [e("1", "2026-11-01", "a", { tags: ["part time"] }), e("2", "2026-11-02", "b", { tags: ["part time"] }), e("3", "2026-11-03", "c", { tags: ["parts times", "work"] })];
+  assert.deepEqual(tagStats(list).map((s) => [s.tag, s.n]), [["part time", 3], ["work", 1]]);
+  assert.deepEqual(tagsOf(list), ["part time", "work"]);
+  assert.deepEqual(showTags(["parts times", "part time"], tagStats(list)), ["part time"]);
+  assert.deepEqual(filterEntries(list, { tag: "part time" }).map((x) => x.id), ["3", "2", "1"]);
+  assert.equal(tagMatches("parts time", tagStats(list)).same.tag, "part time");
+  assert.deepEqual(tagMatches("wo", tagStats(list)).list.map((s) => s.tag), ["work"]);
+  assert.deepEqual(tagMatches("", tagStats(list), ["work"]).list.map((s) => s.tag), ["part time"]);
+  // Misspellings and texting short forms point at the tag you have.
+  const mk = tagStats([e("9", "2026-11-04", "x", { tags: ["Makan", "kerja", "friends"] })]);
+  assert.deepEqual(tagMatches("mkan", mk).close.map((s) => s.tag), ["Makan"]);
+  assert.deepEqual(tagMatches("makn", mk).close.map((s) => s.tag), ["Makan"]);
+  assert.deepEqual(tagMatches("mkaan", mk).close.map((s) => s.tag), ["Makan"]);
+  assert.deepEqual(tagMatches("kja", mk).close.map((s) => s.tag), ["kerja"]);
+  assert.deepEqual(tagMatches("freinds", mk).close.map((s) => s.tag), ["friends"]);
+  assert.deepEqual(tagMatches("tidur", mk).close, []);
+  assert.equal(looksLike("ma", "makan"), false); // too short to guess
 });
 
 test("diaryStats: streak ends today or yesterday, deleted entries don't count", () => {

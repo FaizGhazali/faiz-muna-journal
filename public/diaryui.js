@@ -6,7 +6,7 @@
 // Pure logic: diary.js (entries) and writestyle.js (style profile, prompt). The model: localai.js (WebLLM, in the browser).
 // Data: diary/{id} (see diary.js), diaryPhotos/{id} -> { entry, person, data, w, h }, diaryStyle/{person} -> { on, since? }.
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDocs, query, where, writeBatch } from "./fs.js";
-import { PAGE, OPENING, words, bodyText, titleOf, preview, parseTags, live, diaryStats, onThisDay, tagsOf, filterEntries, neighbours, expired,
+import { PAGE, OPENING, words, bodyText, titleOf, preview, parseTags, live, diaryStats, onThisDay, tagsOf, filterEntries, tagKey, tagStats, showTags, tagMatches, looksLike, MAX_TAGS, neighbours, expired,
   prettyDate, ago, lineFor, greeting, iso } from "./diary.js";
 import { MIN_STYLE, ABOUT_MAX, aboutSuggestions, addToAbout, styleSource, styleProfile, describeStyle, samplesFor, buildMessages, cleanOutput, unsupported, dropped, looksGarbled } from "./writestyle.js";
 import * as ai from "./localai.js";
@@ -162,7 +162,7 @@ function paintOtd() {
 function paintList() {
   const host = $("dyList"); if (!host) return;
   const tags = tagsOf(mine());
-  $("dyTag").innerHTML = `<option value="">All tags</option>${tags.map((t) => `<option value="${esc(t)}"${t === filt.tag ? " selected" : ""}>#${esc(t)}</option>`).join("")}`;
+  $("dyTag").innerHTML = `<option value="">All tags</option>${tags.map((t) => `<option value="${esc(t)}"${filt.tag && tagKey(t) === tagKey(filt.tag) ? " selected" : ""}>#${esc(t)}</option>`).join("")}`;
   $("dyTag").hidden = !tags.length;
   if (!ready) { host.innerHTML = `<p class="note">Opening your diary…</p>`; return; }
   if (!live(mine()).length) {
@@ -179,7 +179,13 @@ function paintList() {
   host.innerHTML = found.length ? `${filtered ? `<p class="note">${found.length} ${found.length === 1 ? "entry" : "entries"} found. <button type="button" class="linkbtn" data-dy="clear">Clear</button></p>` : ""}
     ${some.map(cardHtml).join("")}
     ${left > 0 ? `<button type="button" class="dy-more" data-dy="more">Show more (${left} left)</button>` : ""}`
-    : `<div class="dy-empty"><p>Nothing matches.</p><button type="button" data-dy="clear">Clear search and filters</button></div>`;
+    : `<div class="dy-empty"><p>Nothing matches.</p>${meant(filt.q)}<button type="button" data-dy="clear">Clear search and filters</button></div>`;
+}
+// "mkan" found nothing, but there's a #makan tag: offer it.
+function meant(q) {
+  const k = tagKey(q); if (!k) return "";
+  const hit = tagStats(mine()).filter((s) => looksLike(k, s.key)).slice(0, 3);
+  return hit.length ? `<p class="dy-sugrow dy-meant">Did you mean ${hit.map((s) => `<button type="button" class="dy-sugtag same" data-dy="tag" data-tag="${esc(s.tag)}">#${esc(s.tag)}</button>`).join("")}</p>` : "";
 }
 function cardHtml(e) {
   const pd = prettyDate(e.date);
@@ -187,7 +193,7 @@ function cardHtml(e) {
     <div class="dy-cdate"><b>${+e.date.slice(8)}</b><small>${esc(new Date(e.date + "T12:00").toLocaleDateString(undefined, { month: "short" }))}</small><small>${e.date.slice(0, 4)}</small></div>
     <div class="dy-cbody"><h3>${e.fav ? '<span class="dy-star" aria-label="Favourite">★</span> ' : ""}${esc(titleOf(e))}</h3>
       <p>${esc(preview(e))}</p>
-      ${(e.tags || []).length ? `<p class="dy-tags">${e.tags.map((t) => `<span>#${esc(t)}</span>`).join("")}</p>` : ""}
+      ${(e.tags || []).length ? `<p class="dy-tags">${showTags(e.tags, tagStats(mine())).map((t) => `<span>#${esc(t)}</span>`).join("")}</p>` : ""}
       <span class="sr">${esc(pd.day)}, ${esc(pd.date)}</span></div>
     ${e.cover ? `<img class="dy-cover" src="${esc(e.cover)}" alt="" loading="lazy">` : isMood(e.mood) ? `<span class="dy-cmood" title="${MOODS[e.mood].label}">${face(e.mood, 30)}</span>` : ""}
   </a>`;
@@ -217,7 +223,7 @@ function renderRead(id) {
       <p class="dy-dear">${esc(OPENING)}</p>
       <div class="dy-text">${paras(e.body)}</div>
       <div class="dy-photos" id="dyPhotos"></div>
-      ${(e.tags || []).length ? `<p class="dy-tags">${e.tags.map((t) => `<button type="button" class="linkbtn" data-dy="tag" data-tag="${esc(t)}">#${esc(t)}</button>`).join("")}</p>` : ""}
+      ${(e.tags || []).length ? `<p class="dy-tags">${showTags(e.tags, tagStats(mine())).map((t) => `<button type="button" class="linkbtn" data-dy="tag" data-tag="${esc(t)}">#${esc(t)}</button>`).join("")}</p>` : ""}
       <p class="dy-meta">${[e.ai ? "Written with Dearly's helper, from your notes" : "", e.noStyle ? "Not used to learn your style" : "", `${words(bodyText(e.body))} words`].filter(Boolean).map(esc).join(" · ")}</p>
       <div class="actions" id="dyReadActs">${confirm === "del" + id
         ? `<p class="note">Move this entry to Recently deleted? You can bring it back for 30 days.</p><button type="button" class="danger" data-dy="del-yes">Delete</button><button type="button" data-dy="del-no">Keep</button>`
@@ -285,7 +291,9 @@ function renderEditor(id) {
       <label for="dyTitle">Title <small>Optional. Otherwise the first sentence is used.</small><input type="text" id="dyTitle" maxlength="80" value="${esc(ed.title)}" autocomplete="off"></label>
       <div class="lbl"><span>How was the day? <small>Optional. Sets your mood for the day; several entries are averaged.</small></span><div class="mfaces" role="group" aria-label="Mood">${[1, 2, 3, 4, 5].map((v) =>
         `<button type="button" class="mface" data-mood="${v}" aria-pressed="${ed.mood === v}" aria-label="${MOODS[v].label}">${face(v, 32)}</button>`).join("")}</div></div>
-      <label for="dyTags">Tags <small>Optional, with commas: friends, work</small><input type="text" id="dyTags" maxlength="200" value="${esc(ed.tags)}" autocomplete="off"></label>
+      <div class="lbl dy-tagfield"><label for="dyTags">Tags <small>Optional. Tap one you've used, or type a new one and press Enter. Spaces are fine: part time.</small></label>
+        <div class="dy-tagbox" id="dyTagBox"><span class="dy-chips" id="dyChips"></span><input type="text" id="dyTags" maxlength="40" value="${esc(ed.tagText || "")}" placeholder="Add a tag" autocomplete="off" autocapitalize="off" enterkeyhint="done" aria-describedby="dyTagSug"></div>
+        <div class="dy-tagsug" id="dyTagSug" aria-live="polite"></div></div>
       <div class="lbl"><span>Photos <small>Optional, up to ${MAX_PHOTOS}. Made smaller before saving.</small></span>
         <div class="dy-edphotos" id="dyEdPhotos"></div>
         <input type="file" id="dyPhotoIn" accept="image/*" multiple hidden></div>
@@ -294,12 +302,40 @@ function renderEditor(id) {
         ${!id ? `<button type="button" data-dy="discard">Discard draft</button>` : ""}</div>
       <p class="note" id="dyEdMsg" role="status"></p>
     </section>`;
-  count(); paintPhotos(); paintAi();
+  count(); paintPhotos(); paintTags(); paintAi();
   if (ed.mode === "ai") { if (useCloud()) wakeCloud(); else if (!device) probe(); }
 }
 function count() {
   const n = words(bodyText(ed.body)), el = $("dyCount");
   if (el) el.textContent = `${n} ${n === 1 ? "word" : "words"}`;
+}
+// ---------- tags: chips + suggestions from tags already used ----------
+// ed.tags = the chosen tags (comma text, as drafts always kept it); ed.tagText = what's being typed.
+const chosenTags = () => parseTags(ed.tags);
+function addTag(raw) {
+  const have = chosenTags(), stats = tagStats(mine());
+  const add = parseTags(raw, stats.map((s) => s.tag)).filter((t) => !have.some((h) => tagKey(h) === tagKey(t)));
+  const room = MAX_TAGS - have.length;
+  ed.tags = [...have, ...add.slice(0, Math.max(0, room))].join(", ");
+  if (add.length > room) edMsg(`Up to ${MAX_TAGS} tags on one entry.`);
+}
+function paintTags() {
+  const box = $("dyChips"), sug = $("dyTagSug"); if (!box || !ed) return;
+  const have = chosenTags(), stats = tagStats(mine()), text = (ed.tagText || "").trim();
+  box.innerHTML = have.map((t, i) => `<span class="dy-chip">#${esc(t)}<button type="button" data-dy="untag" data-i="${i}" aria-label="Remove tag ${esc(t)}">✕</button></span>`).join("");
+  if (have.length >= MAX_TAGS) { sug.innerHTML = `<p class="note">That's ${MAX_TAGS} tags, the most for one entry.</p>`; return; }
+  const { same, close, list } = tagMatches(text, stats, have, text ? 5 : 8);
+  const btn = (s, cls = "") => `<button type="button" class="dy-sugtag${cls}" data-dy="addtag" data-tag="${esc(s.tag)}">#${esc(s.tag)}<small>${s.n}</small></button>`;
+  let html = "";
+  if (text && same) html = `<p class="dy-sughead">${same.tag === text.toLowerCase().replace(/^#+/, "").replace(/\s+/g, " ") ? "You've used this before:" : "Same as a tag you have:"}</p><div class="dy-sugrow">${btn(same, " same")}</div>`;
+  else if (text) {
+    const add = `<button type="button" class="dy-sugtag new" data-dy="addtag" data-tag="${esc(text)}">+ New tag #${esc(parseTags(text)[0] || text)}</button>`;
+    html = close.length
+      ? `<p class="dy-sughead">Did you mean…</p><div class="dy-sugrow">${close.map((s) => btn(s, " same")).join("")}</div><p class="dy-sughead">No, it's new:</p><div class="dy-sugrow">${add}</div>`
+      : `<div class="dy-sugrow">${add}</div>`;
+  }
+  if (list.length) html += `<p class="dy-sughead">${text ? "Or one of yours:" : "Your tags:"}</p><div class="dy-sugrow">${list.map((s) => btn(s)).join("")}</div>`;
+  sug.innerHTML = html;
 }
 function paintPhotos() {
   const host = $("dyEdPhotos"); if (!host || !ed) return;
@@ -332,7 +368,7 @@ async function saveEntry() {
   }
   const cover = ed.photos[0]?.thumb || (ed.photos[0]?.old ? old?.cover : null);
   const entry = {
-    person: pid(), date: ed.date, body, tags: parseTags(ed.tags), fav: !!old?.fav,
+    person: pid(), date: ed.date, body, tags: parseTags(`${ed.tags},${ed.tagText || ""}`, tagStats(mine()).map((s) => s.tag)), fav: !!old?.fav,
     created: old?.created || now, updated: now,
   };
   if (ed.title.trim()) entry.title = ed.title.trim();
@@ -814,6 +850,7 @@ function wire() {
     }
     const pap = ev.target.closest("button[data-paper]"); // #diary itself carries data-paper, so match the buttons only
     if (pap) { store.set("journal-paper", pap.dataset.paper); paper(); host.querySelectorAll("[data-paper]").forEach((b) => b.setAttribute("aria-pressed", b === pap)); return; }
+    if (ev.target.id === "dyTagBox" || ev.target.id === "dyChips") { $("dyTags").focus(); return; }
     const b = ev.target.closest("[data-dy]"); if (!b) return;
     const act = b.dataset.dy, id = parseRoute().id;
     if (act === "more") { shown += PAGE; paintList(); }
@@ -865,6 +902,8 @@ function wire() {
       aiState.busy = false; paintAiPage();
     }
     if (act === "undo") { const el = $("dyUndo"); ed.body = el.dataset.before || `${OPENING}\n\n`; ed.ai = false; aiState.flags = []; $("dyBody").value = ed.body; el.innerHTML = ""; count(); saveDraft(); paintAi(); }
+    if (act === "addtag") { const typed = !!(ed.tagText || "").trim(); addTag(b.dataset.tag); ed.tagText = ""; $("dyTags").value = ""; paintTags(); saveDraft(); if (typed) $("dyTags").focus(); }
+    if (act === "untag") { const have = chosenTags(); have.splice(+b.dataset.i, 1); ed.tags = have.join(", "); paintTags(); saveDraft(); }
     if (act === "photo") $("dyPhotoIn").click();
     if (act === "unphoto") { const [p] = ed.photos.splice(+b.dataset.i, 1); if (p?.old) ed.removed.push(p.id); paintPhotos(); }
     if (act === "save") saveEntry();
@@ -919,8 +958,18 @@ function wire() {
     if (t.id === "dyNotes") { ed.notes = t.value; if (aiState.msg) { aiState.msg = ""; paintAi(); } }
     if (t.id === "dyBody") { ed.body = t.value; count(); }
     if (t.id === "dyTitle") ed.title = t.value;
-    if (t.id === "dyTags") ed.tags = t.value;
+    if (t.id === "dyTags") {
+      // A comma or # ends a tag (spaces don't: "part time" stays one tag).
+      const parts = t.value.split(/[,;#\n]/);
+      if (parts.length > 1) { addTag(parts.slice(0, -1).join(",")); t.value = parts[parts.length - 1].trimStart(); }
+      ed.tagText = t.value; paintTags();
+    }
     if (["dyNotes", "dyBody", "dyTitle", "dyTags"].includes(t.id)) saveDraft();
+  });
+  host.addEventListener("keydown", (ev) => {
+    const t = ev.target; if (t.id !== "dyTags" || !ed) return;
+    if (ev.key === "Enter" && !ev.isComposing) { ev.preventDefault(); if (t.value.trim()) { addTag(t.value); t.value = ""; ed.tagText = ""; paintTags(); saveDraft(); } }
+    if (ev.key === "Backspace" && !t.value) { const have = chosenTags(); if (have.length) { have.pop(); ed.tags = have.join(", "); paintTags(); saveDraft(); } }
   });
   host.addEventListener("change", async (ev) => {
     const t = ev.target;

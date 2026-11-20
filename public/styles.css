@@ -933,6 +933,24 @@ a.btn.mini { font-size: 13px; font-weight: 400; padding: 4px 10px; color: var(--
 .dy-cbody p { margin: 0; font-size: 14px; color: var(--muted); overflow-wrap: anywhere }
 .dy-star { color: #d99a1c }
 .dy-tags { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 0 0 !important; font-size: 13px }
+.dy-tagfield { display: grid; gap: 6px }
+.dy-tagbox { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: text }
+.dy-tagbox:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft) }
+.dy-chips { display: contents }
+.dy-chip { display: inline-flex; align-items: center; gap: 2px; padding: 4px 4px 4px 10px; border-radius: 99px; background: var(--accent-soft); font-size: 14px; animation: dy-pop .18s ease-out }
+.dy-chip button { border: 0; background: none; padding: 2px 6px; min-height: 0; font-size: 12px; color: var(--muted); border-radius: 99px; line-height: 1.4 }
+.dy-chip button:hover { background: var(--line); color: var(--ink) }
+.dy-tagbox input { flex: 1 1 120px; min-width: 120px; border: 0 !important; box-shadow: none !important; outline: none; padding: 6px 4px; background: transparent; margin: 0 }
+.dy-tagsug:empty { display: none }
+.dy-sughead { margin: 4px 0 2px; font-size: 12px; color: var(--muted) }
+.dy-sugrow { display: flex; flex-wrap: wrap; gap: 6px }
+.dy-sugtag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 99px; font-size: 14px; font-weight: 400; border: 1px dashed var(--line); background: transparent }
+.dy-sugtag small { font-size: 11px; color: var(--muted); background: var(--accent-soft); border-radius: 99px; padding: 0 6px }
+.dy-sugtag:hover { border-color: var(--accent) }
+.dy-sugtag.same { border: 1px solid var(--accent); background: var(--accent-soft); font-weight: 700 }
+.dy-sugtag.new { border-style: solid; color: var(--accent) }
+@keyframes dy-pop { from { transform: scale(.85); opacity: 0 } }
+@media (prefers-reduced-motion: reduce) { .dy-chip { animation: none } }
 .dy-cover { width: 64px; height: 64px; object-fit: cover; border-radius: 8px }
 .dy-cmood { line-height: 0 }
 .dy-more { justify-self: center }
