@@ -1,5 +1,5 @@
 // Dearly's cloud writer: the family's own Modal server (modal/dearly_writer.py), for phones whose graphics chip can't
-// run the writer. Free: Modal's monthly free credit, with a $0 spending limit. The model is open (Qwen2.5-7B).
+// run the writer. Free: Modal's monthly free credit, with a $0 spending limit. The model is open (Qwen2.5, 3B on a T4 by default).
 // Family writes send a sign-in token and the full prompt to /write. The demo has no sign-in: it sends only the notes to
 // /demo, which builds its own prompt and is capped per visitor and per day. Nothing is stored on the server.
 
