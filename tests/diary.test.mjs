@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { words, titleOf, preview, parseTags, diaryStats, onThisDay, filterEntries, neighbours, tagsOf, expired, KEEP_DELETED_DAYS, ago } from "../public/diary.js";
-import { styleProfile, styleSource, describeStyle, samplesFor, buildMessages, cleanOutput, unsupported, dropped, langOf, noteLang, targetWords, MIN_STYLE, aboutSuggestions, addToAbout } from "../public/writestyle.js";
+import { styleProfile, styleSource, describeStyle, samplesFor, buildMessages, cleanOutput, unsupported, dropped, langOf, noteLang, targetWords, MIN_STYLE, aboutSuggestions, addToAbout, looksGarbled } from "../public/writestyle.js";
 
 const e = (id, date, body, more = {}) => ({ id, person: "p1", date, body, created: 0, ...more });
 
@@ -221,4 +221,14 @@ test("addToAbout appends a line and refuses past the limit", () => {
   assert.equal(addToAbout("Aku Amir.", "Lina is my wife."), "Aku Amir.\nLina is my wife.");
   assert.equal(addToAbout("", "Lina is my wife."), "Lina is my wife.");
   assert.equal(addToAbout("x".repeat(600), "more"), null);
+});
+
+test("looksGarbled catches scrambled phone output, not real entries", () => {
+  const junk = "Dear Diary,\n\nabled Shadows Bondsavar operative 篚_life美团dk maxY.Abs ms_REFERERوجد.iconaddon ]\n\nework较差 הכולל<TextView pressing/hRuleContext deserved wi.mockitoriter dood_ENT";
+  assert.equal(looksGarbled(junk, "Harini bangun awal, pergi jog 5km"), true);
+  assert.equal(looksGarbled("Dear Diary,\n\nabled Shadows maxY.Abs ms_REFERER iconAddon hRuleContext wi.mockito dood_ENT TextView beastCBC"), true); // code bits only
+  assert.equal(looksGarbled("Dear Diary,\n\nHarini bangun awal, pergi jog 5km, pukul 6 habis. Kemudian sampai office dgr lagu. Best gila haha."), false);
+  assert.equal(looksGarbled("Dear Diary,\n\nWent to the café near the office. The coffee was good, the cake was too sweet. Would go back."), false);
+  assert.equal(looksGarbled("Dear Diary,\n\n今天去了吉隆坡，很开心。", "今天去了吉隆坡，很开心"), false); // the notes were in Chinese
+  assert.equal(looksGarbled("Dear Diary,\n\nshort"), false);
 });

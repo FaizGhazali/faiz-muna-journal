@@ -8,7 +8,7 @@
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDocs, query, where, writeBatch } from "./fs.js";
 import { PAGE, OPENING, words, bodyText, titleOf, preview, parseTags, live, diaryStats, onThisDay, tagsOf, filterEntries, neighbours, expired,
   prettyDate, ago, lineFor, greeting, iso } from "./diary.js";
-import { MIN_STYLE, ABOUT_MAX, aboutSuggestions, addToAbout, styleSource, styleProfile, describeStyle, samplesFor, buildMessages, cleanOutput, unsupported, dropped } from "./writestyle.js";
+import { MIN_STYLE, ABOUT_MAX, aboutSuggestions, addToAbout, styleSource, styleProfile, describeStyle, samplesFor, buildMessages, cleanOutput, unsupported, dropped, looksGarbled } from "./writestyle.js";
 import * as ai from "./localai.js";
 import { MOODS, isMood } from "./mood.js";
 import { face } from "./moodui.js";
@@ -369,6 +369,18 @@ async function probe() {
   device = { checking: true };
   paintAi();
   device = await ai.checkSupport();
+  // The faster 16-bit build scrambles words on some phone graphics chips even when they claim support, so phones
+  // (and any device where scrambling was seen, journal-ai-f32) use the 32-bit build. A bit bigger, always correct.
+  if (device.ok) {
+    const had16 = device.f16;
+    device.f16 = device.f16 && !device.mobile && !store.get("journal-ai-f32", false);
+    // A phone that downloaded the 16-bit build before this change: remove it and say why, once.
+    if (had16 && !device.f16) {
+      let removed = false;
+      for (const x of ai.MODELS) if (await ai.isDownloaded(x.key, true)) { try { await ai.remove(x.key, true); removed = true; } catch (_) {} }
+      if (removed) aiState.msg = "Dearly now uses a safer version of the writer on this phone (the old one could scramble words). Please download it once more.";
+    }
+  }
   const key = aiKey();
   device.downloaded = device.ok ? await ai.isDownloaded(key, device.f16) : false;
   paintAi();
@@ -390,7 +402,7 @@ function paintAi() {
       <p class="note">Pick a size. It downloads once${device.mobile ? ", best on Wi-Fi" : ""}.</p>
       ${sizesHtml()}
       <p class="note">${esc(m.note)}</p>
-      <div class="actions"><button type="button" class="primary" data-dy="download">Download ${esc(m.size.replace("about ", ""))}</button></div></div>`;
+      <div class="actions"><button type="button" class="primary" data-dy="download">Download ${esc(sizeOf(m))}</button></div></div>`;
   } else if (device.soft) html = `<p class="note">This device has no graphics chip for AI, so writing will be slow.</p>`;
   if (aiState.msg) html += `<p class="note dy-err" role="alert">${esc(aiState.msg)}</p>`;
   if ((aiState.flags.length || aiState.lost?.length) && !aiState.busy) html += `<div class="dy-box dy-check">
@@ -401,11 +413,26 @@ function paintAi() {
   if (btn) { btn.disabled = aiState.busy || (device && !device.checking && !device.ok); btn.textContent = aiState.busy && aiState.phase === "write" ? "Writing…" : ed && ed.ai && bodyText(ed.body) ? "✨ Write it again" : "✨ Write it for me"; }
   if (stop) stop.hidden = !(aiState.busy && aiState.phase === "write");
 }
+// The model wrote scrambled text: this graphics chip mishandles the 16-bit build. Remember that on this device,
+// throw away the broken download, and offer the safe 32-bit build. Returns the message to show.
+async function switchToSafe() {
+  const key = aiKey(), wasF16 = device.f16;
+  store.set("journal-ai-f32", true);
+  device.f16 = false;
+  if (wasF16) { try { await ai.remove(key, true); } catch (_) {} }
+  device.downloaded = await ai.isDownloaded(key, false);
+  const m = ai.modelOf(key);
+  return wasF16
+    ? `This ${device.mobile ? "phone" : "device"}'s graphics chip scrambled the words. Nothing was saved. Dearly has switched to the safe version of the writer: download it once (about ${sizeOf(m)}) and try again.`
+    : "The writer scrambled the words on this device. Nothing was saved. Try again; if it happens again, pick the Small size on the AI & privacy page.";
+}
+// Download size for this device: the safe 32-bit build used on phones is about 15% bigger.
+const sizeOf = (x) => `${(x.gb * (device?.f16 === false ? 1.15 : 1)).toFixed(1)} GB`;
 // Size picker shown right in the editor, so choosing a size never leaves the page you're writing on.
 function sizesHtml() {
   const key = aiKey(), fit = ai.suggestKey(device);
   return `<div class="dy-sizes" role="radiogroup" aria-label="Model size">${ai.MODELS.map((x) => `<button type="button" role="radio" class="dy-size" data-size="${x.key}" aria-checked="${x.key === key}">
-    <b>${esc(x.name)}</b><small>${esc(x.size.replace("about ", ""))}</small>${x.key === fit ? `<em>Suits this ${device?.mobile ? "phone" : "device"}</em>` : ""}</button>`).join("")}</div>`;
+    <b>${esc(x.name)}</b><small>${esc(sizeOf(x))}</small>${x.key === fit ? `<em>Suits this ${device?.mobile ? "phone" : "device"}</em>` : ""}</button>`).join("")}</div>`;
 }
 // The download / opening bar: a big percentage, a thick bar and how many MB so far. Updated in place while it runs.
 const barTotal = () => Math.round(ai.modelOf(aiKey()).gb * 1000 * (device?.f16 === false ? 1.15 : 1));
@@ -474,7 +501,13 @@ async function writeForMe() {
   abort = new AbortController();
   const page = $("dyBody");
   try {
-    const out = await ai.write(messages, (t) => { const c = cleanOutput(t, notes); if (c && page) { page.value = c; } }, abort.signal);
+    let garbled = false;
+    const out = await ai.write(messages, (t) => {
+      if (garbled) return;
+      if (looksGarbled(t, notes)) { garbled = true; abort.abort(); if (page) page.value = before; return; }
+      const c = cleanOutput(t, notes); if (c && page) page.value = c;
+    }, abort.signal);
+    if (garbled || looksGarbled(out, notes)) throw new Error("garbled");
     const clean = cleanOutput(out, notes);
     if (!clean || words(bodyText(clean)) < 3) throw new Error("empty");
     ed.body = clean; ed.ai = true;
@@ -484,7 +517,8 @@ async function writeForMe() {
     undo(before);
   } catch (e) {
     if (page) page.value = ed.body;
-    aiState.msg = e.message === "empty" ? "The writer came back empty. Try again, or add a little more to your notes." : abort?.signal.aborted ? "" : ai.errorText(e);
+    aiState.msg = e.message === "garbled" ? await switchToSafe()
+      : e.message === "empty" ? "The writer came back empty. Try again, or add a little more to your notes." : abort?.signal.aborted ? "" : ai.errorText(e);
   } finally {
     aiState.busy = false; aiState.phase = ""; abort = null;
     count(); saveDraft(); paintAi();
@@ -569,7 +603,7 @@ function paintAiPage() {
   host.innerHTML = s;
   if (acts) acts.innerHTML = device?.ok ? `${device.downloaded
       ? `<button type="button" data-dy="test"${aiState.busy ? " disabled" : ""}>Get it ready now</button><button type="button" data-dy="remove"${aiState.busy ? " disabled" : ""}>Remove from this device</button>`
-      : `<button type="button" class="primary" data-dy="download"${aiState.busy ? " disabled" : ""}>Download and turn on (${esc(m.size)})</button>`}` : "";
+      : `<button type="button" class="primary" data-dy="download"${aiState.busy ? " disabled" : ""}>Download and turn on (about ${esc(sizeOf(m))})</button>`}` : "";
   storageLine();
 }
 async function storageLine() {

@@ -36,7 +36,10 @@ Optional, on **✨ AI & privacy**:
 | Large | Qwen2.5-3B-Instruct | ~1.7 GB | ~2.6 GB | laptops/desktops with 8 GB+ RAM |
 
 - Download sizes are approximate. Memory figures come from WebLLM 0.2.86's model list.
-- Phones without the GPU's `shader-f16` feature get the `q4f32_1` build automatically (a bit bigger).
+- **Phones always get the `q4f32_1` build** (about 15% bigger). On some Android graphics chips the faster `q4f16_1`
+  build scrambled the output into mixed-script junk even though the phone reported `shader-f16` support. Computers
+  use `q4f16_1` when supported. If scrambled text is ever detected while writing (`looksGarbled()`), Dearly stops,
+  restores what was there, removes the 16-bit download, and switches that device to 32-bit (`journal-ai-f32`).
 - Qwen2.5 was chosen because it handles Malay better than other models this small, and has no "thinking" output.
 
 ## Which devices work

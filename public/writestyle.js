@@ -281,3 +281,20 @@ export function dropped(notes, out) {
   const own = tokens(notes).filter((t) => t.length >= 3 && (MALAY.has(t) || MANGLISH.has(t) || SLANG.includes(t)) && !MS_FUNC.includes(t));
   return [...new Set(own)].filter((t) => !have.has(t)).slice(0, 8);
 }
+
+// Scrambled output: some phone graphics chips break the model's maths and it spits out mixed scripts and code bits
+// ("abled Shadows Bondsavar 篚_life美团 ms_REFERER..."). Spotting it lets the writer stop at once and switch to the safe build.
+export function looksGarbled(text, notes = "") {
+  const t = bodyText(text);
+  if (t.length < 40) return false;
+  const letters = t.match(/\p{L}/gu) || [];
+  if (!letters.length) return false;
+  // Letters outside Latin, when the notes had none (so a note written in Jawi or Chinese is still fine).
+  const foreign = (s) => (s.match(/\p{L}/gu) || []).length - (s.match(/\p{Script=Latin}/gu) || []).length;
+  const odd = foreign(t), noteOdd = foreign(String(notes));
+  if (!noteOdd && (odd >= 6 || odd / letters.length > 0.04)) return true;
+  // Code-like words: under_scores, camelCase, angle brackets, dots inside words.
+  const ws = t.split(/\s+/).filter(Boolean);
+  const codey = ws.filter((w) => /[_<>{}\[\]\|]|[a-z][A-Z]|\w\.\w/.test(w) && !/^https?:/.test(w)).length;
+  return ws.length >= 8 && codey / ws.length > 0.15;
+}
