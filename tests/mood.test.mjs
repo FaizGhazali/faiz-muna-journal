@@ -110,3 +110,21 @@ test("moodMix pct: share of rated days, whole numbers that add up to 100", () =>
   const three = moodMix({ "2026-11-16": 1, "2026-11-17": 3, "2026-11-18": 5 }, "week", "2026-11-19", "2026-11-19");
   assert.equal(three.pct.reduce((s, n) => s + n, 0), 100);
 });
+
+test("diary moods set the day's mood, and several in a day are averaged", async () => {
+  const { dayMoods } = await import("../public/mood.js");
+  const entries = [{ person: "p1", date: "2026-11-02", mood: 2 }, { person: "p1", date: "2026-11-04", mood: 3 }];
+  const diary = [
+    { person: "p1", date: "2026-11-01", mood: 4 },
+    { person: "p1", date: "2026-11-01", mood: 5 },
+    { person: "p1", date: "2026-11-02", mood: 5 },
+    { person: "p1", date: "2026-11-03", mood: 1, deleted: 1 },
+    { person: "p1", date: "2026-11-03" },
+    { person: "p2", date: "2026-11-01", mood: 1 },
+  ];
+  assert.deepEqual(moodMap(entries, "p1", diary), { "2026-11-01": 5, "2026-11-02": 4, "2026-11-04": 3 });
+  const d = dayMoods(entries, "p1", diary);
+  assert.equal(d["2026-11-01"].avg, 4.5);
+  assert.deepEqual(d["2026-11-02"], { avg: 3.5, rating: 2, diary: [5], n: 2 });
+  assert.equal(d["2026-11-03"], undefined, "deleted entries and entries without a mood don't count");
+});

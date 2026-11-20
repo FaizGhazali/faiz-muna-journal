@@ -43,7 +43,7 @@ const GUIDES = [
   { id: "meal", icon: "🍽️", title: "Log a meal", blurb: "Pick the meal, add foods or a meal set, save.", words: "food eat calories kcal breakfast lunch dinner snack set plate" },
   { id: "run", icon: "🏃", title: "Add a run", blurb: "In the Weight journal's entry card, add a picture of your COROS run and check the numbers.", words: "exercise coros watch running picture photo pace heart fitness" },
   { id: "mood", icon: "🙂", title: "Rate your day", blurb: "Tap a face on the Yesterday card.", words: "mood face feeling yesterday happy" },
-  { id: "diary", icon: "📔", title: "Write in your diary", blurb: "Round button, then Diary, then Write today's diary. Jot a few words and tap Write it for me, or write it yourself.", words: "dearly diary journal write entry ai writer notes malay manglish dear" },
+  { id: "diary", icon: "📔", title: "Write in your diary", blurb: "Round button, then Dearly, then Write today's diary. Jot a few words and tap Write it for me, or write it yourself.", words: "dearly diary journal write entry ai writer notes malay manglish dear" },
   { id: "fold", icon: "✋", title: "Fold a card", blurb: "Hold the knob on a card's top edge to tuck it away. Tap it to open again.", words: "hide collapse tidy close card" },
   { id: "zoom", icon: "🔍", title: "Zoom a graph", blurb: "Pinch with two fingers. Double-tap to see it all again.", words: "chart graph pinch closer detail" },
 ];

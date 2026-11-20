@@ -467,7 +467,7 @@ function readSetRows() {
 export const JOURNALS = [
   { id: "meals", name: "Meals", icon: "🍽️" },
   { id: "weight", name: "Weight", icon: "⚖️" },
-  { id: "diary", name: "Diary", icon: "📔" },
+  { id: "diary", name: "Dearly", icon: "📔" },
   { id: "soon-2", name: "Empty", icon: "＋", soon: true },
   { id: "soon-3", name: "Empty", icon: "＋", soon: true },
 ];

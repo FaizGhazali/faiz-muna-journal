@@ -26,7 +26,9 @@ const MAX_PHOTOS = 4;
 const PAPERS = { cream: "Cream", rose: "Rose", sage: "Sage" };
 
 let db, commit, people, me, getToken, demo, diaryCol, photosCol, styleCol, unsubs = [];
-let list = [], styles = {}, ready = false;
+let list = [], styles = {}, ready = false, onChange = () => {};
+// Everyone's diary entries (deleted ones included, marked). The Mood page and reflections read moods from these.
+export const diaryList = () => list;
 // Dashboard filters (kept while the app is open) and how many memories are showing.
 const filt = { q: "", month: "", tag: "", fav: false, sort: "new" };
 let shown = PAGE, route = "", painted = "", confirm = null, flash = null; // flash: { id, text } shown on that entry until you leave it
@@ -37,7 +39,7 @@ let device = null, aiState = { busy: false, progress: 0, mb: 0, phase: "", msg: 
 
 export function initDiary(opts) {
   ({ db, commit, people, me } = opts);
-  getToken = opts.token || (async () => null); demo = !!opts.demo;
+  getToken = opts.token || (async () => null); demo = !!opts.demo; onChange = opts.onChange || onChange;
   diaryCol = collection(opts.db, "diary");
   photosCol = collection(opts.db, "diaryPhotos");
   styleCol = collection(opts.db, "diaryStyle");
@@ -52,6 +54,7 @@ export function startDiary() {
     ready = true;
     purge();
     render(true);
+    onChange();
   }));
   unsubs.push(onSnapshot(styleCol, (s) => { styles = Object.fromEntries(s.docs.map((d) => [d.id, d.data()])); if (route === "ai") render(true); }));
 }
@@ -280,7 +283,7 @@ function renderEditor(id) {
       <textarea id="dyBody" class="dy-page" rows="12" maxlength="20000">${esc(ed.body)}</textarea>
       <div class="dy-under"><span class="note" id="dyCount"></span><span id="dyUndo"></span></div>
       <label for="dyTitle">Title <small>Optional. Otherwise the first sentence is used.</small><input type="text" id="dyTitle" maxlength="80" value="${esc(ed.title)}" autocomplete="off"></label>
-      <div class="lbl"><span>How was the day? <small>Optional</small></span><div class="mfaces" role="group" aria-label="Mood">${[1, 2, 3, 4, 5].map((v) =>
+      <div class="lbl"><span>How was the day? <small>Optional. Sets your mood for the day; several entries are averaged.</small></span><div class="mfaces" role="group" aria-label="Mood">${[1, 2, 3, 4, 5].map((v) =>
         `<button type="button" class="mface" data-mood="${v}" aria-pressed="${ed.mood === v}" aria-label="${MOODS[v].label}">${face(v, 32)}</button>`).join("")}</div></div>
       <label for="dyTags">Tags <small>Optional, with commas: friends, work</small><input type="text" id="dyTags" maxlength="200" value="${esc(ed.tags)}" autocomplete="off"></label>
       <div class="lbl"><span>Photos <small>Optional, up to ${MAX_PHOTOS}. Made smaller before saving.</small></span>
@@ -372,6 +375,7 @@ async function probe() {
   device = { checking: true };
   paintAi();
   device = await ai.checkSupport();
+  if (device.why === "mobile" && await ai.clearAll()) aiState.note = "The on-phone writer is now off on phones, so its download was removed to free space. Use the cloud writer or write it yourself.";
   // The faster 16-bit build scrambles words on some phone graphics chips even when they claim support, so phones
   // (and any device where scrambling was seen, journal-ai-f32) use the 32-bit build. A bit bigger, always correct.
   if (device.ok) {

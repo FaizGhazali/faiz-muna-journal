@@ -18,7 +18,7 @@ import { initMeals, startMeals, stopMeals, refreshMeals, refreshCalories, initWh
 import { initCollapse } from "./collapse.js";
 import { initZoom, zoomable, xWindow, isZoomed } from "./zoom.js";
 import { initGuides } from "./tour.js";
-import { initDiary, startDiary, stopDiary, refreshDiary } from "./diaryui.js";
+import { initDiary, startDiary, stopDiary, refreshDiary, diaryList } from "./diaryui.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const PACE = 0.5; // kg a week
@@ -440,8 +440,8 @@ initWheel();
 initCollapse();
 initZoom();
 initGuides();
-initDiary({ db, people: () => PEOPLE, me: currentPerson, commit, demo: DEMO, token: async () => (auth?.currentUser ? auth.currentUser.getIdToken() : null) });
-initMood({ db, people: () => PEOPLE, entries: () => entries, me: currentPerson, habitFacts, commit });
+initDiary({ db, people: () => PEOPLE, me: currentPerson, commit, onChange: () => refreshMood(), demo: DEMO, token: async () => (auth?.currentUser ? auth.currentUser.getIdToken() : null) });
+initMood({ db, people: () => PEOPLE, entries: () => entries, diary: diaryList, me: currentPerson, habitFacts, commit });
 initFitDetail({
   people: () => PEOPLE, entries: () => entries,
   saveBorn: (pid, born) => commit(() => setDoc(doc(db, "config", "people"), { people: PEOPLE.map((p) => (p.id === pid ? { ...p, born } : p)) })),

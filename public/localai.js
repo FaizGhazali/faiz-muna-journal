@@ -24,6 +24,9 @@ const lib = async () => (wl ||= await import(LIB));
 export async function checkSupport() {
   const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform || ""));
   const memGB = navigator.deviceMemory || null; // Chrome and Edge only, rounded and capped at 8
+  // Phones and tablets: the on-device writer is off. Tested on the family's phones it was too slow, ran out of
+  // memory or scrambled words, so phones use the cloud writer (or write it themselves) instead.
+  if (mobile) return { ok: false, why: "mobile", mobile, memGB };
   if (!isSecureContext) return { ok: false, why: "insecure", mobile, memGB };
   if (!("gpu" in navigator)) return { ok: false, why: "nowebgpu", mobile, memGB };
   let adapter = null;
@@ -44,10 +47,21 @@ export function suggestKey(s) {
 }
 export function whyText(why) {
   return {
+    mobile: "The on-device writer is too heavy for phones, so it's switched off here. It still works on a computer.",
     insecure: "The writer needs a secure (https) page.",
     nowebgpu: "This browser can't use the graphics chip for AI yet (no WebGPU). It works in recent Chrome or Edge on a computer, Chrome on many Android phones, and Safari on iOS 26 or newer.",
     noadapter: "This browser has WebGPU, but no graphics chip it can use was found. The graphics driver may be too old, or the browser has it switched off.",
   }[why] || "The writer can't run in this browser.";
+}
+
+// Free the space a model downloaded on a phone before the writer was switched off there. Only Dearly's model
+// caches (webllm/*), never the app's own. Returns true when something was removed.
+export async function clearAll() {
+  try {
+    const ks = (await caches.keys()).filter((k) => k.startsWith("webllm"));
+    await Promise.all(ks.map((k) => caches.delete(k)));
+    return ks.length > 0;
+  } catch (_) { return false; }
 }
 
 export async function isDownloaded(key, f16) {

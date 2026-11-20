@@ -71,10 +71,26 @@ export function quoteFor(level, date, pid = "") {
   return list[h % list.length];
 }
 
-// { "YYYY-MM-DD": 1..5 } for one person.
-export function moodMap(entries, pid) {
+// Every mood given on each day by one person: the face rating (entries.mood) and the mood on each diary entry
+// written that day (Dearly). { date: { avg, rating|null, diary: [1..5], n } }. Deleted diary entries don't count.
+export function dayMoods(entries, pid, diary = []) {
   const out = {};
-  for (const e of entries) if (e.person === pid && isMood(e.mood)) out[e.date] = e.mood;
+  const at = (d) => (out[d] ||= { avg: null, rating: null, diary: [], n: 0 });
+  for (const e of entries) if (e.person === pid && isMood(e.mood)) at(e.date).rating = e.mood;
+  for (const e of diary) if (e.person === pid && !e.deleted && isMood(e.mood)) at(e.date).diary.push(e.mood);
+  for (const day of Object.values(out)) {
+    const all = [...day.diary, ...(day.rating ? [day.rating] : [])];
+    day.n = all.length;
+    day.avg = all.reduce((a, b) => a + b, 0) / all.length;
+  }
+  return out;
+}
+
+// { "YYYY-MM-DD": 1..5 } for one person: each day's average mood, rounded to a whole face (3.5 → 4).
+// Writing several diary entries in a day with different moods gives that day their average.
+export function moodMap(entries, pid, diary = []) {
+  const out = {};
+  for (const [d, m] of Object.entries(dayMoods(entries, pid, diary))) out[d] = Math.min(5, Math.max(1, Math.round(m.avg)));
   return out;
 }
 

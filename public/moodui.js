@@ -1,8 +1,12 @@
-// The "Yesterday" mood card on the dashboard and the Mood history page at #mood.
+// The "Yesterday" mood card and the "Reflect" card on the dashboard, and the Mood history page at #mood.
 // Each person rates their own day (1 to 5); it's saved as `mood` on entries/{person}_{date} (merged, so
-// weight, run and note on that day are untouched). The numbers are worked out in mood.js.
+// weight, run and note on that day are untouched). A mood picked on a diary entry (Dearly) counts too: the day's
+// mood is the average of every mood given that day (dayMoods / moodMap in mood.js). Tapping a day on Year in
+// pixels opens its flashcard: the mood plus what happened (diary, run, weight, habits). Reflections: reflect.js.
 import { doc, setDoc } from "./fs.js";
-import { MOODS, isMood, quoteFor, moodMap, lastSeven, periods, boosters, yearGrid, moodMix, VIEWS, MIN_DAYS } from "./mood.js";
+import { MOODS, isMood, quoteFor, moodMap, dayMoods, lastSeven, periods, boosters, yearGrid, moodMix, VIEWS, MIN_DAYS } from "./mood.js";
+import { reflections, pickReflection } from "./reflect.js";
+import { titleOf, preview } from "./diary.js";
 import { iso, parse, addDays } from "./suggest.js";
 
 const $ = (id) => document.getElementById(id);
@@ -11,8 +15,8 @@ const today = () => iso(new Date());
 const fmt = (s, o) => parse(s).toLocaleDateString(undefined, o);
 const MONTHS = Array.from({ length: 12 }, (_, m) => new Date(2000, m, 1).toLocaleDateString(undefined, { month: "short" }));
 
-let db, people, entries, me, habitFacts, commit;
-let pickDay = null, year = null, fromApp = false, lastPid = null;
+let db, people, entries, diary, me, habitFacts, commit;
+let pickDay = null, year = null, fromApp = false, lastPid = null, pendingDay = null, shownDay = null, skip = 0;
 // Mood mix card inside Year in pixels: closed until a day is tapped. First tap → that month, same day again → its week.
 let mixOpen = false, view = "month", anchor = null;
 const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -33,11 +37,27 @@ const one = (n) => (n == null ? "–" : n.toFixed(1));
 
 export function initMood(opts) {
   ({ db, people, entries, me, habitFacts, commit } = opts);
+  diary = opts.diary || (() => []);
   window.addEventListener("hashchange", (ev) => {
     if (location.hash !== "#mood") return;
     if (new URL(ev.oldURL).hash !== "#mood") { fromApp = true; window.scrollTo(0, 0); }
-    pickDay = null; year = null; mixOpen = false;
+    pickDay = pendingDay; year = null; mixOpen = false; shownDay = null;
     refreshMood();
+    if (pendingDay) { pendingDay = null; requestAnimationFrame(() => $("mdDay")?.scrollIntoView({ behavior: "auto", block: "center" })); }
+  });
+  // Dashboard reflection: "Another" shows the next one; "See the day" opens its flashcard on the Mood page.
+  $("reflectCard").addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-another], [data-day]");
+    if (!b) return;
+    if ("another" in b.dataset) { skip++; renderReflect(); return; }
+    openDay(b.dataset.day);
+  });
+  $("mdReflect").addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-day]");
+    if (!b) return;
+    pickDay = b.dataset.day; year = parse(pickDay).getFullYear();
+    renderPage();
+    $("mdDay").scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "center" });
   });
   $("moodCard").addEventListener("click", (ev) => {
     const b = ev.target.closest("[data-mood]");
@@ -52,7 +72,8 @@ export function initMood(opts) {
       if (!again) view = "month";
       else if (view === "month") view = "week";
       pickDay = anchor = d;
-      if (!mixOpen) { mixOpen = true; requestAnimationFrame(() => $("mdMix").scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "nearest" })); }
+      mixOpen = true;
+      requestAnimationFrame(() => $("mdDay").scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "nearest" }));
     }
     if (b.dataset.year) { year = Number(b.dataset.year); pickDay = null; mixOpen = false; }
     if (b.dataset.step) {
@@ -67,6 +88,12 @@ export function initMood(opts) {
   });
 }
 
+// Open the Mood page on one day's flashcard.
+export function openDay(date) {
+  if (location.hash === "#mood") { pickDay = date; year = parse(date).getFullYear(); renderPage(); $("mdDay").scrollIntoView({ block: "center" }); return; }
+  pendingDay = date; location.hash = "#mood";
+}
+
 function rate(date, v) {
   const pid = me();
   if (!pid || !isMood(v) || date > today()) return;
@@ -78,7 +105,34 @@ export function refreshMood() {
   if (!people().length || !me()) return;
   if (me() !== lastPid) { lastPid = me(); pickDay = null; }
   renderCard();
+  renderReflect();
   if (location.hash === "#mood") renderPage();
+}
+
+const mine = () => diary().filter((e) => e.person === me() && !e.deleted);
+const moods = () => moodMap(entries(), me(), diary());
+// "Average 3.5 of 2 diary entries and your rating", "From your diary", or "".
+function madeOf(m) {
+  if (!m || m.n < 2) return m?.diary.length === 1 && !m.rating ? "From your diary" : "";
+  const d = m.diary.length, bits = [d ? `${d} diary ${d === 1 ? "entry" : "entries"}` : "", m.rating ? "your rating" : ""].filter(Boolean);
+  return `Average ${m.avg.toFixed(1)} of ${bits.join(" and ")}`;
+}
+
+// The reflection cards for this person, from reflect.js.
+const cards = () => reflections({ map: moods(), diary: mine(), facts: dayFacts(me()), today: today() });
+const ICON = { comfort: "🤍", past: "📖", bright: "☀️", trend: "📈", pattern: "🔎", streak: "✍️", month: "🗓️", empty: "🌱" };
+function reflectHtml(c, dash) {
+  const go = [c.entry ? `<a class="rgo" href="#diary/read/${esc(c.entry)}">Read entry</a>` : "", c.date ? `<button type="button" class="rgo" data-day="${esc(c.date)}">See the day</button>` : ""].join("");
+  const h = dash ? "h3" : "h4";
+  return `<article class="rcard" style="--rc:${isMood(c.mood) ? `var(--m${c.mood})` : "var(--line)"}">
+    <div class="rhead"><span class="ricon" aria-hidden="true">${ICON[c.kind] || "💭"}</span><${h} class="rtitle">${esc(c.title)}</${h}>${isMood(c.mood) ? face(c.mood, 22) : ""}</div>
+    <p class="rtext">${esc(c.text)}</p>${go ? `<div class="rgos">${go}</div>` : ""}</article>`;
+}
+function renderReflect() {
+  const all = cards(), c = pickReflection(all, today(), me(), skip);
+  $("reflectCard").innerHTML = `<div class="hhead"><p class="eyebrow">Reflect</p>${all.length > 1 ? `<button type="button" class="mini" data-another>Another</button>` : ""}</div>
+    ${c ? reflectHtml(c, true) : ""}
+    <div class="mfoot"><span>${all.length > 1 ? `${all.indexOf(c) + 1} of ${all.length}` : ""}</span><a href="#mood">All reflections →</a></div>`;
 }
 
 // What else happened on each day, for the card's reminder line and for "What goes with good days".
@@ -94,20 +148,21 @@ function dayFacts(pid) {
 }
 
 function renderCard() {
-  const pid = me(), y = addDays(today(), -1), map = moodMap(entries(), pid), v = map[y] ?? null;
-  const f = dayFacts(pid)[y] || {}, bits = [];
+  const pid = me(), y = addDays(today(), -1), map = moods(), v = map[y] ?? null;
+  const m = dayMoods(entries(), pid, diary())[y], f = dayFacts(pid)[y] || {}, bits = [];
+  if (madeOf(m)) bits.push(madeOf(m));
   if (f.ran) bits.push(f.km ? `${f.km} km run` : `${f.minutes} min exercise`);
   if (f.habitsDue) bits.push(`${f.habitsDone} of ${f.habitsDue} habits`);
   const week = lastSeven(map, y);
   $("moodCard").innerHTML = `<div class="hhead"><p class="eyebrow">Yesterday</p><span class="mdate">${esc(fmt(y, { weekday: "short", day: "numeric", month: "short" }))}</span></div>
     <div class="mnow">${face(v, 46)}<div><strong${v ? "" : ' class="unrated"'}>${v ? MOODS[v].label : "Not rated yet"}</strong><small>${esc(bits.join(" · ") || "Nothing logged")}</small></div></div>
     <p class="mquote">“${esc(quoteFor(v, today(), pid))}”</p>
-    <div class="mpick"><p class="mask">${v ? "Change your answer" : "How was yesterday?"}</p>${faces(v, "data-mood")}</div>
+    <div class="mpick"><p class="mask">${m?.rating ? "Change your answer" : v ? "Add your own rating" : "How was yesterday?"}</p>${faces(m?.rating ?? null, "data-mood")}</div>
     <div class="mfoot"><span>${week == null ? "" : `7-day average ${one(week)}`}</span><a href="#mood">Mood history →</a></div>`;
 }
 
 function renderPage() {
-  const pid = me(), p = people().find((x) => x.id === pid), map = moodMap(entries(), pid), t = today();
+  const pid = me(), p = people().find((x) => x.id === pid), map = moods(), t = today();
   if (!pickDay) pickDay = year && year < parse(t).getFullYear() ? `${year}-12-31` : addDays(t, -1);
   if (!year) year = parse(pickDay).getFullYear();
   // While the Mood mix is open, Year in pixels shows its year and lights up only the days it counts.
@@ -132,10 +187,10 @@ function renderPage() {
   const grid = yearGrid(map, year, t);
   const rated = Object.keys(map).filter((d) => d.startsWith(year + "-")).length;
   const pv = map[pickDay] ?? null;
-  if (!$("mdPix")) $("mdYear").innerHTML = `<div id="mdPix" class="fd"></div><div id="mdMix" class="mmix" hidden></div><div id="mdDay" class="mday"></div>`;
+  if (!$("mdPix")) $("mdYear").innerHTML = `<div id="mdPix" class="fd"></div><div id="mdDay" class="mday"></div><div id="mdMix" class="mmix" hidden></div>`;
   $("mdPix").innerHTML = `<div class="fdhead"><h3 class="fdtitle">Year in pixels</h3>
       <div class="myear"><button type="button" class="mini" data-year="${year - 1}"${year > first ? "" : " disabled"} aria-label="Previous year">‹</button><b>${year}</b><button type="button" class="mini" data-year="${year + 1}"${year < last ? "" : " disabled"} aria-label="Next year">›</button></div></div>
-    <p class="note">${rated ? `${rated} day${rated > 1 ? "s" : ""} rated. ` : ""}Tap a day to see the mood mix for its month, and again for its week.</p>
+    <p class="note">${rated ? `${rated} day${rated > 1 ? "s" : ""} rated. ` : ""}Tap a day to see what happened and the mood mix for its month; tap it again for its week.</p>
     <div class="pixels${mix ? " mixing" : ""}" role="grid" aria-label="Mood for each day of ${year}">
       <span class="pxmon"></span>${Array.from({ length: 31 }, (_, i) => `<span class="pxday">${[1, 10, 20, 30].includes(i + 1) ? i + 1 : ""}</span>`).join("")}
       ${grid.map((days, m) => `<span class="pxmon">${esc(MONTHS[m])}</span>${days.map((c) => c.future
@@ -145,11 +200,12 @@ function renderPage() {
     <div class="mlegend">${[5, 4, 3, 2, 1].map((v) => `<span><i style="background:var(--m${v})"></i>${MOODS[v].word}</span>`).join("")}<span><i class="none"></i>Not rated</span></div>
 `;
   renderMix(map, t);
-  $("mdDay").innerHTML = `
-      <div class="mdayhead"><button type="button" class="mini" data-step="-1" aria-label="Day before">‹</button>
-        <div class="mnow">${face(pv, 34)}<div><strong>${esc(fmt(pickDay, { weekday: "long", day: "numeric", month: "long" }))}</strong><small>${pv ? MOODS[pv].label : "Not rated"}</small></div></div>
-        <button type="button" class="mini" data-step="1"${pickDay < t ? "" : " disabled"} aria-label="Day after">›</button></div>
-      ${faces(pv, "data-rate")}`;
+  renderDay(pid, map, t);
+
+  // Reflections: every looking-back card the engine has for this person.
+  $("mdReflect").innerHTML = `<h3 class="fdtitle">Reflections</h3>
+    <p class="note">Looking back over your moods, diary and logs. They change as you write and rate.</p>
+    <div class="rlist">${cards().map((c) => reflectHtml(c, false)).join("")}</div>`;
 
   // What goes with good days.
   const B = boosters(map, dayFacts(pid)), bar = (v, cls) => `<div class="mbar ${cls}"><i style="width:${((v - 1) / 4) * 100}%"></i></div><span>${v.toFixed(1)}</span>`;
@@ -163,6 +219,33 @@ function renderPage() {
           <div class="mbrow"><small>Without</small>${bar(r.without, "without")}</div>
         </div>`).join("") + `<p class="note">Based on ${B.days} rated days. It shows what tends to go together, not what causes what.</p>`
       : `<p class="mwait">Not enough mixed days yet. Keep rating and logging, and this fills in.</p>`}`;
+}
+
+// The day's flashcard: its mood (and what it's an average of) and what happened: diary entries, run, weight,
+// note, habits, Next Move. It flips in each time a new day is picked.
+function renderDay(pid, map, t) {
+  const d = pickDay, pv = map[d] ?? null, m = dayMoods(entries(), pid, diary())[d];
+  const e = entries().find((x) => x.person === pid && x.date === d) || {}, f = dayFacts(pid)[d] || {};
+  const pages = mine().filter((x) => x.date === d).sort((a, b) => (a.created || 0) - (b.created || 0));
+  const did = [];
+  if (e.run) did.push(["🏃", `Ran ${e.run.km} km${e.run.secs ? ` in ${Math.round(e.run.secs / 60)} min` : ""}${e.run.hr ? `, ${e.run.hr} bpm` : ""}`]);
+  else if (e.minutes > 0) did.push(["🏃", `${e.minutes} min exercise`]);
+  if (typeof e.weight === "number") did.push(["⚖️", `Weighed ${e.weight} kg`]);
+  if (f.habitsDue) did.push(["✅", `${f.habitsDone} of ${f.habitsDue} habits`]);
+  if (f.move) did.push(["➡️", "Did a Next Move"]);
+  if (e.note) did.push(["📝", e.note]);
+  const box = $("mdDay");
+  box.innerHTML = `<div class="flash">
+      <div class="mdayhead"><button type="button" class="mini" data-step="-1" aria-label="Day before">‹</button>
+        <div class="mnow">${face(pv, 40)}<div><strong>${esc(fmt(d, { weekday: "long", day: "numeric", month: "long" }))}</strong><small>${pv ? MOODS[pv].label : "Not rated"}${madeOf(m) ? ` · ${esc(madeOf(m))}` : ""}</small></div></div>
+        <button type="button" class="mini" data-step="1"${d < t ? "" : " disabled"} aria-label="Day after">›</button></div>
+      ${pages.length ? `<div class="fpages">${pages.map((x) => `<a class="fpage" href="#diary/read/${esc(x.id)}">${isMood(x.mood) ? face(x.mood, 22) : `<span class="fdot" aria-hidden="true">📔</span>`}<span><b>${esc(titleOf(x))}</b><small>${esc(preview(x, 140))}</small></span></a>`).join("")}</div>` : ""}
+      ${did.length ? `<ul class="fdid">${did.map(([i, s]) => `<li><span aria-hidden="true">${i}</span>${esc(s)}</li>`).join("")}</ul>` : ""}
+      ${!pages.length && !did.length ? `<p class="note">Nothing written or logged this day.</p>` : ""}
+      <p class="mask">${m?.rating ? "Your rating for the day" : "Rate this day"}</p>${faces(m?.rating ?? null, "data-rate")}
+    </div>`;
+  if (shownDay !== d && shownDay !== null && !calm()) box.firstElementChild.animate([{ opacity: 0, transform: "perspective(700px) rotateX(-70deg)" }, { opacity: 1, transform: "none" }], { duration: 380, easing: "cubic-bezier(.2,.8,.2,1)" });
+  shownDay = d;
 }
 
 // Mood mix card: one bar per mood (hard → great), height = how many days of it in the week, month or year.
