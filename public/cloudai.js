@@ -4,7 +4,7 @@
 // /demo, which builds its own prompt and is capped per visitor and per day. Nothing is stored on the server.
 
 // The address `modal deploy modal/dearly_writer.py` prints. Empty = the cloud writer is hidden.
-export const CLOUD_URL = "";
+export const CLOUD_URL = "https://faizghazali21--dearly-writer-web.modal.run";
 
 // A Modal address, or a localhost stand-in while developing.
 export const cloudReady = () => /^(https:\/\/[a-z0-9-]+\.modal\.run|http:\/\/localhost:\d+)\/?$/.test(CLOUD_URL);

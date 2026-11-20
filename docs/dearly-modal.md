@@ -80,7 +80,8 @@ as it's written.
 
 ## Tested so far
 
-- The server file loads with Modal 1.6.4. It wasn't deployed, because that needs your account.
-- The app's cloud flow was tested in the demo against a local stand-in server (`localhost`): the offer, the consent
-  box, "N demo writes left today", the streamed entry, the daily-limit message, and switching back to the on-phone
-  writer. Real output on Modal, the llama.cpp build, sign-in checking and the wake-up time are untested until it's deployed.
+- Deployed on CPU at `https://faizghazali21--dearly-writer-web.modal.run` (2026-11-20). `/demo-left` answers, `/write`
+  without a sign-in is refused (401).
+- Real demo writes: Malay / Manglish notes came back in their own words and language, about 13 s on a cold start and
+  2–3 s once awake. The app's page (localhost) reaches it through CORS.
+- Still to check: a signed-in family write from the live site, and how long longer notes take.
