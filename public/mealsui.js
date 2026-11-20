@@ -467,7 +467,7 @@ function readSetRows() {
 export const JOURNALS = [
   { id: "meals", name: "Meals", icon: "🍽️" },
   { id: "weight", name: "Weight", icon: "⚖️" },
-  { id: "soon-1", name: "Empty", icon: "＋", soon: true },
+  { id: "diary", name: "Diary", icon: "📔" },
   { id: "soon-2", name: "Empty", icon: "＋", soon: true },
   { id: "soon-3", name: "Empty", icon: "＋", soon: true },
 ];
@@ -478,7 +478,7 @@ const store = {
 // How many times the "More lives here" tip shows before it stops by itself (journal-tip-more: count, or "off").
 const TIP_VIEWS = 5, TIP_KEY = "journal-tip-more";
 // The view the Dashboard tab opens: the last journal picked on this phone, Meals at first.
-export function journalView() { return store.get("journal-type", "meals") === "weight" ? "home" : "meals"; }
+export function journalView() { const t = store.get("journal-type", "meals"); return t === "weight" ? "home" : t === "diary" ? "diary" : "meals"; }
 
 export function initWheel() {
   const fab = $("wheelBtn"), wheel = $("wheel"), ring = $("wheelRing"), hub = $("wheelHub");
@@ -582,7 +582,12 @@ export function initWheel() {
     if (!go) return;
     if (go === "tips") { store.set(TIP_KEY, "0"); setMenu(false); showTip(); return; }
     hide();
-    if (go === "backup") { document.querySelector("#app .data")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    if (go === "backup") {
+      // The backup card lives in the Weight journal; open it first when another journal is showing.
+      const go2 = () => document.querySelector("#app .data")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if ($("home").hidden) { choose("weight"); setTimeout(go2, 80); } else go2();
+      return;
+    }
     location.hash = `#${go}`;
     scrollTo({ top: 0 });
   });

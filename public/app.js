@@ -18,6 +18,7 @@ import { initMeals, startMeals, stopMeals, refreshMeals, refreshCalories, initWh
 import { initCollapse } from "./collapse.js";
 import { initZoom, zoomable, xWindow, isZoomed } from "./zoom.js";
 import { initGuides } from "./tour.js";
+import { initDiary, startDiary, stopDiary, refreshDiary } from "./diaryui.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const PACE = 0.5; // kg a week
@@ -439,6 +440,7 @@ initWheel();
 initCollapse();
 initZoom();
 initGuides();
+initDiary({ db, people: () => PEOPLE, me: currentPerson, commit });
 initMood({ db, people: () => PEOPLE, entries: () => entries, me: currentPerson, habitFacts, commit });
 initFitDetail({
   people: () => PEOPLE, entries: () => entries,
@@ -499,6 +501,7 @@ function startApp(user) {
     render();
     refreshActivities();
     refreshMeals();
+    refreshDiary();
   }, denied));
   unsubs.push(onSnapshot(entriesCol, (snap) => {
     entries = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.date || ""));
@@ -506,8 +509,9 @@ function startApp(user) {
   }, denied));
   startActivities();
   startMeals();
+  startDiary();
 }
-function stop() { unsubs.forEach((u) => u()); unsubs = []; stopActivities(); stopMeals(); }
+function stop() { unsubs.forEach((u) => u()); unsubs = []; stopActivities(); stopMeals(); stopDiary(); }
 
 // ---------- Demo ----------
 // Keys the demo keeps in this tab. journal-theme stays so the day/night choice carries on.

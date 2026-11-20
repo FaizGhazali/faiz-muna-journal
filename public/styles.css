@@ -645,6 +645,11 @@ html.touring .wheel.hint .wmore::after { display: none }
 .mdrow b { text-align: right }
 .mdrow small { color: var(--muted); font-size: 12px }
 .mealdemo .ok { margin: 0; color: var(--good); font-weight: 700; font-size: 14px }
+.diarydemo { display: grid; gap: 10px }
+.diarydemo .dnotes { padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px; font-size: 14px; line-height: 1.6 }
+.diarydemo .dpage { margin: 0; padding: 14px; border-radius: 10px; background: #fbf6ec; color: #3b2f24; font: 16px/1.7 "Lora", Georgia, serif }
+.diarydemo .dpage i { color: #b5653b }
+.diarydemo .ok { margin: 0; color: var(--good); font-weight: 700; font-size: 14px }
 
 /* ---------- Calories card ---------- */
 .person.cal { gap: 12px }
@@ -831,3 +836,140 @@ html.touring .wheel.hint .wmore::after { display: none }
   border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 13px; opacity: .9; animation: zhint 1.8s ease forwards }
 @keyframes zhint { 0%, 70% { opacity: .9 } 100% { opacity: 0 } }
 @media (prefers-reduced-motion: reduce) { .zhint { animation: none } }
+
+/* Dearly, the diary journal (diaryui.js). Warm paper surfaces; the colour (#diary[data-paper]) is a per-device choice. */
+#diary { --paper: #fbf6ec; --paper-ink: #3b2f24; --paper-muted: #7a6a58; --paper-line: #eadfcb; --paper-rule: #efe5d3; --paper-accent: #b5653b;
+  --serif: "Lora", Georgia, "Times New Roman", serif }
+#diary[data-paper="rose"] { --paper: #fcf1f1; --paper-line: #f0d9da; --paper-rule: #f4e2e3; --paper-accent: #b8536a }
+#diary[data-paper="sage"] { --paper: #f2f6ee; --paper-line: #d9e3cf; --paper-rule: #e3ebdb; --paper-accent: #557a4e }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #diary { --paper: #241f1a; --paper-ink: #efe5d6; --paper-muted: #b5a690; --paper-line: #3d342b; --paper-rule: #322b24; --paper-accent: #e29a6e }
+  :root:not([data-theme="light"]) #diary[data-paper="rose"] { --paper: #2a1f22; --paper-line: #44323a; --paper-rule: #36282d; --paper-accent: #e8899f }
+  :root:not([data-theme="light"]) #diary[data-paper="sage"] { --paper: #1e2420; --paper-line: #334036; --paper-rule: #29322b; --paper-accent: #93bd88 } }
+:root[data-theme="dark"] #diary { --paper: #241f1a; --paper-ink: #efe5d6; --paper-muted: #b5a690; --paper-line: #3d342b; --paper-rule: #322b24; --paper-accent: #e29a6e }
+:root[data-theme="dark"] #diary[data-paper="rose"] { --paper: #2a1f22; --paper-line: #44323a; --paper-rule: #36282d; --paper-accent: #e8899f }
+:root[data-theme="dark"] #diary[data-paper="sage"] { --paper: #1e2420; --paper-line: #334036; --paper-rule: #29322b; --paper-accent: #93bd88 }
+#diary { gap: 16px }
+#diary .paper { background: var(--paper); color: var(--paper-ink); border-color: var(--paper-line) }
+#diary .paper .note, #diary .paper small { color: var(--paper-muted) }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
+.linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer }
+#diary .paper .linkbtn { color: var(--paper-accent) }
+a.btn.mini { font-size: 13px; font-weight: 400; padding: 4px 10px; color: var(--muted) }
+.dy-day { margin: 0; font: italic 400 15px var(--serif); color: var(--paper-accent) }
+.dy-date { font: 600 clamp(22px, 5vw, 28px)/1.2 var(--serif); margin: 0 }
+.dy-hero { display: grid; gap: 6px; padding: 24px }
+.dy-greet { font: 600 clamp(26px, 6vw, 34px)/1.15 var(--serif); margin: 0 }
+.dy-hero .dy-date { font-size: 16px; font-weight: 400; color: var(--paper-muted) }
+.dy-line { margin: 4px 0 8px; font: italic 16px/1.5 var(--serif) }
+.dy-go { font-size: 16px; padding: 12px 18px }
+#diary .btn.primary, #diary button.primary { background: var(--paper-accent); border-color: var(--paper-accent); color: #fff }
+#diary .chip[aria-pressed="true"] { background: var(--paper-accent); border-color: var(--paper-accent); color: #fff }
+.dy-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 12px 0 0; padding-top: 12px; border-top: 1px dashed var(--paper-line) }
+.dy-stats div { min-width: 0 }
+.dy-stats dt { font-size: 12px; color: var(--paper-muted) }
+.dy-stats dd { margin: 0; font: 600 20px/1.2 var(--serif); font-variant-numeric: tabular-nums; overflow-wrap: anywhere }
+@media (max-width: 420px) { .dy-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px } }
+.dy-otd h2, .dy-mem h2 { font-size: 20px }
+.dy-otdlist { display: grid; gap: 8px; margin-top: 10px }
+.dy-otditem { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--paper-line); color: inherit; text-decoration: none }
+.dy-otditem b { font: 600 16px var(--serif) }
+.dy-otditem span { font-size: 14px; color: var(--paper-muted) }
+.dy-memhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px }
+.dy-tools { display: grid; gap: 10px; margin-bottom: 12px }
+.dy-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.dy-filters select { width: auto; max-width: 100% }
+.dy-filters input[type=month] { font: 15px var(--body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-width: 0 }
+#dyFav { border: 1px solid var(--line) }
+.dy-list { display: grid; gap: 10px }
+.dy-card { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px; border: 1px solid var(--line); border-radius: 12px; color: inherit; text-decoration: none; transition: border-color .15s, transform .15s }
+.dy-card:hover { border-color: var(--accent) }
+.dy-card:active { transform: scale(.99) }
+.dy-cdate { display: grid; text-align: center; line-height: 1.1; padding: 4px 0; border-right: 1px solid var(--line) }
+.dy-cdate b { font: 600 22px var(--serif) }
+.dy-cdate small { font-size: 12px; color: var(--muted) }
+.dy-cbody { min-width: 0 }
+.dy-cbody h3 { font: 600 16px/1.3 var(--serif); margin: 0 0 2px }
+.dy-cbody p { margin: 0; font-size: 14px; color: var(--muted); overflow-wrap: anywhere }
+.dy-star { color: #d99a1c }
+.dy-tags { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 0 0 !important; font-size: 13px }
+.dy-cover { width: 64px; height: 64px; object-fit: cover; border-radius: 8px }
+.dy-cmood { line-height: 0 }
+.dy-more { justify-self: center }
+.dy-empty { text-align: center; display: grid; gap: 8px; justify-items: center; padding: 20px 8px }
+.dy-emptyicon { font-size: 44px; margin: 0 }
+.dy-empty h3 { font: 600 20px var(--serif) }
+.dy-empty .note { max-width: 46ch }
+/* reading view */
+.dy-readtop .dy-pager { display: flex; gap: 6px }
+.dy-read, .dy-editor { padding: clamp(18px, 5vw, 36px); display: grid; gap: 14px }
+.dy-rhead, .dy-edhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--paper-line) }
+.dy-rside { display: flex; align-items: center; gap: 12px }
+.dy-rmood { display: inline-flex; align-items: center; gap: 6px; line-height: 1 }
+.dy-favbtn { font-size: 24px; line-height: 1; padding: 4px 10px; color: var(--paper-muted); border-color: var(--paper-line) }
+.dy-favbtn[aria-pressed="true"] { color: #d99a1c }
+.dy-title { font: 600 22px/1.3 var(--serif); margin: 0 }
+.dy-dear { margin: 0; font: italic 18px var(--serif); color: var(--paper-accent) }
+.dy-text { font: 18px/1.75 var(--serif); max-width: 62ch; overflow-wrap: anywhere }
+.dy-text p { margin: 0 0 1em }
+.dy-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px }
+.dy-photos:empty { display: none }
+.dy-photo { padding: 0; border: 0; line-height: 0; border-radius: 10px; overflow: hidden; background: none }
+.dy-photo img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block }
+.dy-photo.big { grid-column: 1 / -1 }
+.dy-photo.big img { aspect-ratio: auto; max-height: 80vh; object-fit: contain }
+.dy-meta { margin: 0; font-size: 13px; color: var(--paper-muted) }
+.dy-flash { color: var(--paper-ink) !important; font-weight: 700 }
+.dy-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+.dy-nav a { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); text-decoration: none; font-size: 14px; min-width: 0; overflow-wrap: anywhere }
+.dy-nav a.r { text-align: right }
+.dy-nav small { color: var(--muted) }
+/* editor */
+.dy-datepick { font-weight: 400; font-size: 13px; color: var(--paper-muted) }
+.dy-datepick input { padding: 6px 8px; font-size: 15px }
+.dy-modes .chip { border: 1px solid var(--paper-line); color: var(--paper-ink) }
+.dy-notes { display: grid; gap: 8px; padding: 14px; border-radius: 12px; background: color-mix(in srgb, var(--paper-accent) 7%, transparent); border: 1px dashed var(--paper-line) }
+.dy-notes textarea { background: var(--paper); font: 16px/1.6 var(--body) }
+.dy-editor textarea, .dy-editor input[type=text], .dy-editor input[type=date] { border-color: var(--paper-line); color: var(--paper-ink) }
+.dy-editor input[type=text] { background: var(--paper) }
+.dy-page { min-height: 320px; background: var(--paper) repeating-linear-gradient(to bottom, transparent 0 calc(1.75em - 1px), var(--paper-rule) calc(1.75em - 1px) 1.75em) !important;
+  background-attachment: local !important; font: 18px/1.75 var(--serif) !important; padding: 0 4px !important; border: 0 !important; border-radius: 0 !important; resize: vertical }
+.dy-page:focus-visible { outline: 2px dashed var(--paper-line) !important; outline-offset: 6px }
+.dy-under { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px }
+.dy-ai:empty { display: none }
+.dy-ai { display: grid; gap: 8px }
+.dy-box { display: grid; gap: 6px; padding: 12px; border-radius: 10px; background: var(--paper); border: 1px solid var(--paper-line) }
+.dy-box p { margin: 0 }
+.dy-err { color: var(--obese) !important }
+.dy-check mark { background: color-mix(in srgb, #d99a1c 30%, transparent); color: inherit; padding: 0 4px; border-radius: 4px; margin-right: 2px }
+.dy-edphotos { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.dy-thumb { position: relative; line-height: 0 }
+.dy-thumb img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px }
+.dy-thumb .mini { position: absolute; top: -6px; right: -6px; padding: 2px 6px; background: var(--surface); border-radius: 99px; line-height: 1.2 }
+.dy-addphoto { border-style: dashed; border-color: var(--paper-line); color: var(--paper-ink); font-weight: 400 }
+.dy-nostyle { font-size: 14px; color: var(--paper-muted) }
+.dy-saved { min-height: 1.4em }
+/* AI and privacy page */
+.dy-models { border: 0; padding: 0; margin: 4px 0 0; display: grid; gap: 8px }
+.dy-models legend { font-weight: 700; font-size: 14px; margin-bottom: 6px }
+.dy-model { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-weight: 400; cursor: pointer }
+.dy-model input { width: 20px; height: 20px; margin: 2px 0 0; flex: none; accent-color: var(--accent) }
+.dy-model small { display: block; color: var(--muted); margin-top: 2px }
+.dy-model .pill { font-size: 12px; padding: 1px 8px; margin: 0 0 0 4px }
+.dy-model:has(input:checked) { border-color: var(--accent) }
+.dy-status { display: flex; align-items: baseline; gap: 8px; margin: 8px 0 0 }
+.dy-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; transform: translateY(1px) }
+.dy-dot.on { background: var(--good) }
+.dy-switch { display: flex; gap: 10px; align-items: center; font-size: 15px; margin: 6px 0; cursor: pointer }
+.dy-switch input { width: 22px; height: 22px; accent-color: var(--accent); flex: none }
+.dy-dna, .dy-priv { margin: 6px 0; padding-left: 20px; display: grid; gap: 4px; font-size: 15px }
+.dy-excl ul { padding-left: 18px; display: grid; gap: 6px }
+.dy-bin { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px }
+.dy-bin li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line) }
+.dy-bin li small { display: block; color: var(--muted) }
+.dy-sugg { display: grid; gap: 6px; margin: 6px 0 4px; padding: 12px; border: 1px dashed var(--line); border-radius: 12px }
+.dy-sugg ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px }
+.dy-sugg li { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line) }
+.dy-sugg li:first-child { border-top: 0; padding-top: 0 }
+.dy-sugg li p { margin: 0 }
+.dy-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 6px; padding: 0 5px; border-radius: 99px; background: var(--accent); color: var(--on-accent); font-size: 11px; font-weight: 700 }

@@ -141,5 +141,27 @@ export function sampleData(now = new Date()) {
   const burns = {};
   for (let i = 13; i >= 1; i--) if (rnd() < 0.4) { const d = ago(i); burns[`p1_${d}`] = { person: "p1", date: d, kcal: Math.round((2500 + jitter(250)) / 10) * 10 }; }
 
-  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns };
+  // Diary (Dearly): a few made-up entries each. Amir mixes Malay and English; Lina writes in English.
+  // One of Amir's is from this day last year, so "On this day" has something to show.
+  const lastYear = iso(new Date(now.getFullYear() - 1, now.getMonth(), Math.min(now.getDate(), 28)));
+  const pages = [
+    ["p1", lastYear, "First week at the new office", "harini first week kat office baru. jauh sikit tapi okay lah. lunch dengan team, makan nasi kandar.\n\npenat tapi best. tak sabar weekend.", 4, ["work"]],
+    ["p1", ago(1), "", "pagi tadi run 5k dengan Lina. panas gila tapi habis jugak haha.\n\nmalam lepak rumah je, tengok bola. penat tapi puas.", 4, ["running", "lina"]],
+    ["p1", ago(3), "Mamak night", "lepak mamak dengan geng sampai pukul 1. borak pasal kerja, pasal duit, pasal plan tahun depan.\n\nrisau sikit pasal duit tapi gelak banyak malam ni. best.", 4, ["friends"]],
+    ["p1", ago(6), "", "kerja banyak sangat harini. meeting dari pagi sampai petang.\n\nbalik terus tidur. esok cuba lagi lah.", 2, ["work"]],
+    ["p1", ago(9), "Sambal day", "masak sambal sendiri for the first time. pedas gila haha. Lina kata okay, tapi aku rasa terlebih garam sikit.\n\nnext time kurang garam.", 5, ["cooking"]],
+    ["p1", ago(15), "", "hujan dari pagi. tak dapat run. duduk rumah, kemas bilik, baca buku sikit.\n\nhari slow tapi okay je.", 3, []],
+    ["p2", ago(0), "", "Started the morning with oats and a slow walk. Work was quiet, so I finally finished the report I've been putting off.\n\nFeeling lighter tonight.", 4, ["work"]],
+    ["p2", ago(2), "Japanese practice", "Did my Japanese lesson on the train. Still mixing up the particles, but I read a whole short story without the dictionary.\n\nSmall win. I'll take it.", 5, ["japanese"]],
+    ["p2", ago(5), "", "Long day. My head hurt by lunch and I skipped the evening run.\n\nEarly night. Tomorrow is a new start.", 2, []],
+    ["p2", ago(8), "Market morning", "Walked to the market with Amir. Bought too many mangoes again.\n\nWe sat by the lake after and talked about a trip next year.", 5, ["amir", "weekend"]],
+    ["p2", ago(12), "", "Tried the new café near the office. The coffee was good, the cake was too sweet.\n\nWould go back for the coffee.", 3, ["explore"]],
+  ];
+  const diary = {};
+  pages.forEach(([person, date, title, text, mood, tags], i) => {
+    const at = parse(date).getTime() + (20 + (i % 3)) * 36e5;
+    diary[`d-diary-${i}`] = { person, date, ...(title ? { title } : {}), body: `Dear Diary,\n\n${text}`, mood, tags, fav: i === 4 || i === 7, created: at, updated: at };
+  });
+
+  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns, diary };
 }

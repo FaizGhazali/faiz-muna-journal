@@ -86,21 +86,21 @@ export function habitFacts(pid) {
   return out;
 }
 
-const RESUME = /^#(activities|mood|mealsets|fitness\/[\w-]+)$/;
+const RESUME = /^#(activities|mood|mealsets|fitness\/[\w-]+|diary(?:\/(?:write|ai|(?:edit|read)\/[\w-]+))?)$/;
 function showView() {
   const h = location.hash;
   store.set("journal-page", RESUME.test(h) ? h : "");
   // The Dashboard tab shows the journal picked on the wheel (journalView in mealsui.js).
   const view = h === "#activities" ? "activities" : h.startsWith("#fitness") ? "fitness" : h === "#mood" ? "mood" : h === "#soon" ? "soon" : h === "#guide" ? "guide"
-    : h === "#meals" ? "meals" : h === "#mealsets" ? "mealsets" : journalView();
-  ["home", "meals", "mealsets", "soon", "guide", "activities", "fitness", "mood"].forEach((v) => { $(v).hidden = v !== view; });
-  // Weight, Your Next Move, habits and Yesterday sit on top of every journal.
+    : h.startsWith("#diary") ? "diary" : h === "#meals" ? "meals" : h === "#mealsets" ? "mealsets" : journalView();
+  ["home", "meals", "mealsets", "soon", "guide", "diary", "activities", "fitness", "mood"].forEach((v) => { $(v).hidden = v !== view; });
+  // Weight, Your Next Move, habits and Yesterday sit on top of every journal except the diary, which keeps its page calm.
   $("shared").hidden = !["home", "meals", "soon"].includes(view);
   // The person cards show the part for this journal (see JOURNAL_PARTS in app.js).
   const journal = view === "home" ? "weight" : view === "meals" ? "meals" : "";
   if ($("people").dataset.journal !== journal) { $("people").dataset.journal = journal; dispatchEvent(new Event("journalchange")); }
   $("meBox").hidden = ["fitness", "mealsets", "guide"].includes(view); // the fitness page has its own person switch; sets are shared
-  const tab = ["home", "meals", "mealsets", "soon", "guide"].includes(view) ? "home" : view;
+  const tab = ["home", "meals", "mealsets", "soon", "guide", "diary"].includes(view) ? "home" : view;
   document.querySelectorAll("#nav a").forEach((a) => a.toggleAttribute("aria-current", a.dataset.view === tab));
 }
 

@@ -15,9 +15,9 @@
 <meta name="twitter:card" content="summary">
 <script type="application/ld+json">
 {"@context":"https://schema.org","@graph":[
- {"@type":"WebApplication","name":"Faiz & Muna's Journal","alternateName":"Our Journal","url":"https://faiz-muna-journal-c43ab.web.app/","applicationCategory":"HealthApplication","operatingSystem":"Any (web browser, installable PWA)","inLanguage":"en","dateModified":"2026-11-19",
+ {"@type":"WebApplication","name":"Faiz & Muna's Journal","alternateName":"Our Journal","url":"https://faiz-muna-journal-c43ab.web.app/","applicationCategory":"HealthApplication","operatingSystem":"Any (web browser, installable PWA)","inLanguage":"en","dateModified":"2026-11-20",
   "description":"A private weight, BMI and running journal for two people, with run reading from a COROS watch picture, a fitness score, activity suggestions and a daily habit checklist.",
-  "featureList":["Weight and BMI tracking with WHO ranges","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file","Try-it demo with sample data","Daily mood rating with a quote, year in pixels and what goes with good days","Visitor count by country, guessed from time zone","Meals journal with your own food list, one-tap meal sets and learned portions","Daily calories against a range from BMI and calorie burn","Journal switcher wheel","Show me how: searchable how-tos with step-by-step walkthroughs that light up what to tap"]},
+  "featureList":["Weight and BMI tracking with WHO ranges","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file","Try-it demo with sample data","Daily mood rating with a quote, year in pixels and what goes with good days","Visitor count by country, guessed from time zone","Meals journal with your own food list, one-tap meal sets and learned portions","Daily calories against a range from BMI and calorie burn","Journal switcher wheel","Show me how: searchable how-tos with step-by-step walkthroughs that light up what to tap","Dearly diary: turn a few words in English, Malay or Manglish into a diary entry with an AI writer that runs on your own device, free and private"]},
  {"@type":"FAQPage","mainEntity":[
   {"@type":"Question","name":"What is Our Journal?","acceptedAnswer":{"@type":"Answer","text":"A private web app for two people to track weight, BMI, running and daily habits together. It runs in the browser and can be installed on a phone like an app."}},
   {"@type":"Question","name":"How does it read my run from a picture?","acceptedAnswer":{"@type":"Answer","text":"You choose the screenshot of your COROS run. Text recognition runs on your own phone to pick out distance, time, pace and heart rate. The picture is never uploaded or saved, and you check the numbers before saving."}},
@@ -25,6 +25,7 @@
   {"@type":"Question","name":"Does it work without internet?","acceptedAnswer":{"@type":"Answer","text":"Yes. Once opened, it keeps working offline, and new entries sync when the connection comes back."}},
   {"@type":"Question","name":"How does the mood card work?","acceptedAnswer":{"@type":"Answer","text":"Each person taps one of five faces to rate how yesterday felt, from hard to great, and gets a short quote to match. The app never guesses your mood. The Mood history page shows a year in pixels where tapping a day shows how many hard to great days that month (or week) had, and what tends to go with your good days, like exercise or habits."}},
   {"@type":"Question","name":"How does the meals journal work?","acceptedAnswer":{"@type":"Answer","text":"You add the foods you usually eat once, with calories, carbs, protein and fat per 100 g, from the pack or a nutrition website. Then you save plates you eat often as meal sets. To log a meal, pick the set, check the grams and add it. After you weigh a food three times, the journal fills in your usual portion. A chart compares each day's calories with a range from your BMI and an estimate of what you burn, or the burn from your watch if you type it in. Days you don't log are left out, not counted as zero. A Year view colours one square per day, from far under to far over, with days logged, percent in range, average and best streak. The round button at the bottom switches between journals."}},
+  {"@type":"Question","name":"How does the Dearly diary writer work?","acceptedAnswer":{"@type":"Answer","text":"Jot a few words about your day, in English, Malay, Manglish or a mix, and the writer turns them into a diary entry you can edit before saving. It runs on your own phone or computer inside the browser, using its graphics chip, so your notes are never sent to any AI company and there is no cost. You download the model once (about 0.3 to 1.7 GB). It needs a browser with WebGPU; on other devices you can still write yourself."}},
   {"@type":"Question","name":"Can anyone sign up?","acceptedAnswer":{"@type":"Answer","text":"Not at the moment. This journal is private to one family, and only they can sign in. Anyone can open the demo to try every feature with sample data."}},
   {"@type":"Question","name":"How are visitors counted?","acceptedAnswer":{"@type":"Answer","text":"Each phone or computer that opens this page is counted once, under the country its time zone points to. No location, IP address or personal detail is looked up or saved, only a number per country."}},
   {"@type":"Question","name":"Is anything I do in the demo saved?","acceptedAnswer":{"@type":"Answer","text":"No. The demo uses made-up sample data kept only in your browser tab. Nothing is sent to a server, and it is all gone when you close the tab."}}]}
@@ -34,7 +35,7 @@
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Lora:ital,wght@0,400;0,600;1,400&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
 <link rel="stylesheet" href="/styles.css">
 <script>
 // Apply the saved day/night choice before the page draws, so it never flashes the wrong colours.
@@ -213,6 +214,21 @@ try {
     </div>
   </section>
 
+  <section class="scene" aria-labelledby="l-diary">
+    <div class="copy">
+      <p class="eyebrow">Dearly diary</p>
+      <h2 id="l-diary">A few words in, a diary entry out, in your own language</h2>
+      <p>Jot down your day the way you'd text a friend: English, Malay, Manglish or all three. Dearly's writer turns your notes into an entry that sounds like you, keeps each note in the language you wrote it, and never adds things that didn't happen. It runs on your own phone or computer, so your diary is never sent to an AI company, and it's free. Read it over, change anything, then save.</p>
+      <ul><li>Keywords to diary entry, edit before saving</li><li>Keeps your Malay, English and Manglish as you wrote them</li><li>Learns your writing style, only if you say yes</li><li>Search, tags, favourites, On this day, photos</li><li>Recently deleted keeps entries for 30 days</li></ul>
+    </div>
+    <div class="demo panel diarydemo" aria-hidden="true">
+      <div class="dhead"><span class="note">Sample · notes</span><b>✨</b></div>
+      <p class="note dnotes">went mamak with friends<br>risau pasal duit<br>laughed until 2AM lah</p>
+      <p class="dpage flip" data-at="0.45"><i>Dear Diary,</i><br>Went mamak with friends tonight. Risau sikit pasal duit. But we laughed until 2AM lah.</p>
+      <p class="ok flip" data-at="0.85">✓ Saved to your diary</p>
+    </div>
+  </section>
+
   <section class="scene" aria-labelledby="l-how">
     <div class="copy">
       <p class="eyebrow">Show me how</p>
@@ -250,6 +266,7 @@ try {
   <section class="info" aria-labelledby="l-new">
     <h2 id="l-new">What's new</h2>
     <ol class="changes">
+      <li><time datetime="2026-11-20">20 Nov 2026</time> Dearly, a diary journal on the round button: write it yourself, or jot a few words in English, Malay or Manglish and let a free writer that runs on your own device turn them into an entry. Search, tags, favourites, On this day, photos and a 30-day Recently deleted.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Show me how: search the how-tos and let the app walk you through logging your weight, lighting up each thing to tap.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> A ⋯ button on the round journal menu opens extras: Show me how, meal sets and backup. A small tip points it out the first few times, then gets out of your way.</li>
       <li><time datetime="2026-11-19">19 Nov 2026</time> Zoom into the weight, fitness and running graphs: pinch on a phone, or Ctrl + scroll on a computer, to see a few weeks up close with a finer scale (down to 0.1 kg). Drag along the dates, double-tap or "Reset zoom" to see it all.</li>
@@ -284,6 +301,7 @@ try {
     <details><summary>How does the mood card work?</summary><p>Each person taps one of five faces to rate how yesterday felt, from hard to great, and gets a short quote to match. The app never guesses your mood. The Mood history page shows a year in pixels where tapping a day shows how many hard to great days that month (or week) had, and what tends to go with your good days, like exercise or habits.</p></details>
     <details><summary>How does the meals journal work?</summary><p>You add the foods you usually eat once, with calories, carbs, protein and fat per 100 g, from the pack or a nutrition website. Then you save plates you eat often as meal sets. To log a meal, pick the set, check the grams and add it. After you weigh a food three times, the journal fills in your usual portion. A chart compares each day's calories with a range from your BMI and an estimate of what you burn, or the burn from your watch if you type it in. Days you don't log are left out, not counted as zero. A Year view colours one square per day, from far under to far over, with days logged, percent in range, average and best streak. The round button at the bottom switches between journals.</p></details>
     <details><summary>How do I learn my way around?</summary><p>Tap the round button, then ⋯, then Show me how. Search for what you want to do and start a walkthrough. The app dims the screen, lights up each thing to tap and points at it with a dotted arrow, one step at a time. You can stop whenever you like.</p></details>
+    <details><summary>How does the Dearly diary writer work?</summary><p>Jot a few words about your day, in English, Malay, Manglish or a mix, and the writer turns them into a diary entry you can edit before saving. It runs on your own phone or computer inside the browser, using its graphics chip, so your notes are never sent to any AI company and there is no cost. You download the model once (about 0.3 to 1.7 GB). It needs a browser with WebGPU; on other devices you can still write yourself.</p></details>
     <details><summary>Can anyone sign up?</summary><p>Not at the moment. This journal is private to one family, and only they can sign in. Anyone can open the demo to try every feature with sample data.</p></details>
     <details><summary>How are visitors counted?</summary><p>Each phone or computer that opens this page is counted once, under the country its time zone points to. No location, IP address or personal detail is looked up or saved, only a number per country.</p></details>
     <details><summary>Is anything I do in the demo saved?</summary><p>No. The demo uses made-up sample data kept only in your browser tab. Nothing is sent to a server, and it is all gone when you close the tab.</p></details>
@@ -366,6 +384,7 @@ try {
     <section class="panel mealday" id="mealDay" aria-label="Meals logged"></section>
     <p class="note">Calories, carbs, protein and fat come from the numbers you type for each food, so they're as good as those numbers. The range comes from your BMI and an estimate of what you burn. Use them as a guide, not an exact count.</p>
   </div>
+  <div class="view diary" id="diary" hidden aria-label="Dearly, your diary"></div>
   <div class="view" id="mealsets" hidden>
     <div class="fdtop"><button type="button" id="setsBack">← Back</button></div>
     <section class="panel mlib" id="mealLib" aria-label="Meal sets and foods"></section>
