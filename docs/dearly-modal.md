@@ -1,8 +1,8 @@
 # Dearly's cloud writer on Modal (free)
 
 For phones whose graphics chip can't run the on-phone writer, like the Snapdragon 8 Gen 3. A small server on
-[Modal](https://modal.com) runs Qwen2.5-7B-Instruct on an L4 GPU. That's a bigger model than any phone can hold, so it
-writes better Malay and Manglish. Nothing needs downloading on the phone.
+[Modal](https://modal.com) runs Qwen2.5 on a GPU: by default Qwen2.5-3B on a T4, Modal's smallest GPU. That's about 6× the
+phone's Small model, so it writes better Malay and Manglish. Nothing needs downloading on the phone.
 
 ## What it costs: $0
 
@@ -12,6 +12,15 @@ writes better Malay and Manglish. Nothing needs downloading on the phone.
   free $30.
 - **Set Modal's spending limit to $0** (step 2). Then if the free credit ever runs out, the cloud writer just pauses
   until next month. You are never charged.
+
+## T4 or L4?
+
+- **T4 + Qwen2.5-3B (the default).** This may work without a card on file. Try it first.
+- **L4 + Qwen2.5-7B.** Better writing, but Modal says "Please add a payment method to use L4 GPU functions". With a
+  card added and the spending limit at $0, it still runs on the free monthly credit. To switch, edit `GPU` and `MODEL`
+  at the top of `modal/dearly_writer.py`, then run steps 4 and 5 again.
+- If the T4 also asks for a payment method, Modal needs a card for any GPU. Your choices are then to add one (free
+  credit, $0 limit) or to use OpenRouter's free models instead.
 
 ## Set it up (once, on a computer, about 15 minutes)
 
@@ -28,7 +37,7 @@ writes better Malay and Manglish. Nothing needs downloading on the phone.
    modal setup
    ```
 
-4. **Put the model in Modal's storage** (one time, ~15 GB, a few minutes, uses a little free credit):
+4. **Put the model in Modal's storage** (one time, ~6 GB for 3B or ~15 GB for 7B, a few minutes, uses a little free credit):
 
    ```powershell
    modal run modal/dearly_writer.py::download
@@ -59,8 +68,7 @@ writes better Malay and Manglish. Nothing needs downloading on the phone.
 
 ## Changing things
 
-- **Model:** `MODEL` at the top of `modal/dearly_writer.py` (for example `Qwen/Qwen2.5-3B-Instruct`, which is cheaper and
-  faster to wake). Run step 4 again, then step 5.
+- **GPU and model:** `GPU` and `MODEL` at the top of `modal/dearly_writer.py`. Run step 4 again, then step 5.
 - **Demo limits:** `DEMO_PER_VISITOR`, `DEMO_PER_DAY`.
 - **Wake-up:** the GPU sleeps after `SCALEDOWN` seconds (180). The first write after that takes about 20–60 s while it
   starts. A longer `SCALEDOWN` keeps it awake longer, which uses more credit.

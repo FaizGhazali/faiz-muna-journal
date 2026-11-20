@@ -4,7 +4,7 @@ Two parts, so strangers can't run up the GPU bill:
   * `web`     a small CPU front door (FastAPI). Family writes (/write) need the family's Firebase sign-in. Demo writes
               (/demo) need no sign-in but take only short notes, build the prompt here (so it can't be used as a free
               chatbot) and are capped per visitor and per day for everyone together. Anything refused never wakes the GPU.
-  * `Writer`  an L4 GPU that runs Qwen2.5-7B-Instruct and streams the entry back. It sleeps after SCALEDOWN seconds idle.
+  * `Writer`  a GPU (T4 by default) that runs Qwen2.5 and streams the entry back. It sleeps after SCALEDOWN seconds idle.
 
 Privacy: the app builds the prompt (notes, About you, style) and sends it here. Nothing is stored, and only counts are
 logged (never the text). The model weights live in a Modal Volume so they download once.
@@ -22,7 +22,12 @@ import time
 
 import modal
 
-MODEL = os.environ.get("DEARLY_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+# Which GPU and model. Edit these two lines to switch, then run `download` and `deploy` again.
+#   "T4" + Qwen2.5-3B-Instruct: Modal's smallest GPU (16 GB). Try this first: may work without a card on file.
+#   "L4" + Qwen2.5-7B-Instruct: better Malay. Modal asks for a payment method for L4, though the free monthly
+#                               credit still covers it (keep the spending limit at $0).
+GPU = "T4"
+MODEL = "Qwen/Qwen2.5-3B-Instruct"
 FIREBASE_PROJECT = "faiz-muna-journal-c43ab"
 FAMILY_UID = "wYR0YCfeWmVz6CvPeoqTViI8NRc2"  # the same single account firestore.rules allows
 ORIGINS = [
@@ -99,7 +104,7 @@ def download():
     print("Model ready in the dearly-models volume.")
 
 
-@app.cls(image=gpu_image, gpu="L4", volumes={"/models": models}, scaledown_window=SCALEDOWN, timeout=600, max_containers=1)
+@app.cls(image=gpu_image, gpu=GPU, volumes={"/models": models}, scaledown_window=SCALEDOWN, timeout=600, max_containers=1)
 class Writer:
     @modal.enter()
     def load(self):
@@ -107,7 +112,8 @@ class Writer:
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self.tok = AutoTokenizer.from_pretrained(MODEL)
-        self.model = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype=torch.bfloat16, device_map="cuda")
+        dtype = torch.float16 if GPU == "T4" else torch.bfloat16  # T4 has no fast bf16
+        self.model = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype=dtype, device_map="cuda")
         self.model.eval()
 
     @modal.method()
