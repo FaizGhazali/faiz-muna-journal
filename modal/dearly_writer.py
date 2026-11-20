@@ -4,7 +4,8 @@ Two parts, so strangers can't run up the GPU bill:
   * `web`     a small CPU front door (FastAPI). Family writes (/write) need the family's Firebase sign-in. Demo writes
               (/demo) need no sign-in but take only short notes, build the prompt here (so it can't be used as a free
               chatbot) and are capped per visitor and per day for everyone together. Anything refused never wakes the GPU.
-  * `Writer`  a GPU (T4 by default) that runs Qwen2.5 and streams the entry back. It sleeps after SCALEDOWN seconds idle.
+  * `Writer`  runs Qwen2.5 and streams the entry back: on CPU by default (llama.cpp, no card needed on Modal), or on
+              a GPU if GPU is set. It sleeps after SCALEDOWN seconds idle.
 
 Privacy: the app builds the prompt (notes, About you, style) and sends it here. Nothing is stored, and only counts are
 logged (never the text). The model weights live in a Modal Volume so they download once.
@@ -12,7 +13,7 @@ logged (never the text). The model weights live in a Modal Volume so they downlo
 Setup (once, on a computer):  see docs/dearly-modal.md
     pip install modal
     modal setup                                   # sign in to your Modal account
-    modal run modal/dearly_writer.py::download    # puts the model in the volume (~15 GB, a few minutes)
+    modal run modal/dearly_writer.py::download    # puts the model in the volume (~2 GB on CPU, a few minutes)
     modal deploy modal/dearly_writer.py           # prints the address to paste into Dearly
 """
 import json
@@ -22,12 +23,16 @@ import time
 
 import modal
 
-# Which GPU and model. Edit these two lines to switch, then run `download` and `deploy` again.
-#   "T4" + Qwen2.5-3B-Instruct: Modal's smallest GPU (16 GB). Try this first: may work without a card on file.
-#   "L4" + Qwen2.5-7B-Instruct: better Malay. Modal asks for a payment method for L4, though the free monthly
-#                               credit still covers it (keep the spending limit at $0).
-GPU = "T4"
-MODEL = "Qwen/Qwen2.5-3B-Instruct"
+# Where it runs. Edit these lines to switch, then run `download` and `deploy` again.
+#   GPU = ""   (default) CPU only, with llama.cpp and a 4-bit Qwen2.5-3B (GGUF, ~2 GB). Needs NO card on file.
+#              Slower: about 30-60 s per entry, streamed as it writes.
+#   GPU = "T4" + MODEL "Qwen/Qwen2.5-3B-Instruct", or "L4" + "Qwen/Qwen2.5-7B-Instruct" (better Malay): faster, but
+#              Modal asks for a payment method for any GPU. The free monthly credit still covers it (spending limit $0).
+GPU = ""
+MODEL = "Qwen/Qwen2.5-3B-Instruct"  # used when GPU is set
+GGUF_REPO = "Qwen/Qwen2.5-3B-Instruct-GGUF"  # used on CPU ("Qwen/Qwen2.5-1.5B-Instruct-GGUF" is ~2x faster, plainer)
+GGUF_FILE = "qwen2.5-3b-instruct-q4_k_m.gguf"
+CPU_CORES = 8  # physical cores on CPU mode; more = faster writing, a little more credit per write
 FIREBASE_PROJECT = "faiz-muna-journal-c43ab"
 FAMILY_UID = "wYR0YCfeWmVz6CvPeoqTViI8NRc2"  # the same single account firestore.rules allows
 ORIGINS = [
@@ -36,11 +41,11 @@ ORIGINS = [
     "http://localhost:5000",
     "http://localhost:5057",
 ]
-SCALEDOWN = 180  # seconds the GPU stays awake after the last write; the next write within this is instant
+SCALEDOWN = 120  # seconds the writer stays awake after the last write; the next write within this is instant
 MAX_CHARS = 16000  # whole prompt; Dearly's prompts are ~3-6k
 PER_HOUR = 40  # family writes per hour, a safety cap for two people
 DEMO_PER_VISITOR = 3  # demo writes per visitor (IP) per day
-DEMO_PER_DAY = 25  # demo writes per day for all visitors together: at most ~$8 a month of the $30 free credit
+DEMO_PER_DAY = 20  # demo writes per day for all visitors together: roughly $10-15 a month at most of the $30 free credit
 DEMO_NOTES_MAX = 600  # characters of notes a demo visitor can send
 
 # Counters that survive the front door going to sleep.
@@ -87,6 +92,14 @@ gpu_image = (
     )
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": "/models"})
 )
+# llama.cpp built for any x86 CPU with AVX2 (not just the build machine), so it runs wherever Modal places it.
+cpu_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("build-essential", "cmake")
+    .env({"CMAKE_ARGS": "-DGGML_NATIVE=OFF", "HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": "/models"})
+    .pip_install("llama-cpp-python==0.3.2", "huggingface_hub[hf_transfer]==0.26.5")
+)
+writer_image = gpu_image if GPU else cpu_image
 web_image = modal.Image.debian_slim(python_version="3.11").pip_install(
     "fastapi[standard]==0.115.6", "google-auth==2.37.0", "requests==2.32.3"
 )
@@ -94,20 +107,34 @@ models = modal.Volume.from_name("dearly-models", create_if_missing=True)
 app = modal.App("dearly-writer")
 
 
-@app.function(image=gpu_image, volumes={"/models": models}, timeout=3600)
+@app.function(image=writer_image, volumes={"/models": models}, timeout=3600)
 def download():
-    """Fetch the model into the volume once, so the GPU never downloads it at write time."""
-    from huggingface_hub import snapshot_download
+    """Fetch the model into the volume once, so the writer never downloads it at write time."""
+    from huggingface_hub import hf_hub_download, snapshot_download
 
-    snapshot_download(MODEL)
+    if GPU:
+        snapshot_download(MODEL)
+    else:
+        hf_hub_download(GGUF_REPO, GGUF_FILE)
     models.commit()
     print("Model ready in the dearly-models volume.")
 
 
-@app.cls(image=gpu_image, gpu=GPU, volumes={"/models": models}, scaledown_window=SCALEDOWN, timeout=600, max_containers=1)
+# CPU mode asks for cores and memory instead of a GPU (no card needed on Modal for that).
+hardware = dict(gpu=GPU) if GPU else dict(cpu=float(CPU_CORES), memory=6144)
+
+
+@app.cls(image=writer_image, volumes={"/models": models}, scaledown_window=SCALEDOWN, timeout=600, max_containers=1, **hardware)
 class Writer:
     @modal.enter()
     def load(self):
+        if not GPU:
+            from huggingface_hub import hf_hub_download
+            from llama_cpp import Llama
+
+            path = hf_hub_download(GGUF_REPO, GGUF_FILE)  # already in the volume, so this only finds it
+            self.llm = Llama(model_path=path, n_ctx=8192, n_threads=CPU_CORES, n_batch=512, verbose=False)
+            return
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -123,6 +150,16 @@ class Writer:
     @modal.method()
     def generate(self, messages: list):
         """Stream the entry back piece by piece."""
+        if not GPU:
+            n = 0
+            for chunk in self.llm.create_chat_completion(messages=messages, stream=True, max_tokens=600, temperature=0.3,
+                                                         top_p=0.85, repeat_penalty=1.05):
+                piece = chunk["choices"][0]["delta"].get("content") or ""
+                n += len(piece)
+                if piece:
+                    yield piece
+            print(f"wrote {n} chars")  # counts only, never the text
+            return
         from transformers import TextIteratorStreamer
 
         ids = self.tok.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt").to("cuda")
