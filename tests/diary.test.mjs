@@ -118,19 +118,32 @@ test("langOf tells English, Malay and mixed", () => {
   assert.equal(noteLang("I was so tired after the meeting"), "en");
   assert.equal(noteLang("reach office late already lah"), "manglish");
   const user = buildMessages({ notes: "went mamak with friends\ntadi aku mezmerize do, macam star align" }).at(-1).content;
-  assert.match(user, /- \(English\) went mamak with friends\n- \(Malay\) tadi aku mezmerize do/);
+  assert.match(user, /1\. \(English\) went mamak with friends\n2\. \(Malay\) tadi aku mezmerize do/);
   assert.match(buildMessages({ notes: "tadi aku mezmerize do, macam star align" })[0].content, /English words used inside a Malay note/);
   assert.equal(cleanOutput("Dear Diary,\n\n(Malay) Tadi aku mezmerize."), "Dear Diary,\n\nTadi aku mezmerize.");
 });
 
-test("buildMessages keeps notes as bullet lines and adds style only when given", () => {
+test("numbered output: each sentence checked against its own note, then joined into paragraphs", () => {
+  const notes = "went to the offise erly\nmeeting with boss abt the new projek\nlunch wif colleagues\nhari ni hujan";
+  const out = "1. I went to the office early today.\n2. Then I had a meeting with my boss about the new project.\n3. Pastu aku pergi bercuti ke Langkawi dengan keluarga.\n4. Hari ni hujan.";
+  const c = cleanOutput(out, notes);
+  assert.ok(c.startsWith("Dear Diary,\n\nI went to the office early today. Then I had a meeting"), c);
+  assert.ok(!c.includes("Langkawi") && c.includes("Lunch with colleagues."), c); // strayed sentence -> the note itself
+  // A missing number gets its note; nothing is dropped.
+  assert.match(cleanOutput("1. I went to the office early today.", notes), /Hari ni hujan\./);
+  // While streaming, the half-written last line is shown as it is and missing lines aren't filled in yet.
+  const live = cleanOutput("1. I went to the office early today.\n2. Then I had a mee", notes, false);
+  assert.ok(live.endsWith("Then I had a mee") && !live.includes("hujan"), live);
+});
+
+test("buildMessages numbers the notes and adds style only when given", () => {
   const notes = "Went mamak with friends\n- Discussed career\nWorried about money";
   const msgs = buildMessages({ notes }), sys = msgs[0], user = msgs.at(-1);
   assert.equal(user.role, "user");
   assert.equal(sys.role, "system");
   assert.match(sys.content, /Never add events/);
   assert.doesNotMatch(sys.content, /How this person writes/);
-  assert.match(user.content, /- Went mamak with friends\n- Discussed career\n- Worried about money/);
+  assert.match(user.content, /1\. Went mamak with friends\n2\. Discussed career\n3\. Worried about money/);
   const [sys2] = buildMessages({ notes, profile: styleProfile(mine), samples: ["lepak mamak dengan geng."] });
   assert.match(sys2.content, /How this person writes/);
   assert.match(sys2.content, /lepak mamak dengan geng/);

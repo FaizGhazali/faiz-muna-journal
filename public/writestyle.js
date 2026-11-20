@@ -111,7 +111,7 @@ const MS_GRAMMAR = new Set([...MS_FUNC, "tadi", "dapat", "pastu", "lepastu", "ti
 export const SHORT_FORMS = { dgn: "dengan", ckp: "cakap", x: "tak", tk: "tak", sbb: "sebab", tgk: "tengok", nk: "nak", dh: "dah", blh: "boleh",
   utk: "untuk", mcm: "macam", yg: "yang", kt: "kat", jgk: "juga", jgak: "juga", pon: "pun", tiber: "tiba-tiba", tibe: "tiba-tiba", bg: "bagi",
   tp: "tapi", tpi: "tapi", sy: "saya", org: "orang", lps: "lepas", sgt: "sangat", bkn: "bukan", byk: "banyak", skrg: "sekarang", ckit: "sikit",
-  sket: "sikit", jln: "jalan", mkn: "makan", blk: "balik", msk: "masuk", klu: "kalau", kalo: "kalau", camne: "macam mana", mlm: "malam",
+  sket: "sikit", jln: "jalan", mkn: "makan", blk: "balik", msk: "masuk", klu: "kalau", kalo: "kalau", camne: "macam mana", mlm: "malam", xde: "takde", xder: "takde", xda: "takde", xnak: "tak nak", xleh: "tak boleh",
   tdur: "tidur", tdo: "tidur", blm: "belum", smpai: "sampai", sampe: "sampai", krja: "kerja", kje: "kerja", rmh: "rumah", ptg: "petang",
   bru: "baru", lg: "lagi", lgi: "lagi", dlm: "dalam", sma: "sama", smua: "semua", mmg: "memang", trus: "terus", pkai: "pakai", bli: "beli",
   u: "you", ur: "your", b4: "before", pls: "please", tmr: "tomorrow", tmrw: "tomorrow", bcs: "because", bcoz: "because", coz: "because",
@@ -171,19 +171,26 @@ export function targetWords(notes, profile) {
   return Math.round(profile ? Math.min(260, Math.max(40, base * 0.6 + profile.avgWords * 0.4)) : base);
 }
 
-// One worked example per language: small models copy the example far more than they follow rules, so an all-Malay
-// day gets a Malay example (a mixed one made Qwen2.5-3B drift into English or formal Malay). Each shows typos fixed,
-// notes joined into diary sentences, and nothing added: no new events, feelings or verdicts.
+// One sentence per note, numbered. Tested on Qwen2.5-3B with free-form entries: it sometimes translated English words
+// inside Malay ("just boring" -> "hanya bosan") or wrote nonsense ("aku find diri sendiri"). Numbered, it can't merge,
+// skip or wander, and the app checks each sentence against its own note (cleanOutput puts the note back if one goes wrong).
+// One worked example per language, because the model copies the example: a Malay-only example turned English notes
+// into Indonesian-style Malay, and it twisted "Harini" into "Harimau", so the Malay example says "Hari ni".
 const EXAMPLES = {
-  ms: { notes: "- gym lepas kerja\n- leg day, penat gila, esok confirm tak boleh jalam\n- dinner roti canai je",
-    entry: "Harini lepas kerja aku terus pergi gym. Leg day, memang penat gila. Esok confirm tak boleh jalan.\n\nPastu dinner aku makan roti canai je." },
-  en: { notes: "- gym aftr wrk, legs so sor\n- dinner was just roti canai, so cheap",
-    entry: "After work today I went straight to the gym, and now my legs are so sore.\n\nThen dinner was just roti canai, so cheap." },
-  manglish: { notes: "- gym aftr work, leg day, tmr sure cannot walk one\n- dinner roti canai only, so cheap one",
-    entry: "After work today I went to the gym. Leg day lah, tomorrow sure cannot walk one.\n\nThen dinner roti canai only, so cheap one." },
-  mixed: { notes: "- (English) gym aftr wrk, legs so sor\n- (Malay) leg day, penat gila, esok confirm tak boleh jalam\n- (Manglish) dinner roti canai only, so cheap one",
-    entry: "After work today I went straight to the gym, and now my legs are so sore.\n\nHarini leg day, memang penat gila. Esok confirm tak boleh jalan.\n\nThen dinner roti canai only, so cheap one." },
+  ms: { notes: ["gym lepas kerja", "leg day, penat gila", "esok confirm tak boleh jalam", "dinner roti canai je, maybe tapau esok"],
+    out: ["Hari ni lepas kerja aku terus pergi gym.", "Leg day, memang penat gila.", "Esok confirm tak boleh jalan.", "Pastu dinner aku makan roti canai je, maybe esok tapau."] },
+  en: { notes: ["gym aftr wrk", "legs so sor", "dinner was just roti canai, so cheap"],
+    out: ["After work today I went straight to the gym.", "Now my legs are so sore.", "Then dinner was just roti canai, so cheap."] },
+  manglish: { notes: ["gym aftr work", "leg day, tmr sure cannot walk one", "dinner roti canai only, so cheap one"],
+    out: ["After work today I went to the gym.", "Leg day lah, tomorrow sure cannot walk one.", "Then dinner roti canai only, so cheap one."] },
+  mixed: { notes: ["(English) gym aftr wrk", "(Malay) leg day, penat gila, esok confirm tak boleh jalam", "(Manglish) dinner roti canai only, so cheap one"],
+    out: ["After work today I went straight to the gym.", "Leg day, memang penat gila, esok confirm tak boleh jalan.", "Then dinner roti canai only, so cheap one."] },
 };
+const numbered = (xs) => xs.map((x, i) => `${i + 1}. ${x}`).join("\n");
+// The notes as the model sees them: one per line, short forms spelled out, bullets and trailing commas gone.
+export function noteLines(notes) {
+  return expandShort(notes).split(/\n+/).map((l) => l.trim().replace(/^[-*•]\s*/, "").replace(/[\s,;]+$/, "")).filter(Boolean).slice(0, 30);
+}
 
 // The chat messages for the model. Nothing here leaves the device: the model runs in the browser.
 export const ABOUT_MAX = 600;
@@ -191,7 +198,7 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
   const lang = langOf(notes), target = targetWords(notes, profile);
   // Language always follows the notes, note by note: what was written in English stays English, Malay stays Malay.
   // The style profile never changes the language (its language line is left out of the prompt below).
-  const malayRule = "Malay notes become casual Malay sentences, the way people text, not formal Malay: \"aku\" (not \"saya\" unless the notes say saya), \"lunch\", \"harini\", not \"makan siang\" or \"hari ini\". English words used inside a Malay note (like \"mezmerize\", \"star align\", \"meeting\") stay those same English words: only fix their spelling (mezmerize → mesmerised), never swap them for a Malay word.";
+  const malayRule = "Malay notes become casual Malay sentences, the way people text, not formal Malay: \"aku\" (not \"saya\" unless the notes say saya), \"lunch\", \"hari ni\", not \"makan siang\" or \"hari ini\". English words used inside a Malay note (like \"mezmerize\", \"star align\", \"meeting\") stay those same English words: only fix their spelling (mezmerize → mesmerised), never swap them for a Malay word.";
   const manglishRule = "Manglish notes stay Manglish, the way Malaysians talk: keep particles like lah, lor, leh, meh, liao, words like makan, tapau, jom, alamak, and grammar like \"got\", \"already\", \"cannot\", \"one\" at the end. Fix the spelling, but never turn it into standard English.";
   const langRule = lang === "ms" ? `The notes are in Malay, so write the whole entry in Malay. ${malayRule} Do not turn it into English.`
     : lang === "manglish" ? `The notes are in Manglish (Malaysian English), so write the entry in Manglish. ${manglishRule} Do not turn it into Malay.`
@@ -202,31 +209,27 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
     : lang === "manglish" ? "The notes are Manglish: keep it Manglish (lah, already, cannot), never correct it."
     : lang === "ms" ? "The notes are Malay: write in casual Malay; English words inside stay English." : "The notes are English: write in English.";
     const fix = "Correct every spelling mistake and fix the grammar (offise → office, gud → good, tdur → tidur). Keep casual words and slang (gila, do, lah, best, jom): corrected, not formal.";
-  // Diary voice: full sentences joined up, with small personal touches (lepas tu, honestly, memang, rasa macam), but only
-  // from what the notes say. Tested on Qwen2.5-3B: it adds wording, not events, as long as the facts rule stays.
-  const voice = "Write it like a real diary, not a list: full sentences with \"I\"/\"aku\", joined with linking words (today, then, after that, harini, lepas tu, pastu, tapi, sebab). The personal touch comes from how it's told, not from new feelings or opinions: never add a feeling, taste or verdict (good, lame, sedap, takut) a note didn't give. Every sentence must make sense; no filler phrases.";
+  // Diary voice, one sentence per note: a full sentence with "I"/"aku" and a linking word where it fits, but only what
+  // that note says. The app joins the sentences into paragraphs.
+  const voice = "Each note becomes ONE complete diary sentence, as them (\"I\"/\"aku\"). You may start it with a small linking word (today, then, after that, hari ni, pastu, lepas tu, tapi, sebab tu) and add the small words a full sentence needs.";
+  const format = "Reply with the same numbers, one sentence per line, and nothing else. Never merge, split, skip or add a number.";
+  const facts = "Each sentence says only what its own note says. Never add events, people, places, times, food, feelings, tastes or opinions.";
   const rules = compact ? [
-    `Write this person's diary entry from their notes, as them ("I"/"aku"). You are not chatting.`,
-    voice,
-    "Same order as the notes. Never add events, people, places, times, food or feelings the notes don't say.",
+    `You rewrite this person's numbered notes as their diary. You are not chatting.`,
+    voice, format, facts,
     `Keep their words and slang. Never translate. ${shortLang}`,
     fix,
     `No drama, no lessons, no questions, never talk to "you".${profile?.emoji ? "" : " No emojis."}`,
-    `Start with "${OPENING}" then short paragraphs, about ${target} words. Reply with the entry only.`,
   ] : [
-    `You turn someone's rough notes into their own diary entry. You are not chatting with them. Write as them, in the first person ("I"/"aku"/"saya", whichever the notes use).`,
-    voice,
-    "Keep the notes' order. Add words, not facts: every event, person, place, time, food and feeling must come from a note.",
-    "Never add events, people, places, times, food, reasons, results or feelings that the notes do not mention.",
-    "Only say how they felt where a note says it, in the note's words. Do not call the day good, bad, chaotic, stressful or anything else unless a note does.",
+    `You rewrite someone's numbered notes as their own diary. You are not chatting with them. Write as them, in the first person ("I"/"aku"/"saya", whichever the notes use).`,
+    voice, format, facts,
+    "Only say how they felt where a note says it, in the note's words.",
     "Keep their own words: slang, names and Malay words stay theirs. Never translate a word or explain it in brackets.",
     fix,
     langRule,
-    `Sound like a real person writing in a diary: plain and casual. No drama, no poetry, no life lessons, no wishes, no questions, no hashtags, and never talk to the reader ("you").`,
-    compact ? "" : `Avoid chatbot words such as: ${AI_WORDS.slice(0, 10).join(", ")}.`,
+    `Plain and casual, like a real person's diary. No drama, no poetry, no lessons, no wishes, no questions, no hashtags, and never talk to the reader ("you").`,
+    `Avoid chatbot words such as: ${AI_WORDS.slice(0, 10).join(", ")}.`,
     profile?.emoji ? "Emojis are fine if they fit." : "No emojis.",
-    `Start with "${OPENING}" on its own line, then ${target < 90 ? "one or two short paragraphs" : "two or three short paragraphs"}, about ${target} words in total.`,
-    "Reply with the diary entry only. No title, no notes, no explanation.",
   ];
   let style = "";
   if (profile) {
@@ -238,27 +241,57 @@ export function buildMessages({ notes, profile = null, samples = [], name = "", 
   // talk, what they call people). Background only: it never becomes something that happened today.
   const bio = String(about || "").trim().slice(0, compact ? 300 : ABOUT_MAX); // phones: shorter, for a lighter first step
   if (bio) style += `\n\nAbout the writer, in their own words. Use it only to sound like them and to know who people are (for example, use the name or nickname they use for someone a note mentions). Never add anything from here as something that happened today, and never mention a person, place or habit from here unless a note does:\n"""${bio}"""`;
-  const lines = expandShort(notes).split(/\n+/).map((l) => l.trim().replace(/^[-*•]\s*/, "")).filter(Boolean);
-  // One worked example: small models copy what they see far better than they follow rules. It shows each note kept
-  // in its own language (English, Malay, Manglish), nothing added, no feelings that weren't written.
+  const lines = noteLines(notes);
   return [
     { role: "system", content: rules.filter(Boolean).map((x) => `- ${x}`).join("\n") + style },
-    { role: "user", content: `My notes for today:\n${EXAMPLES[lang].notes}\n\nWrite my diary entry.` },
-    { role: "assistant", content: `${OPENING}\n\n${EXAMPLES[lang].entry}` },
+    { role: "user", content: `My notes for today:\n${numbered(EXAMPLES[lang].notes)}` },
+    { role: "assistant", content: numbered(EXAMPLES[lang].out) },
     { role: "user", content: "That was only an example. Now do mine, using nothing from the example." },
     { role: "assistant", content: "Okay. Send your notes." },
-    { role: "user", content: `${name ? `My name is ${name}. ` : ""}My notes for today:\n${lines.map((l) => `- ${lang === "mixed" ? `(${LANG_NAME[noteLang(l)]}) ` : ""}${l}`).join("\n")}\n\nWrite my diary entry.` },
+    { role: "user", content: `${name ? `My name is ${name}. ` : ""}My notes for today:\n${numbered(lines.map((l) => `${lang === "mixed" ? `(${LANG_NAME[noteLang(l)]}) ` : ""}${l}`))}` },
   ];
 }
 
-// Tidy what the model wrote: drop chatter around it and make sure it opens with "Dear Diary," once.
-export function cleanOutput(text, notes = "") {
+// A note written as a plain sentence, for when the model's version of it can't be trusted.
+const asSentence = (s) => { const x = String(s).trim(); return x ? x[0].toUpperCase() + x.slice(1) + (/[.!?…]$/.test(x) ? "" : ".") : ""; };
+// A sentence that wandered from its note: two or more words the note never gave, much longer than the note, or in
+// another language (English notes turned Malay). Then the note itself goes in instead.
+export function strayed(note, s) {
+  if (!s || words(s) > words(note) * 2.5 + 8) return true;
+  if (unsupported(note, `${OPENING}\n\n${s}`).length >= 1) return true; // one is enough: "maybe" -> "mungkin" is one word
+  return words(note) >= 4 && noteLang(note) !== noteLang(s) && !(noteLang(note) !== "ms" && noteLang(s) !== "ms");
+}
+// "1. ...\n2. ..." -> paragraphs, each sentence checked against its own note. While streaming (done = false) the last
+// line may be half-written, so it's shown as it is and only checked once the next line starts or writing ends.
+function fromNumbered(t, notes, done) {
+  const ns = noteLines(notes), got = new Map(), order = [];
+  for (const line of t.split("\n")) {
+    const m = line.match(/^\s*(\d{1,2})[.)]\s*(.*)$/);
+    if (m && !got.has(+m[1])) { got.set(+m[1], m[2].trim()); order.push(+m[1]); }
+  }
+  const last = order[order.length - 1], out = [];
+  for (let i = 1; i <= ns.length; i++) {
+    const s = got.get(i), note = ns[i - 1];
+    if (s === undefined) { if (done) out.push(asSentence(note)); else break; continue; }
+    out.push(!done && i === last ? s : strayed(note, s) ? asSentence(note) : asSentence(s));
+  }
+  // Paragraphs of about three sentences.
+  const per = Math.ceil(out.length / Math.max(1, Math.round(out.length / 3)));
+  const paras = [];
+  for (let i = 0; i < out.length; i += per) paras.push(out.slice(i, i + per).join(" "));
+  return paras.join("\n\n");
+}
+
+// Tidy what the model wrote: drop chatter around it and make sure it opens with "Dear Diary," once. done = false while
+// it's still streaming.
+export function cleanOutput(text, notes = "", done = true) {
   let t = String(text || "").replace(/```[a-z]*\n?|```/gi, "").replace(/\r/g, "").trim();
   t = t.replace(/^(?:sure|okay|ok|here(?:'s| is)|berikut)[^\n]*:\s*\n+/i, "");
   t = t.replace(/^["“](.*)["”]$/s, "$1").trim();
   t = t.replace(/\n+(?:note|nota|\(note)[\s\S]*$/i, "").trim();
   t = t.replace(/^\s*\**\s*dear diary\s*,?\s*\**\s*,?\s*/i, "").trim();
   t = t.replace(/\((?:Malay|English|Manglish)\)\s*/g, ""); // language marks from the prompt never belong in the entry
+  if (notes && /^\s*\d{1,2}[.)]\s/m.test(t)) t = fromNumbered(t, notes, done);
   t = t.replace(/\n{3,}/g, "\n\n");
   // Small models like to gloss words "(tiredness)" and to end by talking to the reader. Neither belongs in a diary.
   const have = String(notes).toLowerCase();

@@ -485,7 +485,7 @@ async function writeInCloud(notes) {
   try {
     const out = await cloud.cloudWrite({ token: tok, messages, notes, signal: abort.signal }, (t) => {
       if (first && t.trim()) { first = false; aiState.note = ""; paintAi(); }
-      const c = cleanOutput(t, notes); if (c && page) page.value = c;
+      const c = cleanOutput(t, notes, false); if (c && page) page.value = c;
     });
     if (looksGarbled(out, notes)) throw new Error("jumbled");
     const clean = cleanOutput(out, notes);
@@ -606,7 +606,7 @@ async function writeForMe() {
     const out = await ai.write(messages, (t) => {
       if (garbled) return;
       if (looksGarbled(t, notes)) { garbled = true; sample = bodyText(t).slice(0, 120); abort.abort(); if (page) page.value = before; return; }
-      const c = cleanOutput(t, notes); if (c && page) page.value = c;
+      const c = cleanOutput(t, notes, false); if (c && page) page.value = c;
     }, abort.signal);
     if (garbled || looksGarbled(out, notes)) { sample ||= bodyText(out).slice(0, 120); throw new Error("garbled"); }
     return out;

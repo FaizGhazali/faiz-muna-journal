@@ -52,28 +52,42 @@ DEMO_NOTES_MAX = 600  # characters of notes a demo visitor can send
 limits = modal.Dict.from_name("dearly-limits", create_if_missing=True)
 
 # The demo's prompt lives here, not in the browser, so /demo can only ever write a diary entry from notes.
-DEMO_RULES = """- Write this person's diary entry from their notes, as them ("I"/"aku"). You are not chatting.
-- Write it like a real diary, not a list: full sentences with "I"/"aku", joined with linking words (today, then, harini, lepas tu, pastu, tapi, sebab), same order as the notes.
-- Add words, not facts. Never add events, people, places, times, food, feelings, tastes or verdicts the notes don't say. No filler phrases.
-- Keep their words and slang. Never translate. Each note stays in the language it was written in (English, Malay or Manglish). Malay stays casual ("aku", "harini", "lunch"), never formal. English words inside a Malay note stay those English words, only spelled right.
+# Same shape as the app's own prompt (public/writestyle.js): one numbered sentence per note, so the app can check
+# each sentence against its note. The app spells out short forms and sends the day's language.
+DEMO_RULES = """- You rewrite this person's numbered notes as their diary. You are not chatting. Write as them ("I"/"aku").
+- Each note becomes ONE complete diary sentence. You may start it with a small linking word (today, then, after that, hari ni, pastu, lepas tu, tapi, sebab tu) and add the small words a full sentence needs.
+- Reply with the same numbers, one sentence per line, and nothing else. Never merge, split, skip or add a number.
+- Each sentence says only what its own note says. Never add events, people, places, times, food, feelings, tastes or opinions.
+- Keep their words and slang. Never translate. Each note stays in its own language (English, Malay or Manglish). Malay stays casual ("aku", "hari ni", "lunch"), never formal. English words inside a Malay note stay those English words, only spelled right.
 - Correct every spelling mistake and fix the grammar (offise → office, gud → good, tdur → tidur). Keep casual words and slang (gila, do, lah, best, jom): corrected, not formal.
-- No drama, no lessons, no questions, never talk to "you". No emojis.
-- Start with "Dear Diary," then short paragraphs. Reply with the entry only. If the notes are not about someone's day, reply only: Dear Diary,"""
-# The app spells out short forms (ckp -> cakap) before sending, so the example only shows typos being fixed.
-EXAMPLE_NOTES = "- gym aftr wrk, legs so sor\n- leg day, penat gila, esok confirm tak boleh jalam\n- dinner roti canai only, so cheap one"
-EXAMPLE_ENTRY = "Dear Diary,\n\nAfter work today I went straight to the gym, and now my legs are so sore.\n\nHarini leg day, memang penat gila. Esok confirm tak boleh jalan.\n\nThen dinner roti canai only, so cheap one."
+- No drama, no lessons, no questions, never talk to "you". No emojis."""
+# One example per language: the model copies its example, so a Malay day needs a Malay one.
+EXAMPLES = {
+    "ms": (["gym lepas kerja", "leg day, penat gila", "esok confirm tak boleh jalam", "dinner roti canai je, maybe tapau esok"],
+           ["Hari ni lepas kerja aku terus pergi gym.", "Leg day, memang penat gila.", "Esok confirm tak boleh jalan.", "Pastu dinner aku makan roti canai je, maybe esok tapau."]),
+    "en": (["gym aftr wrk", "legs so sor", "dinner was just roti canai, so cheap"],
+           ["After work today I went straight to the gym.", "Now my legs are so sore.", "Then dinner was just roti canai, so cheap."]),
+    "manglish": (["gym aftr work", "leg day, tmr sure cannot walk one", "dinner roti canai only, so cheap one"],
+                 ["After work today I went to the gym.", "Leg day lah, tomorrow sure cannot walk one.", "Then dinner roti canai only, so cheap one."]),
+    "mixed": (["(English) gym aftr wrk", "(Malay) leg day, penat gila, esok confirm tak boleh jalam", "(Manglish) dinner roti canai only, so cheap one"],
+              ["After work today I went straight to the gym.", "Leg day, memang penat gila, esok confirm tak boleh jalan.", "Then dinner roti canai only, so cheap one."]),
+}
 
 
-def demo_messages(notes: str) -> list:
-    lines = [l.strip().lstrip("-*• ").strip() for l in notes.splitlines() if l.strip()][:12]
-    mine = "\n".join(f"- {l[:200]}" for l in lines)
+def numbered(xs: list) -> str:
+    return "\n".join(f"{i + 1}. {x}" for i, x in enumerate(xs))
+
+
+def demo_messages(notes: str, lang: str = "mixed") -> list:
+    lines = [l.strip().lstrip("-*• ").strip()[:200] for l in notes.splitlines() if l.strip()][:12]
+    ex_notes, ex_out = EXAMPLES.get(lang, EXAMPLES["mixed"])
     return [
         {"role": "system", "content": DEMO_RULES},
-        {"role": "user", "content": f"My notes for today:\n{EXAMPLE_NOTES}\n\nWrite my diary entry."},
-        {"role": "assistant", "content": EXAMPLE_ENTRY},
+        {"role": "user", "content": f"My notes for today:\n{numbered(ex_notes)}"},
+        {"role": "assistant", "content": numbered(ex_out)},
         {"role": "user", "content": "That was only an example. Now do mine, using nothing from the example."},
         {"role": "assistant", "content": "Okay. Send your notes."},
-        {"role": "user", "content": f"My notes for today:\n{mine}\n\nWrite my diary entry."},
+        {"role": "user", "content": f"My notes for today:\n{numbered(lines)}"},
     ]
 
 
@@ -260,7 +274,8 @@ def web():
         if not bump(f"demo:{day}:{visitor(request)}", DEMO_PER_VISITOR):
             raise HTTPException(429, "you've used today's demo writes")
         bump(f"demo:{day}", DEMO_PER_DAY)
-        return StreamingResponse(Writer().generate.remote_gen(demo_messages(notes)), media_type="text/plain; charset=utf-8",
+        lang = body.get("lang") if body.get("lang") in EXAMPLES else "mixed"
+        return StreamingResponse(Writer().generate.remote_gen(demo_messages(notes, lang)), media_type="text/plain; charset=utf-8",
                                  headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
     @api.post("/write")

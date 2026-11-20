@@ -3,7 +3,15 @@
 // Family writes send a sign-in token and the full prompt to /write. The demo has no sign-in: it sends only the notes to
 // /demo, which builds its own prompt and is capped per visitor and per day. Nothing is stored on the server.
 
-import { expandShort } from "./writestyle.js";
+import { noteLines, langOf, noteLang, LANG_NAME } from "./writestyle.js";
+
+// The demo's notes as the server's prompt wants them: one per line, short forms spelled out, each marked with its
+// language when the day mixes languages, plus the day's language so the server picks the matching example.
+export function demoBody(notes) {
+  const lang = langOf(notes), lines = noteLines(notes);
+  const text = lines.map((l) => (lang === "mixed" ? `(${LANG_NAME[noteLang(l)]}) ${l}` : l)).join("\n");
+  return { notes: text.slice(0, 600), lang };
+}
 
 // The address `modal deploy modal/dearly_writer.py` prints. Empty = the cloud writer is hidden.
 export const CLOUD_URL = "https://faizghazali21--dearly-writer-web.modal.run";
@@ -26,7 +34,7 @@ async function post(path, body, token, signal) {
 
 // Write, calling onText with everything so far. token = family sign-in; null = demo (notes only).
 export async function cloudWrite({ token, messages, notes, signal }, onText) {
-  const r = token ? await post("/write", { messages }, token, signal) : await post("/demo", { notes: expandShort(notes).slice(0, 600) }, null, signal);
+  const r = token ? await post("/write", { messages }, token, signal) : await post("/demo", demoBody(notes), null, signal);
   const reader = r.body.getReader(), dec = new TextDecoder();
   let out = "";
   for (;;) {
