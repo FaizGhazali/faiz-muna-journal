@@ -6,7 +6,7 @@
 import { doc, setDoc } from "./fs.js";
 import { MOODS, isMood, quoteFor, moodMap, dayMoods, lastSeven, periods, boosters, yearGrid, moodMix, VIEWS, MIN_DAYS } from "./mood.js";
 import { reflections, pickReflection } from "./reflect.js";
-import { titleOf, preview } from "./diary.js";
+import { titleOf, bodyText, prettyDate, words } from "./diary.js";
 import { iso, parse, addDays } from "./suggest.js";
 
 const $ = (id) => document.getElementById(id);
@@ -19,6 +19,9 @@ let db, people, entries, diary, me, habitFacts, commit;
 let pickDay = null, year = null, fromApp = false, lastPid = null, pendingDay = null, shownDay = null, skip = 0;
 // Mood mix card inside Year in pixels: closed until a day is tapped. First tap → that month, same day again → its week.
 let mixOpen = false, view = "month", anchor = null;
+// The day's diary list shows FEW entries until "Show all" is tapped; tapping one opens it in a pop-up (readEntry).
+const FEW = 3;
+let allPages = false;
 const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // A small face: colour and mouth by mood, an outline when not rated.
@@ -47,14 +50,16 @@ export function initMood(opts) {
   });
   // Dashboard reflection: "Another" shows the next one; "See the day" opens its flashcard on the Mood page.
   $("reflectCard").addEventListener("click", (ev) => {
-    const b = ev.target.closest("[data-another], [data-day]");
+    const b = ev.target.closest("[data-another], [data-day], [data-read]");
     if (!b) return;
     if ("another" in b.dataset) { skip++; renderReflect(); return; }
+    if (b.dataset.read) { readEntry(b.dataset.read); return; }
     openDay(b.dataset.day);
   });
   $("mdReflect").addEventListener("click", (ev) => {
-    const b = ev.target.closest("[data-day]");
+    const b = ev.target.closest("[data-day], [data-read]");
     if (!b) return;
+    if (b.dataset.read) { readEntry(b.dataset.read); return; }
     pickDay = b.dataset.day; year = parse(pickDay).getFullYear();
     renderPage();
     $("mdDay").scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "center" });
@@ -65,8 +70,10 @@ export function initMood(opts) {
   });
   $("mdBack").addEventListener("click", () => { if (fromApp) { fromApp = false; history.back(); } else location.hash = ""; });
   $("mdYear").addEventListener("click", (ev) => {
-    const b = ev.target.closest("[data-pick], [data-year], [data-rate], [data-step], [data-view], [data-go], [data-close]");
+    const b = ev.target.closest("[data-pick], [data-year], [data-rate], [data-step], [data-view], [data-go], [data-close], [data-read], [data-allpages]");
     if (!b) return;
+    if (b.dataset.read) { readEntry(b.dataset.read); return; }
+    if ("allpages" in b.dataset) { allPages = !allPages; renderDay(me(), moods(), today()); return; }
     if (b.dataset.pick) {
       const d = b.dataset.pick, again = mixOpen && d === pickDay;
       if (!again) view = "month";
@@ -122,7 +129,7 @@ function madeOf(m) {
 const cards = () => reflections({ map: moods(), diary: mine(), facts: dayFacts(me()), today: today() });
 const ICON = { comfort: "🤍", past: "📖", bright: "☀️", trend: "📈", pattern: "🔎", streak: "✍️", month: "🗓️", empty: "🌱" };
 function reflectHtml(c, dash) {
-  const go = [c.entry ? `<a class="rgo" href="#diary/read/${esc(c.entry)}">Read entry</a>` : "", c.date ? `<button type="button" class="rgo" data-day="${esc(c.date)}">See the day</button>` : ""].join("");
+  const go = [c.entry ? `<button type="button" class="rgo" data-read="${esc(c.entry)}">Read entry</button>` : "", c.date ? `<button type="button" class="rgo" data-day="${esc(c.date)}">See the day</button>` : ""].join("");
   const h = dash ? "h3" : "h4";
   return `<article class="rcard" style="--rc:${isMood(c.mood) ? `var(--m${c.mood})` : "var(--line)"}">
     <div class="rhead"><span class="ricon" aria-hidden="true">${ICON[c.kind] || "💭"}</span><${h} class="rtitle">${esc(c.title)}</${h}>${isMood(c.mood) ? face(c.mood, 22) : ""}</div>
@@ -234,12 +241,17 @@ function renderDay(pid, map, t) {
   if (f.habitsDue) did.push(["✅", `${f.habitsDone} of ${f.habitsDue} habits`]);
   if (f.move) did.push(["➡️", "Did a Next Move"]);
   if (e.note) did.push(["📝", e.note]);
+  if (shownDay !== d) allPages = false;
   const box = $("mdDay");
   box.innerHTML = `<div class="flash">
       <div class="mdayhead"><button type="button" class="mini" data-step="-1" aria-label="Day before">‹</button>
         <div class="mnow">${face(pv, 40)}<div><strong>${esc(fmt(d, { weekday: "long", day: "numeric", month: "long" }))}</strong><small>${pv ? MOODS[pv].label : "Not rated"}${madeOf(m) ? ` · ${esc(madeOf(m))}` : ""}</small></div></div>
         <button type="button" class="mini" data-step="1"${d < t ? "" : " disabled"} aria-label="Day after">›</button></div>
-      ${pages.length ? `<div class="fpages">${pages.map((x) => `<a class="fpage" href="#diary/read/${esc(x.id)}">${isMood(x.mood) ? face(x.mood, 22) : `<span class="fdot" aria-hidden="true">📔</span>`}<span><b>${esc(titleOf(x))}</b><small>${esc(preview(x, 140))}</small></span></a>`).join("")}</div>` : ""}
+      ${pages.length ? `<div class="fpages">
+        ${pages.length > 1 ? `<p class="fphead">📔 ${pages.length} diary entries</p>` : ""}
+        ${(allPages ? pages : pages.slice(0, FEW)).map((x) => `<button type="button" class="fpage" data-read="${esc(x.id)}">${isMood(x.mood) ? face(x.mood, 22) : `<span class="fdot" aria-hidden="true">📔</span>`}<b>${esc(titleOf(x))}</b><span class="fgo" aria-hidden="true">›</span></button>`).join("")}
+        ${pages.length > FEW ? `<button type="button" class="linkbtn fmore" data-allpages aria-expanded="${allPages}">${allPages ? "Show fewer" : `Show all ${pages.length}`}</button>` : ""}
+      </div>` : ""}
       ${did.length ? `<ul class="fdid">${did.map(([i, s]) => `<li><span aria-hidden="true">${i}</span>${esc(s)}</li>`).join("")}</ul>` : ""}
       ${!pages.length && !did.length ? `<p class="note">Nothing written or logged this day.</p>` : ""}
       <p class="mask">${m?.rating ? "Your rating for the day" : "Rate this day"}</p>${faces(m?.rating ?? null, "data-rate")}
@@ -305,4 +317,47 @@ function count(el, to, unit = "") {
     if (k < 1) el._raf = requestAnimationFrame(step);
   };
   el._raf = requestAnimationFrame(step);
+}
+
+// A diary entry in a pop-up over the Mood page, so you stay on the day. ‹ › step through that day's entries;
+// "Open in Dearly" goes to the full page (photos, edit, older / newer).
+let reading = null;
+function readEntry(id) {
+  let dlg = $("dayReader");
+  if (!dlg) {
+    dlg = document.createElement("dialog");
+    dlg.id = "dayReader"; dlg.className = "gsheet rdpop"; dlg.setAttribute("aria-labelledby", "rdDate");
+    document.body.append(dlg);
+    dlg.addEventListener("click", (ev) => {
+      if (ev.target === dlg) { dlg.close(); return; } // tap outside closes
+      const b = ev.target.closest("[data-rd], a");
+      if (!b) return;
+      if (b.tagName === "A") { dlg.close(); return; }
+      if (b.dataset.rd === "close") dlg.close();
+      else readEntry(b.dataset.rd);
+    });
+    dlg.addEventListener("close", () => { reading = null; });
+  }
+  const e = diary().find((x) => x.id === id && !x.deleted);
+  if (!e) return;
+  const day = mine().filter((x) => x.date === e.date).sort((a, b) => (a.created || 0) - (b.created || 0));
+  const i = day.findIndex((x) => x.id === id), prev = day[i - 1], next = day[i + 1], pd = prettyDate(e.date);
+  const paras = bodyText(e.body).split(/\n\s*\n/).filter(Boolean).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
+  const n = (e.photos || []).length;
+  dlg.innerHTML = `<div class="gsin rdin">
+      <div class="rdhead"><div><small>${esc(pd.day)}</small><h3 id="rdDate">${esc(pd.date)}</h3></div>
+        ${isMood(e.mood) ? `<span class="rdmood">${face(e.mood, 30)}<small>${MOODS[e.mood].word}</small></span>` : ""}
+        <button type="button" class="mini" data-rd="close" aria-label="Close">✕</button></div>
+      ${e.title ? `<h4 class="rdtitle">${esc(e.title)}</h4>` : ""}
+      <div class="rdtext">${paras || `<p class="note">This entry is empty.</p>`}</div>
+      <p class="note">${[n ? `📷 ${n} photo${n > 1 ? "s" : ""} in Dearly` : "", `${words(bodyText(e.body))} words`].filter(Boolean).join(" · ")}</p>
+      <div class="rdfoot">
+        ${day.length > 1 ? `<div class="rdstep"><button type="button" class="mini" data-rd="${prev ? esc(prev.id) : ""}"${prev ? "" : " disabled"} aria-label="Earlier entry">‹</button><span>${i + 1} of ${day.length}</span><button type="button" class="mini" data-rd="${next ? esc(next.id) : ""}"${next ? "" : " disabled"} aria-label="Later entry">›</button></div>` : "<span></span>"}
+        <a class="btn" href="#diary/read/${esc(e.id)}">Open in Dearly</a>
+      </div>
+    </div>`;
+  dlg.querySelector(".rdtext").scrollTop = 0;
+  if (!dlg.open) dlg.showModal();
+  if (reading !== null && reading !== id && !calm()) dlg.querySelector(".rdin").animate([{ opacity: 0.4 }, { opacity: 1 }], { duration: 180 });
+  reading = id;
 }

@@ -433,10 +433,29 @@ button.mface[aria-pressed="true"] { border-color: var(--ink) }
 .mday { border-top: 1px solid var(--line); padding-top: 12px }
 .flash { display: grid; gap: 10px; justify-items: start; padding: 14px; border-radius: 14px; background: var(--surface); box-shadow: 0 6px 22px rgba(0, 0, 0, .10), inset 0 0 0 1px var(--line); max-width: 620px; transform-origin: top center }
 .fpages { display: grid; gap: 8px; width: 100% }
-.fpage { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 10px; background: var(--bg); color: inherit; text-decoration: none; min-width: 0 }
-.fpage > span:last-child { min-width: 0 }
-.fpage b { display: block; font-size: 15px; overflow-wrap: anywhere }
-.fpage small { display: block; color: var(--muted); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere }
+.fphead { margin: 0; font-size: 13px; font-weight: 700; color: var(--muted) }
+.fpage { display: flex; gap: 10px; align-items: center; width: 100%; padding: 9px 10px; border: 0; border-radius: 10px; background: var(--bg); color: inherit; font: inherit; text-align: left; cursor: pointer; min-width: 0 }
+.fpage:hover { background: var(--accent-soft) }
+.fpage b { flex: 1; min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.fpage .face { flex: none }
+.fgo { flex: none; color: var(--muted); font-size: 18px }
+.fmore { justify-self: start; font-size: 14px }
+/* A diary entry opened from the Mood page (readEntry in moodui.js): a pop-up, not a new page */
+.rdpop { width: min(560px, calc(100vw - 32px)) }
+.gsin.rdin { max-height: min(80vh, 720px); display: flex; flex-direction: column }
+.rdtext { flex: 1; min-height: 0; padding-right: 8px }
+.rdhead { display: flex; gap: 12px; align-items: flex-start }
+.rdhead > div { flex: 1; min-width: 0 }
+.rdhead small { color: var(--muted); font-size: 13px }
+.rdhead h3 { margin: 0; font-size: 19px }
+.rdmood { display: grid; justify-items: center; gap: 2px }
+.rdtitle { margin: 0; font-size: 17px }
+.rdtext { overflow-y: auto; overscroll-behavior: contain; font: 17px/1.7 "Lora", Georgia, "Times New Roman", serif; overflow-wrap: anywhere }
+.gsin .rdtext p { margin: 0 0 .9em }
+.gsin .rdtext p:last-child { margin-bottom: 0 }
+.gsin.rdin > .note { margin: 0; font-size: 13px }
+.rdfoot { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap }
+.rdstep { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--muted) }
 .fdot { font-size: 18px; line-height: 22px }
 .fdid { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14px; width: 100% }
 .fdid li { display: flex; gap: 8px; overflow-wrap: anywhere; min-width: 0 }
