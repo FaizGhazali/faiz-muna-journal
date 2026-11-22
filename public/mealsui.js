@@ -4,6 +4,7 @@ import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from "./
 import { SLOTS, LEARN_AFTER, slotAt, portion, total, dayTotal, plateOf, rowFor, logItems, rankSets, readFood, fitsSlot, burnOf, intakeRange, weightOn, verdict, shadeOf, yearStats } from "./meals.js";
 import { iso, parse, addDays } from "./suggest.js";
 import { offerWidget } from "./widget.js";
+import { confirmDelete } from "./confirm.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -19,9 +20,9 @@ const CAL_DAYS = 14;
 let burnEdit = null; // the person whose watch burn is being typed
 // The plate being put together on the card.
 let date = today(), slot = slotAt(new Date().getHours()), picked = null, rows = [], naming = false, cardMsg = "";
-// Library editing: { kind: "food"|"set", id|null } and two-step deletes.
+// Library editing: { kind: "food"|"set", id|null }. Deletes ask through confirmDelete().
 let moreSets = false; // showing other meals' sets on the card
-let editing = null, setRows = [], setSlots = [], confirmDel = null, confirmMeal = null, libMsg = "";
+let editing = null, setRows = [], setSlots = [], libMsg = "";
 
 export function initMeals(opts) {
   ({ commit, me, people, entries } = opts);
@@ -181,8 +182,7 @@ function renderDay() {
       return `<div class="mslot"><h3>${SLOTS[k]}</h3>${ms.map((m) => `<div class="mlog">
         <div><b>${esc(m.name)}</b><small>${esc((m.items || []).map((x) => `${x.name} ${x.g} g`).join(" · "))}</small></div>
         <span>${total(m.items || []).kcal} kcal</span>
-        ${confirmMeal === m.id ? `<span class="btns"><button type="button" class="mini danger" data-del-meal="${esc(m.id)}">Delete</button><button type="button" class="mini" data-keep-meal>Keep</button></span>`
-          : `<button type="button" class="mini" data-ask-meal="${esc(m.id)}">Delete</button>`}
+        <button type="button" class="mini" data-ask-meal="${esc(m.id)}">Delete</button>
       </div>`).join("")}</div>`;
     }).join("") : `<p class="note">Nothing logged for this day yet.</p>`}`;
 }
@@ -191,9 +191,7 @@ function renderDay() {
 function renderLib() {
   const host = $("mealLib"); if (!host) return;
   const fname = (id) => foods.find((f) => f.id === id)?.name;
-  const delBtns = (kind, id) => confirmDel === kind + id
-    ? `<button type="button" class="mini danger" data-act="del-yes" data-kind="${kind}" data-id="${esc(id)}">Delete</button><button type="button" class="mini" data-act="del-no">Keep</button>`
-    : `<button type="button" class="mini" data-act="edit" data-kind="${kind}" data-id="${esc(id)}">Edit</button><button type="button" class="mini" data-act="del" data-kind="${kind}" data-id="${esc(id)}">Delete</button>`;
+  const delBtns = (kind, id) => `<button type="button" class="mini" data-act="edit" data-kind="${kind}" data-id="${esc(id)}">Edit</button><button type="button" class="mini" data-act="del" data-kind="${kind}" data-id="${esc(id)}">Delete</button>`;
   const ed = (kind, id) => editing && editing.kind === kind && editing.id === id;
   host.innerHTML = `<h2>Your meal sets</h2>
     <p class="note">A set is a plate you eat often. The grams here are a starting point: after you weigh a food ${LEARN_AFTER} times, your usual amount is filled in for you.</p>
@@ -285,16 +283,19 @@ function wire() {
   });
   card.addEventListener("change", (ev) => {
     if (ev.target.id === "mealDate") { setDate(ev.target.value); ev.target.value = date; }
-    if (ev.target.name === "mealWho") { whoId = ev.target.value; picked = null; rows = []; naming = false; cardMsg = ""; confirmMeal = null; burnEdit = null; renderCard(); renderDay(); refreshCalories(); }
+    if (ev.target.name === "mealWho") { whoId = ev.target.value; picked = null; rows = []; naming = false; cardMsg = ""; burnEdit = null; renderCard(); renderDay(); refreshCalories(); }
     if (ev.target.id === "mealAddFood") { const f = foods.find((x) => x.id === ev.target.value); if (f) { rows.push(rowFor(f, meals, who())); renderPlate(); } }
   });
   card.addEventListener("keydown", (ev) => { if (ev.key === "Enter" && ev.target.id === "setName") { ev.preventDefault(); saveSetFromPlate(); } });
 
   $("mealDay").addEventListener("click", async (ev) => {
     const b = ev.target.closest("button"); if (!b) return;
-    if (b.dataset.askMeal) { confirmMeal = b.dataset.askMeal; renderDay(); }
-    if (b.dataset.keepMeal !== undefined) { confirmMeal = null; renderDay(); }
-    if (b.dataset.delMeal) { const id = b.dataset.delMeal; confirmMeal = null; await commit(() => deleteDoc(doc(mealsCol, id))); }
+    if (b.dataset.askMeal) {
+      const id = b.dataset.askMeal, m = meals.find((x) => x.id === id); if (!m) return;
+      const ok = await confirmDelete({ title: `Delete ${m.name} from ${SLOTS[m.slot]?.toLowerCase() || "this meal"}?`, yes: "Delete meal",
+        body: `<p>${total(m.items || []).kcal} kcal${(m.items || []).length ? ` (${esc(m.items.map((x) => x.name).join(", "))})` : ""} comes off ${esc(parse(m.date).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" }))}.</p>` });
+      if (ok) await commit(() => deleteDoc(doc(mealsCol, id)));
+    }
   });
 
   const lib = $("mealLib");
@@ -302,18 +303,21 @@ function wire() {
     const b = ev.target.closest("button"); if (!b || b.type === "submit") return;
     const { act, kind, id } = b.dataset;
     if (act === "new" || act === "edit") {
-      editing = { kind, id: id || null }; confirmDel = null; libMsg = "";
+      editing = { kind, id: id || null }; libMsg = "";
       if (kind === "set") { const s = sets.find((x) => x.id === id); setRows = s ? (s.items || []).map((x) => ({ ...x })) : [{ food: "", g: 100 }]; setSlots = s ? [...(s.slots || [])] : []; }
       renderLib(); lib.querySelector(".mform input")?.focus();
     }
     if (act === "cancel") { editing = null; setRows = []; setSlots = []; libMsg = ""; renderLib(); }
     if (act === "srow-add") { readSetRows(); setRows.push({ food: "", g: 100 }); renderLib(); }
     if (act === "srow-drop") { readSetRows(); setRows.splice(+b.dataset.i, 1); renderLib(); }
-    if (act === "del") { confirmDel = kind + id; renderLib(); }
-    if (act === "del-no") { confirmDel = null; renderLib(); }
-    if (act === "del-yes") {
-      confirmDel = null;
+    if (act === "del") {
       const name = (kind === "food" ? foods : sets).find((x) => x.id === id)?.name || "";
+      const inSets = kind === "food" ? sets.filter((s) => (s.items || []).some((x) => x.food === id)) : [];
+      const ok = await confirmDelete({ title: kind === "food" ? `Delete the food ${name}?` : `Delete the meal set ${name}?`, yes: kind === "food" ? "Delete food" : "Delete set",
+        body: kind === "food"
+          ? `<p>Meals already logged keep their numbers.${inSets.length ? ` It's in ${inSets.length} meal set${inSets.length === 1 ? "" : "s"} (${esc(inSets.map((s) => s.name).join(", "))}), which will skip it.` : ""}</p>`
+          : `<p>Meals already logged from it stay.</p>` });
+      if (!ok) return;
       libMsg = kind === "food" ? `Deleted ${name}. Meals you already logged keep their numbers.` : `Deleted "${name}".`;
       if (picked === id) { picked = null; rows = []; renderPlate(); }
       await commit(() => deleteDoc(doc(kind === "food" ? foodsCol : setsCol, id)));
@@ -328,13 +332,13 @@ function wire() {
   lib.addEventListener("input", () => { if (libMsg) libSay(""); });
 
   // A new person picked with "For": start a fresh plate for them.
-  $("me").addEventListener("change", () => { whoId = null; picked = null; rows = []; naming = false; cardMsg = ""; confirmMeal = null; burnEdit = null; refreshMeals(); });
+  $("me").addEventListener("change", () => { whoId = null; picked = null; rows = []; naming = false; cardMsg = ""; burnEdit = null; refreshMeals(); });
   $("setsBack").addEventListener("click", () => { location.hash = "#meals"; });
   wireCalories();
 }
 function setDate(d) {
   date = d && d <= today() ? d : today();
-  confirmMeal = null; burnEdit = null;
+  burnEdit = null;
   const inp = $("mealDate"); if (inp) inp.value = date;
   renderDay(); refreshCalories();
 }
@@ -452,7 +456,12 @@ function wireCalories() {
     const act = b.dataset.cal, id = `${pid}_${date}`;
     if (act === "edit") { burnEdit = pid; refreshCalories(); $("burnIn")?.focus(); }
     if (act === "cancel") { burnEdit = null; refreshCalories(); }
-    if (act === "clear") { delete burns[id]; refreshCalories(); await commit(() => deleteDoc(doc(burnsCol, id))); }
+    if (act === "clear") {
+      const ok = await confirmDelete({ title: "Use the estimate instead?", yes: "Remove watch burn",
+        body: `<p>The burn you typed from the watch${burns[id]?.kcal ? ` (${Number(burns[id].kcal).toLocaleString()} kcal)` : ""} is removed, and the day uses the estimate from weight, height, age and runs.</p>` });
+      if (!ok) return;
+      delete burns[id]; refreshCalories(); await commit(() => deleteDoc(doc(burnsCol, id)));
+    }
     if (act === "save") saveBurn(pid);
   });
   host.addEventListener("keydown", (ev) => { if (ev.key === "Enter" && ev.target.id === "burnIn") { ev.preventDefault(); saveBurn(burnEdit); } });

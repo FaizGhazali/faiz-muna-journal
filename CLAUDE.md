@@ -58,7 +58,7 @@ npx firebase deploy    # deploy hosting + firestore rules to production
 ## Conventions
 
 - Keep it dependency-free and build-free. Plain DOM, template strings, `$()` = `getElementById`.
-- **Every delete asks first** through `confirmDelete()` in `public/confirm.js` (title names the thing, body says what else goes, "Keep" is the default). Follow the `safe-delete` skill (`.claude/skills/safe-delete/SKILL.md`) by default whenever you add or change anything that deletes. Stocky uses it everywhere; older deletes elsewhere still use their own two-step buttons until moved over.
+- **Every delete asks first** through `confirmDelete()` in `public/confirm.js` (title names the thing, body says what else goes, "Keep" is the default). Follow the `safe-delete` skill (`.claude/skills/safe-delete/SKILL.md`) by default whenever you add or change anything that deletes. Every journal uses it: entries, activities, meals, foods, meal sets, the typed watch burn, Dearly (delete, delete forever, discard draft, start fresh, remove photo, reset style) and Stocky. It answers from the button tap, not the dialog "close" event (some browsers skip that event). Pass `note` when it can be undone (Recently deleted).
 - Everything user-entered that goes into `innerHTML` must pass through `esc()`.
 - BMI ranges are WHO adult cut-offs (18.5 / 25 / 30); the footer also mentions the Asian 22.9 cut-off. Goal pace is `PACE` kg/week, weekly exercise target is `WEEKLY_MINUTES`.
 - If you add or rename a file in `public/`, add it to `SHELL` in `sw.js` and bump `CACHE` (e.g. `journal-v2` → `journal-v3`).

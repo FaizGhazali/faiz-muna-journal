@@ -11,6 +11,7 @@ import {
   TYPES, ALL_DAYS, guessType, isScheduled, habitState, habitWeek, describe, firstOpenStep, scoreOf, pickNext, learn, iso, parse, addDays, dayNum,
 } from "./suggest.js";
 import { journalView } from "./mealsui.js";
+import { confirmDelete } from "./confirm.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -26,7 +27,7 @@ const TABS = { inbox: "Ideas", active: "Active", paused: "Paused", done: "Done" 
 
 let db, people, commit, exercisedToday, onChange, actsCol, daysCol, movesCol, nextCol;
 let acts = [], dayDocs = [], moves = [], movesReady = false, nextReady = false, unsubs = [];
-let me = null, tab = "inbox", typeFilter = "", editing = null, draft = null, confirmDel = null;
+let me = null, tab = "inbox", typeFilter = "", editing = null, draft = null;
 let moveMsg = "", undoFn = null, undoId = null, addTypeTouched = false, lastDay = today();
 
 export function initActivities(opts) {
@@ -317,8 +318,7 @@ function metaOf(a) {
 function rowHtml(a) {
   const t = TYPES[a.type], id = esc(a.id), b = (act, label, cls = "") => `<button type="button" class="mini ${cls}" data-act="${act}" data-id="${id}">${label}</button>`;
   let btns;
-  if (confirmDel === a.id) btns = b("del-yes", "Delete", "danger") + b("del-no", "Keep");
-  else if (a.status === "inbox") btns = b("start", "Start", "go") + b("edit", "Edit") + b("archive", "Archive");
+  if (a.status === "inbox") btns = b("start", "Start", "go") + b("edit", "Edit") + b("archive", "Archive");
   else if (a.status === "active") btns = (a.type === "habit" && isScheduled(a, today()) ? (habitState(a, logs(), today()) === "skipped" ? b("unskip", "Unskip") : b("skip", "Skip today")) : "") + b("edit", "Edit") + b("pause", "Pause");
   else if (a.status === "paused") btns = b("resume", "Resume", "go") + b("edit", "Edit");
   else btns = b(a.status === "archived" ? "restore-idea" : "resume", a.status === "archived" ? "Back to ideas" : "Do again") + b("del", "Delete");
@@ -359,7 +359,7 @@ function editorHtml() {
     <div class="actions">
       <button type="submit" class="primary">Save</button>
       <button type="button" data-act="ed-cancel">Cancel</button>
-      ${confirmDel === a.id ? `<button type="button" class="danger" data-act="del-yes" data-id="${esc(a.id)}">Delete for good</button><button type="button" data-act="del-no">Keep</button>` : `<button type="button" class="push" data-act="del" data-id="${esc(a.id)}">Delete</button>`}
+      <button type="button" class="push" data-act="del" data-id="${esc(a.id)}">Delete</button>
     </div>
     <p class="msg" id="edMsg" role="status"></p>
   </form>`;
@@ -398,7 +398,7 @@ async function saveEditor() {
     body[k] = val;
   }
   const id = editing;
-  editing = draft = null; confirmDel = null;
+  editing = draft = null;
   await replace(id, body);
   renderList();
 }
@@ -416,12 +416,19 @@ async function addActivity(ev) {
 
 async function listAction(act, id) {
   const a = acts.find((x) => x.id === id);
-  if (act === "edit") { editing = id; draft = structuredClone(a); draft.steps ||= []; confirmDel = null; renderList(); $("ed-title")?.focus(); return; }
-  if (act === "ed-cancel") { editing = draft = null; confirmDel = null; renderList(); return; }
+  if (act === "edit") { editing = id; draft = structuredClone(a); draft.steps ||= []; renderList(); $("ed-title")?.focus(); return; }
+  if (act === "ed-cancel") { editing = draft = null; renderList(); return; }
   if (act === "step-add") { readEditor(); const t = $("ed-step").value.trim(); if (t) draft.steps.push({ text: t, done: false }); renderList(); $("ed-step")?.focus(); return; }
-  if (act === "del") { if (editing) readEditor(); confirmDel = id; renderList(); return; }
-  if (act === "del-no") { if (editing) readEditor(); confirmDel = null; renderList(); return; }
-  if (act === "del-yes") { confirmDel = null; if (editing === id) editing = draft = null; await commit(() => deleteDoc(doc(actsCol, id))); return; }
+  if (act === "del") {
+    if (editing) readEditor();
+    if (!a) return;
+    const steps = a.steps?.length || 0;
+    const ok = await confirmDelete({ title: `Delete ${a.title}?`, yes: "Delete it",
+      body: `<p>It goes from the list${steps ? `, with its ${steps} step${steps === 1 ? "" : "s"}` : ""}. What was already done stays in the history.</p>` });
+    if (!ok) return;
+    if (editing === id) editing = draft = null;
+    await commit(() => deleteDoc(doc(actsCol, id))); return;
+  }
   if (!a) return;
   const started = a.status === "inbox" ? { started: today() } : {};
   if (act === "start" || act === "resume") await update(id, { status: "active", snoozed: null, ...started });
@@ -450,7 +457,7 @@ function wire() {
   $("addTitle").addEventListener("input", () => { if (!addTypeTouched) $("addType").value = guessType($("addTitle").value); });
   $("addType").addEventListener("change", () => { addTypeTouched = true; });
   $("addForm").addEventListener("submit", addActivity);
-  $("tabs").addEventListener("click", (ev) => { const b = ev.target.closest("[data-tab]"); if (!b) return; tab = b.dataset.tab; editing = draft = null; confirmDel = null; renderList(); });
+  $("tabs").addEventListener("click", (ev) => { const b = ev.target.closest("[data-tab]"); if (!b) return; tab = b.dataset.tab; editing = draft = null; renderList(); });
   $("typeFilter").addEventListener("change", () => { typeFilter = $("typeFilter").value; renderList(); });
   $("list").addEventListener("click", (ev) => {
     const b = ev.target.closest("button[data-act]"); if (!b) return;

@@ -7,12 +7,13 @@
 // Data: diary/{id} (see diary.js), diaryPhotos/{id} -> { entry, person, data, w, h }, diaryStyle/{person} -> { on, since? }.
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDocs, query, where, writeBatch } from "./fs.js";
 import { PAGE, OPENING, words, bodyText, titleOf, preview, parseTags, live, diaryStats, onThisDay, tagsOf, filterEntries, tagKey, tagStats, showTags, tagMatches, looksLike, MAX_TAGS, neighbours, expired,
-  prettyDate, ago, lineFor, greeting, iso } from "./diary.js";
+  prettyDate, ago, lineFor, greeting, iso, KEEP_DELETED_DAYS } from "./diary.js";
 import { MIN_STYLE, ABOUT_MAX, aboutSuggestions, addToAbout, styleSource, styleProfile, describeStyle, samplesFor, buildMessages, cleanOutput, unsupported, dropped, looksGarbled } from "./writestyle.js";
 import * as ai from "./localai.js";
 import * as cloud from "./cloudai.js";
 import { MOODS, isMood } from "./mood.js";
 import { face } from "./moodui.js";
+import { confirmDelete } from "./confirm.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -31,7 +32,7 @@ let list = [], styles = {}, ready = false, onChange = () => {};
 export const diaryList = () => list;
 // Dashboard filters (kept while the app is open) and how many memories are showing.
 const filt = { q: "", month: "", tag: "", fav: false, sort: "new" };
-let shown = PAGE, route = "", painted = "", confirm = null, flash = null; // flash: { id, text } shown on that entry until you leave it
+let shown = PAGE, route = "", painted = "", flash = null; // flash: { id, text } shown on that entry until you leave it
 let ed = null, saveTimer = 0, abort = null, photoCache = new Map();
 let modelUi = ""; // editor writer line: "" | "sizes" (picking a size) | "remove" (confirming removal)
 let aboutMsg = ""; // "Saved" under About you, kept through the redraw that saving causes
@@ -90,7 +91,7 @@ function render(data = false) {
   const r = parseRoute(), key = `${r.page}/${r.id || ""}/${pid()}`;
   // The editor is drawn once per opening, so new data never wipes what is being typed.
   if (data && (r.page === "write" || r.page === "edit") && painted === key && ed) return;
-  if (painted !== key) { confirm = null; aboutMsg = ""; modelUi = ""; if (flash && flash.id !== r.id) flash = null; if (r.page !== "dash") scrollTo({ top: 0 }); }
+  if (painted !== key) { aboutMsg = ""; modelUi = ""; if (flash && flash.id !== r.id) flash = null; if (r.page !== "dash") scrollTo({ top: 0 }); }
   route = r.page;
   if (r.page === "dash") renderDash(painted !== key);
   else if (r.page === "read") renderRead(r.id);
@@ -225,9 +226,7 @@ function renderRead(id) {
       <div class="dy-photos" id="dyPhotos"></div>
       ${(e.tags || []).length ? `<p class="dy-tags">${showTags(e.tags, tagStats(mine())).map((t) => `<button type="button" class="linkbtn" data-dy="tag" data-tag="${esc(t)}">#${esc(t)}</button>`).join("")}</p>` : ""}
       <p class="dy-meta">${[e.ai ? "Written with Dearly's helper, from your notes" : "", e.noStyle ? "Not used to learn your style" : "", `${words(bodyText(e.body))} words`].filter(Boolean).map(esc).join(" · ")}</p>
-      <div class="actions" id="dyReadActs">${confirm === "del" + id
-        ? `<p class="note">Move this entry to Recently deleted? You can bring it back for 30 days.</p><button type="button" class="danger" data-dy="del-yes">Delete</button><button type="button" data-dy="del-no">Keep</button>`
-        : `<a class="btn" href="#diary/edit/${esc(e.id)}">Edit</a><button type="button" data-dy="del">Delete</button>`}</div>
+      <div class="actions" id="dyReadActs"><a class="btn" href="#diary/edit/${esc(e.id)}">Edit</a><button type="button" data-dy="del">Delete</button></div>
       ${flash?.id === id ? `<p class="note dy-flash" role="status">${esc(flash.text)}</p>` : ""}
     </article>
     <nav class="dy-nav" aria-label="More entries">
@@ -747,9 +746,7 @@ function renderAi() {
       ${excluded.length ? `<details class="dy-excl"><summary>${excluded.length} ${excluded.length === 1 ? "entry is" : "entries are"} left out of style learning</summary>
         <ul>${excluded.map((e) => `<li><a href="#diary/read/${esc(e.id)}">${esc(titleOf(e))}</a> <small>${esc(e.date)}</small> <button type="button" class="mini" data-dy="include" data-id="${esc(e.id)}">Use again</button></li>`).join("")}</ul></details>` : ""}
       <p class="note">To leave one entry out, tick "Don't use this entry to learn my writing style" when you write or edit it.</p>
-      <div class="actions">${confirm === "reset"
-        ? `<p class="note">Start fresh from today? Entries written before today stop being used for style. Nothing is deleted.</p><button type="button" class="danger" data-dy="reset-yes">Reset style</button><button type="button" data-dy="reset-no">Keep</button>`
-        : `<button type="button" data-dy="reset">Reset my writing style</button>`}</div>
+      <div class="actions"><button type="button" data-dy="reset">Reset my writing style</button></div>
     </section>
     <section class="panel" aria-labelledby="dyPrivTitle" data-title="Privacy and your data">
       <h2 id="dyPrivTitle">Privacy and your data</h2>
@@ -767,9 +764,7 @@ function renderAi() {
     </section>
     <section class="panel" aria-labelledby="dyBinTitle" data-title="Recently deleted">
       <h2 id="dyBinTitle">Recently deleted</h2>
-      ${deleted.length ? `<p class="note">Deleted entries stay here for 30 days, then go for good.</p><ul class="dy-bin">${deleted.map((e) => `<li><div><b>${esc(titleOf(e))}</b><small>${esc(prettyDate(e.date).date)}</small></div><span class="btns">${confirm === "gone" + e.id
-          ? `<button type="button" class="mini danger" data-dy="gone-yes" data-id="${esc(e.id)}">Delete forever</button><button type="button" class="mini" data-dy="gone-no">Keep</button>`
-          : `<button type="button" class="mini" data-dy="restore" data-id="${esc(e.id)}">Restore</button><button type="button" class="mini" data-dy="gone" data-id="${esc(e.id)}">Delete forever</button>`}</span></li>`).join("")}</ul>`
+      ${deleted.length ? `<p class="note">Deleted entries stay here for 30 days, then go for good.</p><ul class="dy-bin">${deleted.map((e) => `<li><div><b>${esc(titleOf(e))}</b><small>${esc(prettyDate(e.date).date)}</small></div><span class="btns"><button type="button" class="mini" data-dy="restore" data-id="${esc(e.id)}">Restore</button><button type="button" class="mini" data-dy="gone" data-id="${esc(e.id)}">Delete forever</button></span></li>`).join("")}</ul>`
         : `<p class="note">Nothing here. Deleted entries wait here for 30 days, so a slip of the finger can be undone.</p>`}
     </section>`;
   paintAiPage();
@@ -857,11 +852,12 @@ function wire() {
     if (act === "clear") { Object.assign(filt, { q: "", month: "", tag: "", fav: false }); shown = PAGE; renderDash(true); }
     if (act === "tag") { Object.assign(filt, { q: "", month: "", fav: false, tag: b.dataset.tag }); shown = PAGE; location.hash = "#diary"; }
     if (act === "fav") { const e = find(id); if (e) { e.fav = !e.fav; renderRead(id); await commit(() => updateDoc(doc(diaryCol, id), { fav: e.fav })); } }
-    if (act === "del") { confirm = "del" + id; renderRead(id); }
-    if (act === "del-no") { confirm = null; renderRead(id); }
-    if (act === "del-yes") {
-      const e = find(id); confirm = null;
-      if (e) { const { older, newer } = neighbours(mine(), id); e.deleted = Date.now(); const next = older || newer; flash = { id: next?.id || null, text: "Moved to Recently deleted. You can restore it from AI & privacy." }; location.hash = next ? `#diary/read/${next.id}` : "#diary"; await commit(() => updateDoc(doc(diaryCol, id), { deleted: e.deleted })); }
+    if (act === "del") {
+      const e = find(id); if (!e) return;
+      const n = (e.photos || []).length;
+      const ok = await confirmDelete({ title: `Delete "${titleOf(e)}"?`, yes: "Delete entry", note: `You can bring it back from Recently deleted (AI & privacy) for ${KEEP_DELETED_DAYS} days.`,
+        body: `<p>The entry for ${esc(prettyDate(e.date).date)}${n ? `, with its ${n} photo${n === 1 ? "" : "s"},` : ""} moves to Recently deleted.</p>` });
+      if (ok) { const { older, newer } = neighbours(mine(), id); e.deleted = Date.now(); const next = older || newer; flash = { id: next?.id || null, text: "Moved to Recently deleted. You can restore it from AI & privacy." }; location.hash = next ? `#diary/read/${next.id}` : "#diary"; await commit(() => updateDoc(doc(diaryCol, id), { deleted: e.deleted })); }
     }
     if (act === "zoom") b.classList.toggle("big");
     if (act === "write") writeForMe();
@@ -905,17 +901,30 @@ function wire() {
     if (act === "addtag") { const typed = !!(ed.tagText || "").trim(); addTag(b.dataset.tag); ed.tagText = ""; $("dyTags").value = ""; paintTags(); saveDraft(); if (typed) $("dyTags").focus(); }
     if (act === "untag") { const have = chosenTags(); have.splice(+b.dataset.i, 1); ed.tags = have.join(", "); paintTags(); saveDraft(); }
     if (act === "photo") $("dyPhotoIn").click();
-    if (act === "unphoto") { const [p] = ed.photos.splice(+b.dataset.i, 1); if (p?.old) ed.removed.push(p.id); paintPhotos(); }
+    if (act === "unphoto") {
+      const i = +b.dataset.i, ph = ed?.photos[i]; if (!ph) return;
+      const ok = await confirmDelete({ title: `Remove photo ${i + 1}?`, yes: "Remove photo", note: ph.old ? "It goes when you save the entry. Cancel the edit to keep it." : "To get it back you'd add it again.",
+        body: `<p><img src="${esc(ph.thumb || ph.data)}" alt="" style="max-width:120px;max-height:120px;border-radius:10px"></p>` });
+      if (!ok || ed?.photos[i] !== ph) return;
+      ed.photos.splice(i, 1); if (ph.old) ed.removed.push(ph.id); paintPhotos();
+    }
     if (act === "save") saveEntry();
     if (act === "discard") {
-      if (b.dataset.sure) { store.del(draftKey(null)); ed = null; aiState.flags = []; painted = ""; location.hash = "#diary"; }
-      else { b.dataset.sure = "1"; b.textContent = "Tap again to throw it away"; b.classList.add("danger"); }
+      const ok = await confirmDelete({ title: "Throw this draft away?", yes: "Discard draft", body: "<p>What you've written here, and any photos added to it, are gone.</p>" });
+      if (ok) { store.del(draftKey(null)); ed = null; aiState.flags = []; painted = ""; location.hash = "#diary"; }
     }
-    if (act === "fresh") { store.del(draftKey(ed?.id)); ed = null; aiState.flags = []; painted = ""; render(); }
+    if (act === "fresh") {
+      const ok = await confirmDelete({ title: "Start fresh?", yes: "Throw draft away",
+        body: `<p>The unsaved changes kept on this phone are thrown away, and you start from ${ed?.id ? "the saved entry" : "an empty page"}.</p>` });
+      if (!ok) return;
+      store.del(draftKey(ed?.id)); ed = null; aiState.flags = []; painted = ""; render();
+    }
     if (act === "include") await commit(() => updateDoc(doc(diaryCol, b.dataset.id), { noStyle: false }));
-    if (act === "reset") { confirm = "reset"; renderAi(); }
-    if (act === "reset-no") { confirm = null; renderAi(); }
-    if (act === "reset-yes") { confirm = null; styles[pid()] = { ...styleOf(), since: today() }; renderAi(); await commit(() => setDoc(doc(styleCol, pid()), { on: !!styleOf().on, since: today() }, { merge: true })); }
+    if (act === "reset") {
+      const ok = await confirmDelete({ title: "Reset your writing style?", yes: "Reset style", note: "Nothing is deleted. Your entries all stay.",
+        body: "<p>Dearly starts learning fresh from today. Entries written before today stop being used for your style.</p>" });
+      if (!ok) return;
+      styles[pid()] = { ...styleOf(), since: today() }; renderAi(); await commit(() => setDoc(doc(styleCol, pid()), { on: !!styleOf().on, since: today() }, { merge: true })); }
     if (act === "export") exportText();
     if (act === "sugg-add" || act === "sugg-no") {
       const li = b.closest("li[data-key]"), key = li.dataset.key, x = suggestions().find((y) => y.key === key); if (!x) return;
@@ -947,9 +956,12 @@ function wire() {
       await commit(() => setDoc(doc(styleCol, pid()), { about }, { merge: true }));
     }
     if (act === "restore") { const e = find(b.dataset.id); if (e) { delete e.deleted; renderAi(); await commit(() => setDoc(doc(diaryCol, e.id), strip(e))); } }
-    if (act === "gone") { confirm = "gone" + b.dataset.id; renderAi(); }
-    if (act === "gone-no") { confirm = null; renderAi(); }
-    if (act === "gone-yes") { const e = find(b.dataset.id); confirm = null; if (e) { list = list.filter((x) => x.id !== e.id); renderAi(); await removeForever(e); } }
+    if (act === "gone") {
+      const e = find(b.dataset.id); if (!e) return;
+      const n = (e.photos || []).length;
+      const ok = await confirmDelete({ title: `Delete "${titleOf(e)}" forever?`, yes: "Delete forever",
+        body: `<p>The entry for ${esc(prettyDate(e.date).date)}${n ? ` and its ${n} photo${n === 1 ? "" : "s"}` : ""} goes for good.</p>` });
+      if (ok) { list = list.filter((x) => x.id !== e.id); renderAi(); await removeForever(e); } }
   });
   host.addEventListener("input", (ev) => {
     const t = ev.target;

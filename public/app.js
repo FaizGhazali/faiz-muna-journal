@@ -21,6 +21,7 @@ import { initZoom, zoomable, xWindow, isZoomed } from "./zoom.js";
 import { initGuides } from "./tour.js";
 import { initWidget, offerWidget } from "./widget.js";
 import { initDiary, startDiary, stopDiary, refreshDiary, diaryList } from "./diaryui.js";
+import { confirmDelete } from "./confirm.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const PACE = 0.5; // kg a week
@@ -71,7 +72,7 @@ if (DEMO) {
   }
 }
 
-let PEOPLE = [], entries = [], editingId = null, confirmDelete = null, unsubs = [];
+let PEOPLE = [], entries = [], editingId = null, unsubs = [];
 let runExtra = null; // numbers from the picture that have no box in the form (cadence, power, ...)
 const entriesCol = collection(db, "entries");
 
@@ -316,9 +317,7 @@ function entryHtml(e) {
   if (e.run) facts.push(`${e.run.km} km run in ${clock(e.run.secs)}${e.run.hr ? `, ${e.run.hr} bpm` : ""}`);
   else if (typeof e.minutes === "number") facts.push(`${e.minutes} min exercise`);
   if (isMood(e.mood)) facts.push(`${facts.length ? "felt" : "Felt"} ${MOODS[e.mood].word.toLowerCase()}`);
-  const btns = confirmDelete === e.id
-    ? `<button class="mini danger" data-act="del-yes" data-id="${esc(e.id)}">Delete</button><button class="mini" data-act="del-no">Keep</button>`
-    : `<button class="mini" data-act="edit" data-id="${esc(e.id)}">Edit</button><button class="mini" data-act="del" data-id="${esc(e.id)}">Delete</button>`;
+  const btns = `<button class="mini" data-act="edit" data-id="${esc(e.id)}">Edit</button><button class="mini" data-act="del" data-id="${esc(e.id)}">Delete</button>`;
   return `<div class="entry"><div class="name">${esc(p.name)}</div>
     <div><div class="facts">${esc(facts.join(" · ") || "Note")}</div>${e.note ? `<p class="text">${esc(e.note)}</p>` : ""}</div>
     <div class="btns">${btns}</div></div>`;
@@ -449,10 +448,13 @@ $("feed").addEventListener("click", async (ev) => {
   const b = ev.target.closest("button[data-act]"); if (!b) return;
   const act = b.dataset.act, id = b.dataset.id;
   if (act === "edit") startEdit(id);
-  if (act === "del") { confirmDelete = id; renderFeed(); }
-  if (act === "del-no") { confirmDelete = null; renderFeed(); }
-  if (act === "del-yes") {
-    confirmDelete = null;
+  if (act === "del") {
+    const e = entries.find((x) => x.id === id); if (!e) return;
+    const p = PEOPLE.find((x) => x.id === e.person);
+    const what = [typeof e.weight === "number" && "weight", (e.run || typeof e.minutes === "number") && "exercise", e.mood && "mood", e.note && "note"].filter(Boolean);
+    const ok = await confirmDelete({ title: `Delete ${p ? `${p.name}'s` : "this"} entry for ${parse(e.date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}?`, yes: "Delete entry",
+      body: what.length ? `<p>The day's ${esc(what.join(", ").replace(/, ([^,]*)$/, " and $1"))} go${what.length === 1 ? "es" : ""} with it.</p>` : "" });
+    if (!ok) return;
     if (editingId === id) resetForm();
     await commit(() => deleteDoc(doc(entriesCol, id)));
   }
