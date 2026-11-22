@@ -1114,7 +1114,22 @@ button.mini.primary { color: var(--on-accent); font-weight: 700 }
 /* Stocky kinds */
 .sk-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px }
 .sk-kinds small { opacity: .7; font-weight: 400 }
-.sk-kindlist .addrow1 { margin-top: 10px }
+/* Kind field: type a name, or tap the arrow for the list */
+.sk-kindf { position: relative; display: grid; gap: 4px; min-width: 0 }
+.sk-lbl { font-size: 14px; font-weight: 700 }
+.sk-combo { display: flex; min-width: 0 }
+.sk-combo input[type=text] { border-radius: 8px 0 0 8px; border-right: 0 }
+.sk-combo-btn { flex: none; width: 44px; padding: 0; border: 1px solid var(--line); border-radius: 0 8px 8px 0; background: var(--bg); color: var(--ink); font-size: 16px }
+.sk-combo-btn[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent) }
+.sk-menu { position: absolute; top: 100%; left: 0; z-index: 20; width: max(100%, 240px); max-width: calc(100vw - 48px); max-height: 260px; overflow: auto; margin-top: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgb(0 0 0 / .25) }
+.sk-menu .note { margin: 8px }
+.sk-opt { display: flex; align-items: center; gap: 6px }
+.sk-opt > button:first-child { flex: 1; min-height: 44px; text-align: left; border: 0; background: none; color: var(--ink); font: 16px var(--body); padding: 6px 10px; border-radius: 8px }
+.sk-opt > button:first-child:hover, .sk-opt[aria-selected="true"] > button:first-child { background: var(--bg) }
+.sk-opt small { color: var(--muted); font-size: 12px }
+.sk-opt.new > button { color: var(--accent) }
+.sk-kindnote { color: var(--accent); font-size: 12px; min-height: 0 }
+.sk-kindnote:empty { display: none }
 /* Delete prompt (confirm.js) */
 .cdel h2 { margin: 0; font-size: 20px }
 .cdel-body { display: grid; gap: 8px; line-height: 1.5 }

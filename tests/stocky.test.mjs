@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buyRate, mealUse, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind } from "../public/stocky.js";
+import { buyRate, mealUse, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind, matchKind, kindsLike } from "../public/stocky.js";
 
 const T = "2026-11-22";
 const rice = { id: "rice", name: "Beras", kind: "food", unit: "g", pack: 5000, food: "f-nasi" };
@@ -177,4 +177,18 @@ test("kinds: built-in Food and Home, the family's own, and removed kinds fall ba
   assert.equal(readItem({ name: "Lampin", kind: "k1", unit: "pcs", pack: 40, food: "x" }, ids).item.kind, "k1");
   assert.equal(readItem({ name: "Lampin", kind: "k1", unit: "pcs", pack: 40 }, ids).item.food, undefined);
   assert.equal(readItem({ name: "Lampin", kind: "nope", unit: "pcs", pack: 40 }, ids).item.kind, "food");
+});
+
+test("the Kind field: typed names match a kind, or make a new one on save", () => {
+  const kinds = allKinds([{ id: "k1", name: "Medicine", created: 1 }]);
+  assert.deepEqual(matchKind(" medicine ", kinds), { id: "k1" });
+  assert.deepEqual(matchKind("FOOD", kinds), { id: "food" });
+  assert.deepEqual(matchKind("medicines", kinds), { id: "k1" }); // near-copies match, like diary tags
+  assert.deepEqual(matchKind("Medi cine", kinds), { id: "k1" });
+  assert.deepEqual(matchKind("Pet  food", kinds), { name: "Pet food" });
+  assert.ok(matchKind("  ", kinds).error);
+  assert.deepEqual(kindsLike("", kinds).map((k) => k.id), ["food", "home", "k1"]);
+  assert.deepEqual(kindsLike("me", kinds).map((k) => k.id), ["home", "k1"]);
+  assert.deepEqual(kindsLike("zzz", kinds), []);
+  assert.deepEqual(kindsLike("medicines", kinds).map((k) => k.id), ["k1"]);
 });

@@ -3,7 +3,7 @@
 // Maths and the data model live in stocky.js. Meals are read, never written: what meals use is worked out.
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "./fs.js";
 import { confirmDelete } from "./confirm.js";
-import { UNITS, LEVELS, allKinds, kindOf, readKind, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice } from "./stocky.js";
+import { UNITS, LEVELS, allKinds, kindOf, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice } from "./stocky.js";
 import { readFood } from "./meals.js";
 import { iso, parse } from "./suggest.js";
 
@@ -35,7 +35,7 @@ export function startStocky() {
   on("buys", (v) => { buys = v; });
   on("prices", (v) => { prices = v; });
   on("shopList", (v) => { list = v.sort((a, b) => (a.created || 0) - (b.created || 0)); });
-  on("kinds", (v) => { kinds = allKinds(v); });
+  on("kinds", (v) => { kinds = allKinds(v); repaintMenus(); });
 }
 export function stopStocky() { unsubs.forEach((u) => u()); unsubs = []; }
 
@@ -70,9 +70,9 @@ const route = () => {
 export function refreshStocky(force) {
   const host = $("stocky"); if (!host || !people().length) return;
   compute();
-  // Don't redraw under someone typing; catch up when they leave the field.
+  // Don't redraw under someone typing, or over a form they've started filling in; catch up when they leave it.
   const a = document.activeElement;
-  if (!force && host.contains(a) && a.matches("input, select, textarea")) { pending = true; return; }
+  if (!force && ((host.contains(a) && a.matches("input, select, textarea")) || host.querySelector("form[data-dirty]"))) { pending = true; return; }
   pending = false;
   if (host.hidden && !force) return;
   const r = route();
@@ -116,15 +116,50 @@ function rowHtml(r) {
 }
 const shopList = () => shopNames(buys, prices);
 const datalist = () => `<datalist id="skShops">${shopList().map((s) => `<option value="${esc(s)}">`).join("")}</datalist>`;
-// Kind picker. Food first: only food can link to a Meals food.
-const kindOptions = (sel) => kinds.map((k) => `<option value="${esc(k.id)}"${k.id === sel ? " selected" : ""}>${esc(k.id === "home" ? "Home (soap, tissue)" : k.name)}</option>`).join("");
+// The Kind field: type a name (the keyboard opens), or tap ▾ for the list. A name that isn't a kind yet
+// becomes a new kind when the item is saved. Your own kinds have ✕ in the list. Only Food links to Meals.
 const kindName = (id) => kindOf(id, kinds).name;
+const kindField = (selId) => `<div class="sk-kindf"><span class="sk-lbl">Kind</span>
+  <div class="sk-combo"><input type="text" name="kind" value="${esc(kindName(selId))}" maxlength="30" autocomplete="off" autocapitalize="words" enterkeyhint="done" placeholder="Type or pick" role="combobox" aria-label="Kind" aria-autocomplete="list" aria-expanded="false"><button type="button" class="sk-combo-btn" data-sk="kindmenu" aria-label="Show all kinds" aria-expanded="false">▾</button></div>
+  <div class="sk-menu" role="listbox" aria-label="Kinds" hidden></div>
+  <small class="sk-kindnote" data-sk-kindnote></small></div>`;
+function menuHtml(text, all) {
+  const m = matchKind(text, kinds), list = all ? kinds : kindsLike(text, kinds);
+  const rows = list.map((k) => `<div class="sk-opt" role="option" aria-selected="${m.id === k.id}"><button type="button" data-sk="kindpick" data-name="${esc(k.name)}">${esc(k.name)}${k.id === "food" ? " <small>links to Meals</small>" : k.id === "home" ? " <small>soap, tissue</small>" : ""}</button>${k.builtIn ? "" : `<button type="button" class="mini" data-sk="kind-del" data-id="${esc(k.id)}" aria-label="Remove the kind ${esc(k.name)}">✕</button>`}</div>`);
+  if (m.name) rows.push(`<div class="sk-opt new"><button type="button" data-sk="kindpick" data-name="${esc(m.name)}">+ New kind "<b>${esc(m.name)}</b>"</button></div>`);
+  return rows.join("") || `<p class="note">No kind like that.</p>`;
+}
+function openMenu(f, all) {
+  const box = f.querySelector(".sk-kindf"); if (!box) return;
+  const menu = box.querySelector(".sk-menu");
+  menu.innerHTML = menuHtml(f.elements.kind.value, all); menu.hidden = false; menu.dataset.all = all ? "1" : "";
+  box.querySelectorAll("[aria-expanded]").forEach((x) => x.setAttribute("aria-expanded", "true"));
+}
+function closeMenus(except) {
+  for (const box of $("stocky").querySelectorAll(".sk-kindf")) {
+    if (box === except) continue;
+    box.querySelector(".sk-menu").hidden = true;
+    box.querySelectorAll("[aria-expanded]").forEach((x) => x.setAttribute("aria-expanded", "false"));
+  }
+}
+function repaintMenus() {
+  for (const box of $("stocky")?.querySelectorAll(".sk-kindf") || []) {
+    const menu = box.querySelector(".sk-menu"); if (!menu.hidden) openMenu(box.closest("form"), !!menu.dataset.all);
+  }
+}
+// Under the field: say when saving will make a new kind.
+function kindNote(f) {
+  const n = f.querySelector("[data-sk-kindnote]"); if (!n) return;
+  const m = matchKind(f.elements.kind.value, kinds);
+  n.textContent = m.name ? `New kind. It's made when you save.` : "";
+}
+const isFood = (f) => matchKind(f.elements.kind?.value, kinds).id === "food";
 // The "Bought" form: how much, and (optional) the price, shop and whether it was on sale.
 function buyForm(r, p) {
   const unit = p?.unit || r.unit || "pcs", qty = r.qty || p?.pack || "";
   const last = buys.filter((b) => b.item === p?.id && b.shop).sort((a, b) => b.date.localeCompare(a.date))[0];
   return `<form class="mform sk-buy" data-skform="buy" data-key="${esc(r.key)}" novalidate>
-    ${p ? "" : `<div class="two"><label>Kind<select name="kind">${kindOptions(r.food ? "food" : FALLBACK_KIND)}</select></label>
+    ${p ? "" : `<div class="two">${kindField(r.food ? "food" : FALLBACK_KIND)}
       <label>Counted in<select name="unit">${Object.keys(UNITS).map((u) => `<option${u === unit ? " selected" : ""}>${u}</option>`).join("")}</select></label></div>`}
     <div class="two"><label>How much${p ? ` (${unit})` : ""}<input type="number" name="qty" inputmode="decimal" min="0" value="${esc(qty)}"></label>
       <label>Price paid, ${"RM"}<input type="number" name="price" inputmode="decimal" min="0" step="0.01" placeholder="optional"></label></div>
@@ -171,20 +206,7 @@ function homePage() {
       <span class="sk-bar" aria-hidden="true"><i class="${e.status}" style="width:${Math.round((e.share ?? 0) * 100)}%"></i></span></a>`; }).join("")}</div>`
       : `<div class="mempty"><p><b>Add the things you buy often.</b></p><p class="note">Rice, eggs, milk, soap, tissue. Each time you buy one, Stocky learns how fast it goes and tells you before it runs out. Link food to your Meals foods and the meals you log count too.</p><a class="btn primary" href="#stocky/add">Add your first item</a></div>`}
   </section>
-  ${kindsPanel()}
   <p class="note">"Days left" is a guess from how often you buy each thing and the meals you log. Tap an item and say how much is left to put it right.</p>`;
-}
-
-// Kinds: Food and Home are built in; the family adds and removes their own.
-function kindsPanel() {
-  const count = (id) => pantry.filter((p) => kindOf(p.kind, kinds).id === id).length;
-  return `<section class="panel sk-kindlist" aria-labelledby="skKindTitle" data-title="Kinds">
-    <h2 id="skKindTitle">Kinds</h2>
-    <p class="note">Sort what you buy your own way, like Baby, Pets or Cleaning. Only Food can link to your Meals foods.</p>
-    <div class="mlist">${kinds.map((k) => { const n = count(k.id); return `<div class="mitem"><div><b>${esc(k.name)}</b><small>${n} item${n === 1 ? "" : "s"}${k.builtIn ? " · built in" : ""}</small></div>${k.builtIn ? "" : `<button type="button" class="mini" data-sk="kind-del" data-id="${esc(k.id)}" aria-label="Remove the kind ${esc(k.name)}">✕</button>`}</div>`; }).join("")}</div>
-    <form class="addrow1" data-skform="kind" novalidate><input type="text" name="name" maxlength="30" placeholder="New kind, like Baby" aria-label="New kind"><button type="submit">Add</button></form>
-    <p class="note sk-msg" role="status" data-sk-kindmsg></p>
-  </section>`;
 }
 
 function itemPage(id) {
@@ -243,7 +265,7 @@ function itemForm(p) {
   const { foods } = mealData(), v = (k, d = "") => esc(p?.[k] ?? d);
   return `<form class="mform" data-skform="item" novalidate>
     <label>Name<input type="text" name="name" maxlength="60" value="${v("name")}" placeholder="Beras, Telur, Tisu"></label>
-    <div class="two"><label>Kind<select name="kind" data-sk-toggle="food">${kindOptions(p ? kindOf(p.kind, kinds).id : "food")}</select></label>
+    <div class="two">${kindField(p ? kindOf(p.kind, kinds).id : "food")}
       <label>Counted in<select name="unit">${Object.keys(UNITS).map((u) => `<option value="${u}"${(p?.unit || "g") === u ? " selected" : ""}>${{ g: "grams", ml: "ml", pcs: "pieces" }[u]}</option>`).join("")}</select></label></div>
     <label>Usually bought at once<input type="number" name="pack" inputmode="decimal" min="0" value="${v("pack")}" placeholder="5000 for a 5 kg bag, 30 for a tray"></label>
     <div data-sk-show="food">
@@ -304,10 +326,12 @@ function planPage() {
 function syncForms() {
   for (const f of $("stocky").querySelectorAll("form.mform")) {
     const el = f.elements, show = (k, on) => f.querySelectorAll(`[data-sk-show="${k}"]`).forEach((x) => { x.hidden = !on; });
+    if (el.kind) kindNote(f);
     if (el.kind && el.food) {
-      show("food", el.kind.value === "food");
-      show("newfood", el.kind.value === "food" && el.food.value === "new");
-      const linked = el.kind.value === "food" && !!el.food.value;
+      const food = isFood(f);
+      show("food", food);
+      show("newfood", food && el.food.value === "new");
+      const linked = food && !!el.food.value;
       show("each", linked && el.unit.value === "pcs");
       show("ratio", linked && el.unit.value !== "pcs");
     }
@@ -328,6 +352,19 @@ function hint(f) {
 const rowByKey = (k) => (k?.startsWith("item-") ? { key: k, item: k.slice(5) } : listRows().find((r) => r.key === k));
 
 // ---------- saving ----------
+// The kind typed in a form: an existing id, or a new kind (made with commitKind() once the rest checks out).
+function kindFrom(f) {
+  const m = matchKind(f.elements.kind?.value, kinds);
+  if (m.error) return m;
+  if (m.id) return { id: m.id, ids: kinds.map((k) => k.id) };
+  const ref = doc(cols.kinds);
+  return { id: ref.id, ids: [...kinds.map((k) => k.id), ref.id], make: { ref, body: { name: m.name, created: Date.now() } } };
+}
+async function commitKind(k) {
+  if (!k.make) return;
+  kinds = allKinds([...kinds.filter((x) => !x.builtIn), { id: k.id, ...k.make.body }]);
+  await commit(() => setDoc(k.make.ref, k.make.body));
+}
 async function saveBuy(f) {
   const r = rowByKey(f.dataset.key); if (!r) return;
   const el = f.elements, { rec, error } = readPrice({ qty: el.qty.value, price: el.price.value, shop: el.shop.value, sale: el.sale.checked });
@@ -337,8 +374,11 @@ async function saveBuy(f) {
     const known = pantry.find((p) => p.name.toLowerCase() === String(r.name).toLowerCase());
     if (known) itemId = known.id;
     else {
-      const { item, error: e2 } = readItem({ name: r.name, kind: el.kind?.value, unit: el.unit?.value, pack: rec.qty, food: r.food }, kinds.map((k) => k.id));
+      const k = kindFrom(f);
+      if (k.error) { setMsg(f, k.error); return; }
+      const { item, error: e2 } = readItem({ name: r.name, kind: k.id, unit: el.unit?.value, pack: rec.qty, food: r.food }, k.ids);
       if (e2) { setMsg(f, e2); return; }
+      await commitKind(k);
       const ref = doc(cols.pantry); itemId = ref.id;
       await commit(() => setDoc(ref, { ...item, created: Date.now() }));
     }
@@ -359,9 +399,11 @@ async function savePrice(f) {
 }
 async function saveItem(f) {
   const el = f.elements, id = route().page === "item" ? route().id : null, { foods } = mealData();
-  let food = el.kind.value === "food" ? el.food.value : "";
-  const fd = { name: el.name.value, kind: el.kind.value, unit: el.unit.value, pack: el.pack.value, each: el.unit.value === "pcs" ? el.each.value : el.ratio.value, food: food === "new" ? "new" : food };
-  const { item, error } = readItem(fd, kinds.map((k) => k.id));
+  const k = kindFrom(f);
+  if (k.error) { setMsg(f, k.error); return; }
+  let food = k.id === "food" ? el.food.value : "";
+  const fd = { name: el.name.value, kind: k.id, unit: el.unit.value, pack: el.pack.value, each: el.unit.value === "pcs" ? el.each.value : el.ratio.value, food: food === "new" ? "new" : food };
+  const { item, error } = readItem(fd, k.ids);
   if (error) { setMsg(f, error); return; }
   if (pantry.some((p) => p.id !== id && p.name.toLowerCase() === item.name.toLowerCase())) { setMsg(f, "That's already in Stocky."); return; }
   // "+ New Meals food from this": the numbers per 100 g become a food in the Meals library.
@@ -378,6 +420,7 @@ async function saveItem(f) {
     if (p.error) { setMsg(f, p.error); return; }
     buy = p.rec;
   }
+  await commitKind(k);
   if (newFood) { item.food = newFood.ref.id; await commit(() => setDoc(newFood.ref, newFood.body)); }
   const ref = id ? doc(cols.pantry, id) : doc(cols.pantry);
   const old = id ? pantry.find((p) => p.id === id) : null;
@@ -397,16 +440,6 @@ async function addTyped(f) {
   refreshStocky(true);
   $("stocky").querySelector('[data-skform="row"] input')?.focus();
 }
-async function addKind(f) {
-  const { name, error } = readKind(f.elements.name.value, kinds);
-  const out = f.parentElement.querySelector("[data-sk-kindmsg]");
-  if (error) { if (out) out.textContent = error; return; }
-  const ref = doc(cols.kinds), body = { name, created: Date.now() };
-  kinds = allKinds([...kinds.filter((k) => !k.builtIn), { id: ref.id, ...body }]);
-  msg = ""; refreshStocky(true);
-  await commit(() => setDoc(ref, body));
-  const o2 = $("stocky").querySelector("[data-sk-kindmsg]"); if (o2) o2.textContent = `Added ${name}. Pick it when you add or edit an item.`;
-}
 // Every delete goes through confirmDelete() (see .claude/skills/safe-delete/SKILL.md).
 const names = (ps) => ps.length <= 3 ? ps.map((p) => `<b>${esc(p.name)}</b>`).join(", ") : `${ps.slice(0, 3).map((p) => `<b>${esc(p.name)}</b>`).join(", ")} and ${ps.length - 3} more`;
 async function removeKind(id) {
@@ -416,6 +449,9 @@ async function removeKind(id) {
     body: inIt.length ? `<p>${inIt.length} item${inIt.length === 1 ? "" : "s"} (${names(inIt)}) will move to <b>${esc(to)}</b>. The items, buys and prices stay.</p>` : `<p>No items use it.</p>` });
   if (!ok) return;
   if (kindShown === id) { kindShown = ""; store.set("journal-stocky-kind", ""); }
+  // A form showing this kind switches to Home.
+  for (const input of $("stocky").querySelectorAll(".sk-kindf input")) if (input.value.trim().toLowerCase() === k.name.toLowerCase()) input.value = to;
+  kinds = kinds.filter((x) => x.id !== id); repaintMenus(); syncForms();
   await commit(() => Promise.all([...inIt.map((p) => updateDoc(doc(cols.pantry, p.id), { kind: FALLBACK_KIND })), deleteDoc(doc(cols.kinds, id))]));
 }
 async function removeItem(id) {
@@ -448,6 +484,7 @@ function setMsg(f, t) { msg = t; const el = f.querySelector(".sk-msg") || f.quer
 function wire() {
   const host = $("stocky");
   host.addEventListener("click", async (ev) => {
+    closeMenus(ev.target.closest(".sk-kindf"));
     const b = ev.target.closest("[data-sk]"); if (!b) return;
     const act = b.dataset.sk, id = route().id;
     if (act === "buy") { buying = b.dataset.key; pricing = false; msg = ""; refreshStocky(true); host.querySelector(".sk-buy input[name=qty]")?.focus(); }
@@ -456,6 +493,8 @@ function wire() {
     if (act === "unlist") await unlist(b.dataset.id);
     if (act === "kindshow") { kindShown = b.dataset.kind; store.set("journal-stocky-kind", kindShown); refreshStocky(true); }
     if (act === "kind-del") await removeKind(b.dataset.id);
+    if (act === "kindmenu") { const f = b.closest("form"), menu = f.querySelector(".sk-menu"); if (menu.hidden || !menu.dataset.all) openMenu(f, true); else closeMenus(); } // suggestions open → show them all
+    if (act === "kindpick") { const f = b.closest("form"); f.elements.kind.value = b.dataset.name; f.dataset.dirty = "1"; closeMenus(); syncForms(); }
     if (act === "list") { const p = pantry.find((x) => x.id === b.dataset.id); if (p) { msg = `${p.name} is on the list.`; await addRow({ name: p.name, item: p.id, qty: p.pack, unit: p.unit, from: "manual" }); } }
     if (act === "level") {
       const check = { date: today(), at: Date.now(), level: Number(b.dataset.level) };
@@ -482,9 +521,19 @@ function wire() {
     if (k === "price") savePrice(f);
     if (k === "item") saveItem(f);
     if (k === "row") addTyped(f);
-    if (k === "kind") addKind(f);
   });
-  host.addEventListener("change", () => syncForms());
-  host.addEventListener("input", (ev) => { const f = ev.target.closest("form"); if (f) hint(f); });
+  host.addEventListener("change", (ev) => { const f = ev.target.closest("form.mform"); if (f) f.dataset.dirty = "1"; syncForms(); });
+  host.addEventListener("input", (ev) => {
+    const f = ev.target.closest("form"); if (!f) return;
+    if (f.matches(".mform")) f.dataset.dirty = "1";
+    if (ev.target.name === "kind" && ev.target.closest(".sk-kindf")) { openMenu(f, false); syncForms(); return; }
+    hint(f);
+  });
+  host.addEventListener("keydown", (ev) => {
+    if (ev.target.name !== "kind" || !ev.target.closest(".sk-kindf")) return;
+    if (ev.key === "Enter") { ev.preventDefault(); closeMenus(); ev.target.blur(); }
+    if (ev.key === "Escape") closeMenus();
+  });
+  document.addEventListener("click", (ev) => { if (!$("stocky").contains(ev.target)) closeMenus(); });
   host.addEventListener("focusout", () => setTimeout(() => { if (pending && !host.contains(document.activeElement)) refreshStocky(); }, 0));
 }

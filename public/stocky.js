@@ -10,6 +10,7 @@
 // What's left, when it runs out, and which shop is cheapest are worked out when drawing, never stored.
 import { dayNum, addDays } from "./suggest.js";
 import { plateOf } from "./meals.js";
+import { tagKey } from "./diary.js"; // same near-copy rule as diary tags: case, spaces, dashes, a plural s
 
 export const UNITS = { g: "g", ml: "ml", pcs: "pcs" };
 export const LEVELS = [[1, "Full"], [0.5, "Half"], [0.25, "Low"], [0, "Out"]];
@@ -222,11 +223,25 @@ export const BUILT_IN_KINDS = [{ id: "food", name: "Food", builtIn: true }, { id
 export const FALLBACK_KIND = "home";
 export const allKinds = (custom = []) => [...BUILT_IN_KINDS, ...[...custom].sort((a, b) => (a.created || 0) - (b.created || 0) || a.name.localeCompare(b.name))];
 export const kindOf = (id, kinds) => kinds.find((k) => k.id === id) || kinds.find((k) => k.id === FALLBACK_KIND);
+// The Kind field: what's typed (or picked) → { id } of a kind that exists (any capitals / spaces),
+// { name } of a new kind to make on save, or { error }.
+export function matchKind(text, kinds) {
+  const nm = String(text || "").trim().replace(/\s+/g, " ");
+  if (!nm) return { error: "Pick a kind, or type a new one." };
+  const same = kinds.find((k) => tagKey(k.name) === tagKey(nm));
+  if (same) return { id: same.id };
+  return readKind(nm, kinds);
+}
+// Kinds for the open list: those whose name has what's typed in it (all of them when nothing is typed).
+export const kindsLike = (text, kinds) => {
+  const q = String(text || "").trim().toLowerCase(), qk = tagKey(q);
+  return q ? kinds.filter((k) => k.name.toLowerCase().includes(q) || (qk && tagKey(k.name).includes(qk))) : kinds;
+};
 // A kind being typed. Returns { name } or { error }.
 export function readKind(name, kinds) {
   const nm = String(name || "").trim().replace(/\s+/g, " ").slice(0, 30);
   if (!nm) return { error: "Give the kind a name, like Baby or Pets." };
-  const same = kinds.find((k) => k.name.toLowerCase() === nm.toLowerCase());
+  const same = kinds.find((k) => tagKey(k.name) === tagKey(nm));
   if (same) return { error: `There's already a kind called ${same.name}.` };
   return { name: nm };
 }
