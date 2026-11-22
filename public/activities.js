@@ -8,14 +8,12 @@ import {
   collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, arrayUnion, arrayRemove, query, where,
 } from "./fs.js";
 import {
-  TYPES, ALL_DAYS, guessType, isScheduled, habitState, habitWeek, describe, firstOpenStep, scoreOf, pickNext, learn, iso, parse, addDays, dayNum,
+  TYPES, ALL_DAYS, guessType, isScheduled, habitState, habitWeek, describe, firstOpenStep, scoreOf, pickNext, learn,
 } from "./suggest.js";
 import { journalView } from "./mealsui.js";
 import { confirmDelete } from "./confirm.js";
+import { $, esc, iso, parse, dayNum, addDays, today } from "./util.js";
 
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const today = () => iso(new Date());
 const fmt = (s) => parse(s).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "";
 const store = {

@@ -3,7 +3,7 @@
 // "Keep" has the focus, so Enter, Esc, tapping outside or the back gesture all keep the thing.
 // `note` replaces "This can't be undone." when it can (a bin to restore from).
 // `title`, `yes` and `note` are plain text (escaped here); `body` is HTML, so callers esc() anything user-typed in it.
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+import { esc } from "./util.js";
 let sheet = null, settle = null;
 // Resolve the open prompt once and close it.
 function answer(yes) {

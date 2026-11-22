@@ -1,6 +1,6 @@
 // Mood: how each day felt, rated 1 to 5 by the person themselves (never guessed from other data).
 // Pure: no Firebase, no DOM. Stored as `mood` on entries/{person}_{date}. Tune quotes and thresholds here.
-import { iso, parse, addDays } from "./suggest.js";
+import { iso, parse, addDays } from "./util.js";
 
 // Cool colours for hard days, warm for good ones ("feeling blue" / "sunny"). Colour-blind safe: blue vs orange.
 export const MOODS = [

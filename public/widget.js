@@ -1,7 +1,8 @@
 // Offers the Android home-screen widget (android/, "Next Move"): after the app is installed, and from the wheel's ⋯ menu.
 // Android phones only, never in the demo (the widget signs in with the family password).
+import { $ } from "./util.js";
+
 const APK = "https://github.com/FaizGhazali/faiz-muna-journal/releases/latest/download/next-move.apk";
-const $ = (id) => document.getElementById(id);
 
 export const canWidget = () => /Android/i.test(navigator.userAgent) && sessionStorage.getItem("journal-demo") !== "1";
 

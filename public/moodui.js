@@ -7,12 +7,8 @@ import { doc, setDoc } from "./fs.js";
 import { MOODS, isMood, quoteFor, moodMap, dayMoods, lastSeven, periods, boosters, yearGrid, moodMix, VIEWS, MIN_DAYS } from "./mood.js";
 import { reflections, pickReflection } from "./reflect.js";
 import { titleOf, bodyText, prettyDate, words } from "./diary.js";
-import { iso, parse, addDays } from "./suggest.js";
+import { $, esc, iso, parse, addDays, today, fmt } from "./util.js";
 
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const today = () => iso(new Date());
-const fmt = (s, o) => parse(s).toLocaleDateString(undefined, o);
 const MONTHS = Array.from({ length: 12 }, (_, m) => new Date(2000, m, 1).toLocaleDateString(undefined, { month: "short" }));
 
 let db, people, entries, diary, me, habitFacts, commit;

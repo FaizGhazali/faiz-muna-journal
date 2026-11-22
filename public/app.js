@@ -22,21 +22,14 @@ import { initGuides } from "./tour.js";
 import { initWidget, offerWidget } from "./widget.js";
 import { initDiary, startDiary, stopDiary, refreshDiary, diaryList } from "./diaryui.js";
 import { confirmDelete } from "./confirm.js";
+import { $, esc, iso, parse, dayNum, today, fmt } from "./util.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const PACE = 0.5; // kg a week
 const WEEKLY_MINUTES = 150; // WHO weekly minimum for moderate activity
 const LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
 
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const r1 = (n) => Math.round(n * 10) / 10;
-const pad = (n) => String(n).padStart(2, "0");
-const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const parse = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
-const dayNum = (s) => { const [y, m, d] = s.split("-").map(Number); return Date.UTC(y, m - 1, d) / 864e5; };
-const fmt = (s, o) => parse(s).toLocaleDateString(undefined, o);
-const today = () => iso(new Date());
 const m2 = (p) => (p.cm / 100) ** 2;
 const bmiOf = (p, kg) => r1(kg / m2(p));
 const range = (p) => ({ lo: r1(18.5 * m2(p)), hi: r1(24.9 * m2(p)), asian: r1(22.9 * m2(p)) });

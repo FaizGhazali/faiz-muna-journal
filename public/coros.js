@@ -1,5 +1,6 @@
 // Reads the numbers out of a COROS run picture (the long image the COROS app shares).
 // The picture is read on this device and never uploaded or stored; only the numbers are kept.
+import { pad } from "./util.js";
 
 // Text reader (Tesseract). Loaded only when a picture is added. The version is pinned so sw.js can keep it offline.
 const READER = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js";
@@ -8,7 +9,6 @@ const Q = "['’‘′`´°]"; // what the minute mark in 9'29" may be read as
 const PACE = new RegExp(`(\\d{1,2})\\s*${Q}\\s*(\\d{2})`);
 const PACES = new RegExp(PACE.source, "g");
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-const pad = (n) => String(n).padStart(2, "0");
 const within = (n, lo, hi) => (Number.isFinite(n) && n >= lo && n <= hi ? n : undefined);
 const clockSecs = (t) => t.split(":").map(Number).reduce((a, n) => a * 60 + n, 0);
 

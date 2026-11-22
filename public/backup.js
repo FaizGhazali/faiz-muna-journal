@@ -1,6 +1,7 @@
 // Save the whole journal to a file, and load such a file back in.
 // Loading adds or replaces items with the same id. It never deletes anything.
 import { collection, doc, getDocs, writeBatch } from "./fs.js";
+import { $, today } from "./util.js";
 
 const APP = "our-journal";
 const VERSION = 1;
@@ -17,9 +18,6 @@ const summary = (counts) => Object.keys(LABELS).filter((k) => counts[k]).map((k)
 function one(label) { return label.replace(/ies$/, "y").replace(/s$/, ""); } // "diary entries" → "diary entry"
 const BATCH = 400; // Firestore allows 500 writes per batch
 
-const $ = (id) => document.getElementById(id);
-const pad = (n) => String(n).padStart(2, "0");
-const stamp = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const okId = (id) => typeof id === "string" && id.length > 0 && id.length <= 150 && !id.includes("/") && id !== "." && id !== "..";
 const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
 
@@ -55,7 +53,7 @@ async function exportData() {
     const blob = new Blob([JSON.stringify(file, null, 1)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `journal-backup-${stamp(new Date())}.json`;
+    a.download = `journal-backup-${today()}.json`;
     document.body.append(a);
     a.click();
     a.remove();

@@ -14,10 +14,8 @@ import * as cloud from "./cloudai.js";
 import { MOODS, isMood } from "./mood.js";
 import { face } from "./moodui.js";
 import { confirmDelete } from "./confirm.js";
+import { $, esc, today } from "./util.js";
 
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const today = () => iso(new Date());
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },

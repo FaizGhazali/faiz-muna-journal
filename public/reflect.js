@@ -4,7 +4,7 @@
 // Each card: { key, kind, score, title, text, date?, entry? (diary id), mood? (1..5) }. Higher score = shown first.
 import { MOODS, periods, boosters, MIN_DAYS } from "./mood.js";
 import { onThisDay, diaryStats, titleOf, preview, live, tagStats, showTags } from "./diary.js";
-import { addDays, parse } from "./suggest.js";
+import { parse, addDays } from "./util.js";
 
 const short = (d) => parse(d).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;

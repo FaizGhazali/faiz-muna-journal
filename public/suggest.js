@@ -1,5 +1,6 @@
 // "Your Next Move": picks ONE thing to do next.
 // Pure rules only: no Firebase and no DOM, so this file can be tuned and tested on its own.
+import { iso, parse, dayNum, addDays } from "./util.js";
 
 export const TYPES = {
   skill: { label: "Skill", color: "--accent" },
@@ -11,11 +12,6 @@ export const TYPES = {
 export const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
 // ---- local calendar dates as "YYYY-MM-DD" ----
-const pad = (n) => String(n).padStart(2, "0");
-export const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-export const parse = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
-export const dayNum = (s) => { const [y, m, d] = s.split("-").map(Number); return Date.UTC(y, m - 1, d) / 864e5; };
-export const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return iso(d); };
 const short = (s) => parse(s).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
 // ---- category guess for the quick-add box (the user can always change it) ----

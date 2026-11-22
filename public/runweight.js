@@ -4,8 +4,7 @@
 // within maxGapDays (a tie goes to the earlier date). Runs with no weigh-in close enough are left out.
 // Weights are never interpolated or made up. A straight line (least squares) then shows how pace moves
 // with weight.
-
-import { dayNum } from "./suggest.js";
+import { dayNum } from "./util.js";
 
 export const MAX_GAP_DAYS = 7;  // furthest a weigh-in can be from a run and still count
 export const MIN_TREND = 3;     // fewer runs than this: dots only, no line

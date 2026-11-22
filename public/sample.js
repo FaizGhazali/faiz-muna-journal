@@ -1,7 +1,7 @@
 // Made-up sample journal for the demo: two invented people, about 12 weeks of history ending today.
 // Pure: no Firebase, no DOM. The numbers are random but repeatable, so every visitor sees the same story.
 // Never put real family data here.
-import { iso, addDays, parse } from "./suggest.js";
+import { iso, parse, addDays } from "./util.js";
 
 const DAYS = 84;
 

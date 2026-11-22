@@ -5,11 +5,8 @@ import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "./fs.
 import { confirmDelete } from "./confirm.js";
 import { UNITS, LEVELS, allKinds, kindOf, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice } from "./stocky.js";
 import { readFood } from "./meals.js";
-import { iso, parse } from "./suggest.js";
+import { $, esc, iso, parse, today } from "./util.js";
 
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const today = () => iso(new Date());
 const day = (d) => parse(d).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
 let commit, me, people, mealData, cols = {}, unsubs = [];

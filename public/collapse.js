@@ -3,8 +3,8 @@
 // Which cards are folded is kept per device in localStorage "journal-folded". A tutorial card explains it
 // until the person ticks "Got it" ("journal-foldhint").
 // Cards are often redrawn with innerHTML, so a MutationObserver puts the button and the folded state back.
+import { $ } from "./util.js";
 
-const $ = (id) => document.getElementById(id);
 const CARDS = "#app .view .panel, #app .person";
 const HOLD_MS = 550;
 

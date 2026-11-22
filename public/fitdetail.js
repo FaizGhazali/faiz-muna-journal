@@ -4,11 +4,8 @@
 import { runsWithWeight, linearRegression, runEntries, similarEffort, weightBands, bandWidth, ageOn, ageText, MAX_GAP_DAYS, MIN_TREND, CONFIDENT, SIMILAR_BPM } from "./runweight.js";
 import { clock } from "./fitness.js";
 import { zoomable, xWindow, isZoomed } from "./zoom.js";
-import { parse, dayNum, iso } from "./suggest.js";
+import { $, esc, iso, parse, dayNum, fmt } from "./util.js";
 
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const fmt = (s, o) => parse(s).toLocaleDateString(undefined, o);
 const short = (s) => fmt(s, { day: "numeric", month: "short" });
 const long = (s) => fmt(s, { day: "numeric", month: "short", year: "numeric" });
 const month = (s) => fmt(s, { month: "short", year: "numeric" });

@@ -5,8 +5,8 @@
 // LOST_MS), the walkthrough goes back to the step named by backTo. Nothing is saved except what the person
 // saves themselves; the walkthrough only watches the page.
 import { unfold } from "./collapse.js";
+import { $ } from "./util.js";
 
-const $ = (id) => document.getElementById(id);
 const LOST_MS = 600;
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 

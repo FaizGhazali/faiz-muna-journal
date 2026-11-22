@@ -2,13 +2,11 @@
 // Also the food library (per 100 g) and the meal sets. Maths lives in meals.js; data model is described there.
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from "./fs.js";
 import { SLOTS, LEARN_AFTER, slotAt, portion, total, dayTotal, plateOf, rowFor, logItems, rankSets, readFood, fitsSlot, burnOf, intakeRange, weightOn, verdict, shadeOf, yearStats } from "./meals.js";
-import { iso, parse, addDays } from "./suggest.js";
+
 import { offerWidget } from "./widget.js";
 import { confirmDelete } from "./confirm.js";
+import { $, esc, iso, parse, addDays, today } from "./util.js";
 
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const today = () => iso(new Date());
 const num = (n) => (Math.round(n * 10) / 10).toLocaleString();
 
 let commit, me, people, entries, stock, foodsCol, setsCol, mealsCol, burnsCol, unsubs = [];

@@ -8,9 +8,10 @@
 //   shopList/{auto id} { name, item?, food?, qty?, unit?, from: "manual"|"plan", created }
 //   kinds/{auto id}    { name, created }  the family's own kinds beside the built-in Food and Home
 // What's left, when it runs out, and which shop is cheapest are worked out when drawing, never stored.
-import { dayNum, addDays } from "./suggest.js";
+
 import { plateOf } from "./meals.js";
 import { tagKey } from "./diary.js"; // same near-copy rule as diary tags: case, spaces, dashes, a plural s
+import { dayNum, addDays } from "./util.js";
 
 export const UNITS = { g: "g", ml: "ml", pcs: "pcs" };
 export const LEVELS = [[1, "Full"], [0.5, "Half"], [0.25, "Low"], [0, "Out"]];
