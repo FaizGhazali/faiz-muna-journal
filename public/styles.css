@@ -1084,12 +1084,36 @@ a.btn.mini { font-size: 13px; font-weight: 400; padding: 4px 10px; color: var(--
 .sk-tot small { color: var(--muted); font-size: 12px }
 .sk-tot div:first-child { outline: 2px solid var(--good); outline-offset: -2px }
 .sk-add { margin-top: 12px }
-.sk-items { display: grid; gap: 2px }
-.sk-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); color: var(--ink); text-decoration: none }
-.sk-name small { display: block; color: var(--muted); font-size: 13px }
+/* At home shelves: one per kind, tiles three a row; a tile opens the quick sheet (#skSheet) */
+.sk-shelf + .sk-shelf { margin-top: 6px }
+.sk-shelfhead { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 8px 2px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; text-align: left }
+.sk-shelfhead small { color: var(--muted); font-weight: 400 }
+.sk-shelfhead i { margin-left: auto; font-style: normal; color: var(--muted); transition: transform .2s }
+.sk-shelfhead[aria-expanded="false"] i { transform: rotate(-90deg) }
+.sk-need { font-size: 12px; padding: 1px 8px; border-radius: 99px; background: color-mix(in srgb, var(--over) 18%, transparent); color: var(--ink) }
+.sk-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px 0 4px }
+.sk-tile { display: grid; gap: 3px; align-content: start; min-width: 0; min-height: 64px; padding: 8px; text-align: left; font-weight: 400; background: var(--bg); border-color: transparent; border-radius: 10px }
+.sk-tile b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.sk-tile small { color: var(--muted); font-size: 12px }
+.sk-tile.is-out, .sk-tile.is-low { border-color: color-mix(in srgb, var(--over) 55%, transparent) }
+.sk-tile.is-out { border-color: color-mix(in srgb, var(--obese) 60%, transparent) }
+.sk-tile .sk-bar { height: 4px; margin-top: 2px; background: var(--surface) }
+.sk-tile.more { place-content: center; text-align: center; color: var(--muted); background: transparent; border: 1px dashed var(--line) }
+.sk-peek .mhead { align-items: center; gap: 8px }
+.sk-peek .mhead h3 { flex: 1; margin: 0; font-size: 20px; min-width: 0 }
+.sk-peek .note, .sk-peek .mwhat { margin: 0 }
+.sk-peek .sk-levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px }
+.sk-peek .sk-levels .chip { padding: 10px 0 }
+.sk-peek .sk-buy { margin: 0 }
+.sk-all { justify-self: center; padding: 6px 12px; font-weight: 700; color: var(--accent); text-decoration: none }
+/* Item page: prices, buys and edit fold into rows that say the gist */
+.sk-part summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-height: 28px }
+.sk-part summary small { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 13px }
+.sk-part:last-child { border-bottom: 0 }
+.sk-part[open] > summary { margin-bottom: 8px }
 .sk-bar { grid-column: 1 / -1; height: 6px; border-radius: 99px; background: var(--bg); overflow: hidden }
 .sk-bar i { display: block; height: 100%; border-radius: 99px; background: var(--good) }
-.sk-bar i.soon { background: var(--under) } .sk-bar i.low { background: var(--over) } .sk-bar i.out { background: var(--obese) } .sk-bar i.unknown { background: var(--line) }
+.sk-bar i.is-soon { background: var(--under) } .sk-bar i.is-low { background: var(--over) } .sk-bar i.is-out { background: var(--obese) } .sk-bar i.is-unknown { background: var(--line) }
 .sk-why { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; display: grid; gap: 4px }
 .sk-check { display: flex; align-items: center; gap: 8px; font-weight: 400 }
 .sk-check input { width: auto }
@@ -1112,8 +1136,6 @@ button.mini.primary { color: var(--on-accent); font-weight: 700 }
 @media (max-width: 460px) { .sk-add input[name=name] { grid-column: 1 / -1 } .sk-add input[name=qty] { grid-column: 1 / 3 } .sk-add button { grid-column: 3 } }
 
 /* Stocky kinds */
-.sk-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px }
-.sk-kinds small { opacity: .7; font-weight: 400 }
 /* Kind field: type a name, or tap the arrow for the list */
 .sk-kindf { position: relative; display: grid; gap: 4px; min-width: 0 }
 .sk-lbl { font-size: 14px; font-weight: 700 }

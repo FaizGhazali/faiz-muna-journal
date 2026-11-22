@@ -115,6 +115,18 @@ export function lowItems(pantry, ests) {
     .sort((a, b) => (ests[a.id].daysLeft ?? -1) - (ests[b.id].daysLeft ?? -1) || a.name.localeCompare(b.name));
 }
 
+// At home as shelves: one per kind that has items (in the kinds' own order), each item sorted out → low →
+// soon → not sure → fine, then fewest days left, then name. `need` counts what wants buying (out / low / soon).
+const STATUS_ORDER = { out: 0, low: 1, soon: 2, unknown: 3, ok: 4 };
+export function shelves(pantry, ests, kinds) {
+  const rank = (p) => STATUS_ORDER[ests[p.id]?.status] ?? STATUS_ORDER.unknown;
+  return kinds.map((kind) => {
+    const items = pantry.filter((p) => kindOf(p.kind, kinds).id === kind.id)
+      .sort((a, b) => rank(a) - rank(b) || (ests[a.id]?.daysLeft ?? 999) - (ests[b.id]?.daysLeft ?? 999) || a.name.localeCompare(b.name));
+    return { kind, items, need: items.filter((p) => rank(p) <= STATUS_ORDER.soon).length };
+  }).filter((s) => s.items.length);
+}
+
 // ---------- shops and prices ----------
 // Price per unit (per kg, per L or per piece reads better than per gram).
 export const perUnit = (r) => (r.qty > 0 && r.price > 0 ? r.price / r.qty : null);

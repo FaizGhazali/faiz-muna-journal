@@ -3,7 +3,7 @@
 // Maths and the data model live in stocky.js. Meals are read, never written: what meals use is worked out.
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "../../core/fs.js";
 import { confirmDelete } from "../../core/confirm.js";
-import { UNITS, LEVELS, allKinds, kindOf, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice } from "../../logic/stocky.js";
+import { UNITS, LEVELS, allKinds, kindOf, shelves, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice } from "../../logic/stocky.js";
 import { readFood } from "../../logic/meals.js";
 import { $, esc, iso, parse, today } from "../../core/util.js";
 
@@ -11,8 +11,9 @@ const day = (d) => parse(d).toLocaleDateString(undefined, { day: "numeric", mont
 
 let commit, me, people, mealData, cols = {}, unsubs = [];
 let pantry = [], buys = [], prices = [], list = [], kinds = allKinds(), ests = {}, boards = {};
-// Page state: which row's "Bought" form is open, the At home kind filter, the meal plan, messages.
-let buying = null, pricing = false, editing = false, byShop = false, kindShown = "", msg = "", plan = {}, pending = false;
+// Page state: which row's "Bought" form is open, the item in the quick sheet, folded shelves, the meal plan, messages.
+let buying = null, pricing = false, editing = false, byShop = false, peek = null, msg = "", plan = {}, pending = false;
+let shut = new Set(), opened = new Set(), unfolded = new Set(); // folded shelves (kept per device), shelves showing every tile, open parts of the item page
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (_) { return d; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} },
@@ -22,8 +23,8 @@ export function initStocky(opts) {
   ({ commit, me, people, mealData } = opts);
   for (const c of ["pantry", "buys", "prices", "shopList", "foods", "kinds"]) cols[c] = collection(opts.db, c);
   byShop = store.get("journal-stocky-byshop", "") === "1";
-  kindShown = store.get("journal-stocky-kind", "");
-  addEventListener("hashchange", () => { buying = null; pricing = false; editing = false; msg = ""; refreshStocky(true); });
+  try { shut = new Set(JSON.parse(store.get("journal-stocky-shut", "[]"))); } catch (_) { shut = new Set(); }
+  addEventListener("hashchange", () => { closePeek(); pricing = false; editing = false; unfolded.clear(); refreshStocky(true); });
   wire();
 }
 export function startStocky() {
@@ -68,12 +69,14 @@ export function refreshStocky(force) {
   const host = $("stocky"); if (!host || !people().length) return;
   compute();
   // Don't redraw under someone typing, or over a form they've started filling in; catch up when they leave it.
-  const a = document.activeElement;
-  if (!force && ((host.contains(a) && a.matches("input, select, textarea")) || host.querySelector("form[data-dirty]"))) { pending = true; return; }
+  const a = document.activeElement, sheet = $("skSheet");
+  const busy = (el) => (el.contains(a) && a.matches("input, select, textarea")) || el.querySelector("form[data-dirty]");
+  if (!force && (busy(host) || (sheet.open && busy(sheet)))) { pending = true; return; }
   pending = false;
   if (host.hidden && !force) return;
   const r = route();
   host.innerHTML = r.page === "item" ? itemPage(r.id) : r.page === "add" ? addPage() : r.page === "prices" ? pricesPage() : r.page === "plan" ? planPage() : homePage();
+  if (peek && sheet.open) sheet.innerHTML = sheetHtml(peek);
   syncForms();
 }
 
@@ -180,13 +183,6 @@ function homePage() {
     listHtml = `${tot.length ? `<p class="note">The list at each shop, for the things it has a price for:</p><div class="sk-tot">${tot.map((t) => `<div><b>${esc(t.shop)}</b><span>${money(t.total)}</span><small>${t.have} item${t.have === 1 ? "" : "s"} with a price${t.missing ? `, ${t.missing} without` : ""}</small></div>`).join("")}</div>` : ""}
       ${[...groups].sort(([a], [b]) => (a === "No price yet") - (b === "No price yet") || a.localeCompare(b)).map(([s, rs]) => `<h3 class="sk-shop">${esc(s)}</h3>${rs.map(rowHtml).join("")}`).join("")}`;
   } else listHtml = rows.map(rowHtml).join("");
-  const order = { out: 0, low: 1, soon: 2, unknown: 3, ok: 4 };
-  // Kind chips over At home, only once there's more than one kind to pick from.
-  const used = kinds.map((k) => ({ ...k, n: pantry.filter((p) => kindOf(p.kind, kinds).id === k.id).length })).filter((k) => k.n);
-  const pick = used.some((k) => k.id === kindShown) ? kindShown : "";
-  const chips = used.length > 1 ? `<div class="chips sk-kinds" role="group" aria-label="Show one kind">${[{ id: "", name: "All", n: pantry.length }, ...used]
-    .map((k) => `<button type="button" class="chip" data-sk="kindshow" data-kind="${esc(k.id)}" aria-pressed="${pick === k.id}">${esc(k.name)} <small>${k.n}</small></button>`).join("")}</div>` : "";
-  const home = pantry.filter((p) => !pick || kindOf(p.kind, kinds).id === pick).sort((a, b) => order[ests[a.id].status] - order[ests[b.id].status] || (ests[a.id].daysLeft ?? 999) - (ests[b.id].daysLeft ?? 999) || a.name.localeCompare(b.name));
   return `${nav("home")}
   <section class="panel sk-list" aria-labelledby="skListTitle" data-title="Shopping list">
     <div class="mhead"><h2 id="skListTitle">Shopping list</h2>${rows.length ? `<button type="button" class="chip" data-sk="byshop" aria-pressed="${byShop}">By cheapest shop</button>` : ""}</div>
@@ -197,13 +193,62 @@ function homePage() {
   </section>
   <section class="panel sk-home" aria-labelledby="skHomeTitle" data-title="At home">
     <div class="mhead"><h2 id="skHomeTitle">At home</h2><a class="btn mini" href="#stocky/add">+ Add item</a></div>
-    ${chips}
-    ${home.length ? `<div class="sk-items">${home.map((p) => { const e = ests[p.id]; return `<a class="sk-item" href="#stocky/item/${esc(p.id)}">
-      <span class="sk-name"><b>${esc(p.name)}</b><small>${esc(leftText(p, e))}</small></span>${pill(e.status)}
-      <span class="sk-bar" aria-hidden="true"><i class="${e.status}" style="width:${Math.round((e.share ?? 0) * 100)}%"></i></span></a>`; }).join("")}</div>`
+    ${pantry.length ? shelves(pantry, ests, kinds).map(shelfHtml).join("")
       : `<div class="mempty"><p><b>Add the things you buy often.</b></p><p class="note">Rice, eggs, milk, soap, tissue. Each time you buy one, Stocky learns how fast it goes and tells you before it runs out. Link food to your Meals foods and the meals you log count too.</p><a class="btn primary" href="#stocky/add">Add your first item</a></div>`}
   </section>
   <p class="note">"Days left" is a guess from how often you buy each thing and the meals you log. Tap an item and say how much is left to put it right.</p>`;
+}
+
+// ---------- At home shelves ----------
+// One shelf per kind: small tiles, three a row, neediest first. A shelf folds (kept per device) and shows
+// SHELF_TILES tiles until "+ more" is tapped, so a full house stays a short page.
+const SHELF_TILES = 9;
+const bar = (e) => `<span class="sk-bar" aria-hidden="true"><i class="is-${e.status}" style="width:${Math.round((e.share ?? 0) * 100)}%"></i></span>`;
+// "3 days", "2 wk", "Out": short enough for a tile.
+function tileLeft(e) {
+  if (e.status === "out") return "Out";
+  const d = e.daysLeft;
+  if (d == null) return e.left == null ? "New" : "Not sure";
+  return d === 0 ? "Today" : d < 14 ? `${d} day${d === 1 ? "" : "s"}` : d < 60 ? `${Math.round(d / 7)} wk` : "2+ months";
+}
+function shelfHtml({ kind, items, need }) {
+  const open = !shut.has(kind.id), all = opened.has(kind.id) || items.length <= SHELF_TILES + 1;
+  const shown = all ? items : items.slice(0, SHELF_TILES);
+  return `<div class="sk-shelf">
+    <button type="button" class="sk-shelfhead" data-sk="shelf" data-kind="${esc(kind.id)}" aria-expanded="${open}">
+      <b>${esc(kind.name)}</b><small>${items.length}</small>${need ? `<span class="sk-need">${need} to buy</span>` : ""}<i aria-hidden="true">▾</i></button>
+    ${open ? `<div class="sk-tiles">${shown.map((p) => { const e = ests[p.id]; return `<button type="button" class="sk-tile is-${e.status}" data-sk="peek" data-id="${esc(p.id)}">
+      <b>${esc(p.name)}</b><small>${esc(tileLeft(e))}</small>${bar(e)}</button>`; }).join("")}${all ? "" : `<button type="button" class="sk-tile more" data-sk="more" data-kind="${esc(kind.id)}">+${items.length - shown.length} more</button>`}</div>` : ""}
+  </div>`;
+}
+// The quick sheet: what a tile tap opens. The everyday jobs (how much is left, bought, add to list);
+// "See everything" opens the full item page.
+function sheetHtml(id) {
+  const p = pantry.find((x) => x.id === id);
+  if (!p) return `<div class="gsin"><p>This item isn't here any more.</p><div class="actions"><button type="button" data-sk="unpeek">Close</button></div></div>`;
+  const e = ests[p.id], key = "item-" + p.id;
+  return `<div class="gsin sk-peek">
+    <div class="mhead"><h3 id="skSheetTitle">${esc(p.name)}</h3>${pill(e.status)}<button type="button" class="mini" data-sk="unpeek" aria-label="Close">✕</button></div>
+    ${bar(e)}
+    <p class="note">${esc(leftText(p, e))}${e.outOn && e.status !== "out" ? ` · runs out ${esc(day(e.outOn))}` : ""}</p>
+    ${levelChips(p)}
+    <div class="actions">${buying === key ? "" : `<button type="button" class="primary" data-sk="buy" data-key="${key}">Bought some</button>`}${onList(p.id) ? `<span class="note">On the list</span>` : `<button type="button" data-sk="list" data-id="${esc(p.id)}">Add to list</button>`}</div>
+    ${buying === key ? buyForm({ key, item: p.id, qty: p.pack }, p) : ""}
+    ${bestText(p.id, p.unit)}
+    ${say()}
+    <a class="sk-all" href="#stocky/item/${esc(p.id)}">See everything →</a>
+  </div>`;
+}
+const levelChips = (p) => `<p class="mwhat">How much is left?</p>
+  <div class="chips sk-levels" role="group" aria-label="How much is left">${LEVELS.map(([l, t]) => `<button type="button" class="chip" data-sk="level" data-id="${esc(p.id)}" data-level="${l}" aria-pressed="${p.check?.date === today() && p.check.level === l}">${t}</button>`).join("")}</div>`;
+function openPeek(id) {
+  peek = id; buying = null; msg = "";
+  const s = $("skSheet"); s.innerHTML = sheetHtml(id);
+  if (!s.open) s.showModal();
+}
+function closePeek() {
+  peek = null; buying = null; msg = "";
+  const s = $("skSheet"); if (s?.open) s.close();
 }
 
 function itemPage(id) {
@@ -219,32 +264,31 @@ function itemPage(id) {
     <p class="note">${esc(kindName(p.kind))}${food ? ` · linked to <b class="ink">${esc(food.name)}</b> in Meals` : ""} · usually ${amount(p.pack, p.unit)} at a time</p>
     <div class="tiles"><div class="tile"><b>${e.left == null ? "–" : amount(e.left, p.unit)}</b>left</div><div class="tile"><b>${e.daysLeft ?? "–"}</b>days left</div><div class="tile"><b>${e.outOn ? esc(day(e.outOn)) : "–"}</b>runs out</div></div>
     <ul class="sk-why">${e.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>
-    <p class="mwhat">How much is left?</p>
-    <div class="chips" role="group" aria-label="How much is left">${LEVELS.map(([l, t]) => `<button type="button" class="chip" data-sk="level" data-level="${l}" aria-pressed="${p.check?.date === today() && p.check.level === l}">${t}</button>`).join("")}</div>
+    ${levelChips(p)}
     <div class="actions">${buying === key ? "" : `<button type="button" class="primary" data-sk="buy" data-key="${key}">Bought some</button>`}${onList(p.id) ? `<span class="note">On the list</span>` : `<button type="button" data-sk="list" data-id="${esc(p.id)}">Add to list</button>`}</div>
     ${buying === key ? buyForm({ key, item: p.id, qty: p.pack }, p) : ""}
     ${say()}
   </section>
-  <section class="panel sk-prices" aria-labelledby="skPriceTitle" data-title="Prices">
-    <div class="mhead"><h2 id="skPriceTitle">Prices by shop</h2>${pricing ? "" : `<button type="button" class="mini" data-sk="price">+ Price I saw</button>`}</div>
+  <section class="panel sk-more" aria-label="More about ${esc(p.name)}" data-title="Prices, buys and edit">
+  ${part("prices", "Prices by shop", board.length ? `${esc(board[0].shop)} cheapest` : "None yet", pricing, `
+    ${pricing ? "" : `<div class="actions"><button type="button" class="mini" data-sk="price">+ Price I saw</button></div>`}
     ${board.length ? `<div class="sk-board">${board.map((s, i) => `<div class="sk-shoprow${i === 0 ? " best" : ""}">
         <b>${esc(s.shop)}${i === 0 ? ` <i class="sk-tag">Cheapest</i>` : ""}</b>
         <span>${money(shown(s.now, p.unit))} <small>${unitLabel(p.unit)}</small></span>
         <small>${s.onSale ? `<i class="sk-sale">Sale${s.until ? ` till ${esc(day(s.until))}` : ""}</i> normal ${s.normal == null ? "not known" : money(shown(s.normal, p.unit))}` : "Normal price"} · seen ${esc(day(s.date))}</small></div>`).join("")}</div>
       ${board.length > 1 ? `<p class="note">${esc(board[0].shop)} saves you about ${money(shown(board.at(-1).now - board[0].now, p.unit))} ${unitLabel(p.unit)} over ${esc(board.at(-1).shop)}.</p>` : ""}`
       : `<p class="note">No prices yet. Add the price when you buy it, or a price you spot in a shop, and Stocky compares shops for you.</p>`}
-    ${pricing ? priceForm(p) : ""}
-  </section>
-  <section class="panel" aria-labelledby="skHistTitle" data-title="Bought">
-    <h2 id="skHistTitle">Bought</h2>
+    ${pricing ? priceForm(p) : ""}`)}
+  ${part("bought", "Bought", hist.length ? `Last: ${esc(day(hist[0].date))}, ${amount(hist[0].qty, p.unit)}` : "Nothing yet", false, `
     ${hist.length ? `<div class="mlist">${hist.map((b) => `<div class="mitem"><div><b>${esc(day(b.date))} · ${amount(b.qty, p.unit)}</b><small>${esc([b.price ? money(b.price) : "", b.shop || "", b.sale ? "on sale" : ""].filter(Boolean).join(" · ") || "No price")}</small></div><button type="button" class="mini" data-sk="unbuy" data-id="${esc(b.id)}" aria-label="Remove this buy">✕</button></div>`).join("")}</div>`
-      : `<p class="note">Nothing yet.</p>`}
-  </section>
-  <section class="panel" aria-labelledby="skEditTitle" data-title="Edit">
-    <h2 id="skEditTitle">Edit</h2>
-    ${editing ? itemForm(p) : `<div class="actions"><button type="button" data-sk="edit">Edit ${esc(p.name)}</button><button type="button" class="danger" data-sk="del">Delete</button></div>`}
+      : `<p class="note">Nothing yet.</p>`}`)}
+  ${part("edit", "Edit or delete", "", editing, `
+    ${editing ? itemForm(p) : `<div class="actions"><button type="button" data-sk="edit">Edit ${esc(p.name)}</button><button type="button" class="danger" data-sk="del">Delete</button></div>`}`)}
   </section>`;
 }
+// A folded part of the item page: its row says the gist, tapping opens it. What's open survives live redraws.
+const part = (key, title, gist, force, body) => `<details class="sk-part" data-part="${key}"${force || unfolded.has(key) ? " open" : ""}>
+  <summary><b>${title}</b>${gist ? `<small>${gist}</small>` : ""}</summary>${body}</details>`;
 function priceForm(p) {
   return `<form class="mform" data-skform="price" novalidate>
     <div class="two"><label>Amount (${p.unit})<input type="number" name="qty" inputmode="decimal" min="0" value="${esc(p.pack)}"></label>
@@ -321,7 +365,7 @@ function planPage() {
 
 // Show or hide parts of a form from its own fields.
 function syncForms() {
-  for (const f of $("stocky").querySelectorAll("form.mform")) {
+  for (const f of [...$("stocky").querySelectorAll("form.mform"), ...$("skSheet").querySelectorAll("form.mform")]) {
     const el = f.elements, show = (k, on) => f.querySelectorAll(`[data-sk-show="${k}"]`).forEach((x) => { x.hidden = !on; });
     if (el.kind) kindNote(f);
     if (el.kind && el.food) {
@@ -445,7 +489,6 @@ async function removeKind(id) {
   const ok = await confirmDelete({ title: `Remove the kind ${k.name}?`, yes: "Remove kind",
     body: inIt.length ? `<p>${inIt.length} item${inIt.length === 1 ? "" : "s"} (${names(inIt)}) will move to <b>${esc(to)}</b>. The items, buys and prices stay.</p>` : `<p>No items use it.</p>` });
   if (!ok) return;
-  if (kindShown === id) { kindShown = ""; store.set("journal-stocky-kind", ""); }
   // A form showing this kind switches to Home.
   for (const input of $("stocky").querySelectorAll(".sk-kindf input")) if (input.value.trim().toLowerCase() === k.name.toLowerCase()) input.value = to;
   kinds = kinds.filter((x) => x.id !== id); repaintMenus(); syncForms();
@@ -478,17 +521,24 @@ async function unbuy(id) {
 function setMsg(f, t) { msg = t; const el = f.querySelector(".sk-msg") || f.querySelector("[data-sk-hint]") || $("stocky").querySelector(".sk-msg"); if (el) el.textContent = t; }
 
 // ---------- events ----------
+// The page and the quick sheet (a <dialog> outside #stocky, so redraws of the page leave it alone) share
+// the same handlers: a button means the same thing in either.
 function wire() {
-  const host = $("stocky");
-  host.addEventListener("click", async (ev) => {
+  const host = $("stocky"), sheet = $("skSheet"), both = (type, fn) => { host.addEventListener(type, fn); sheet.addEventListener(type, fn); };
+  sheet.addEventListener("click", (ev) => { if (ev.target === sheet) sheet.close(); }); // tap outside closes
+  sheet.addEventListener("close", () => { if (peek) { closePeek(); refreshStocky(true); } });
+  both("click", async (ev) => {
     closeMenus(ev.target.closest(".sk-kindf"));
     const b = ev.target.closest("[data-sk]"); if (!b) return;
-    const act = b.dataset.sk, id = route().id;
-    if (act === "buy") { buying = b.dataset.key; pricing = false; msg = ""; refreshStocky(true); host.querySelector(".sk-buy input[name=qty]")?.focus(); }
+    const act = b.dataset.sk, id = b.dataset.id || route().id, here = sheet.open ? sheet : host;
+    if (act === "peek") openPeek(b.dataset.id);
+    if (act === "unpeek") closePeek();
+    if (act === "shelf") { const k = b.dataset.kind; shut.has(k) ? shut.delete(k) : shut.add(k); store.set("journal-stocky-shut", JSON.stringify([...shut])); refreshStocky(true); }
+    if (act === "more") { opened.add(b.dataset.kind); refreshStocky(true); }
+    if (act === "buy") { buying = b.dataset.key; pricing = false; msg = ""; refreshStocky(true); here.querySelector(".sk-buy input[name=qty]")?.focus(); }
     if (act === "cancel") { buying = null; pricing = false; editing = false; msg = ""; refreshStocky(true); }
     if (act === "byshop") { byShop = !byShop; store.set("journal-stocky-byshop", byShop ? "1" : ""); refreshStocky(true); }
     if (act === "unlist") await unlist(b.dataset.id);
-    if (act === "kindshow") { kindShown = b.dataset.kind; store.set("journal-stocky-kind", kindShown); refreshStocky(true); }
     if (act === "kind-del") await removeKind(b.dataset.id);
     if (act === "kindmenu") { const f = b.closest("form"), menu = f.querySelector(".sk-menu"); if (menu.hidden || !menu.dataset.all) openMenu(f, true); else closeMenus(); } // suggestions open → show them all
     if (act === "kindpick") { const f = b.closest("form"); f.elements.kind.value = b.dataset.name; f.dataset.dirty = "1"; closeMenus(); syncForms(); }
@@ -501,7 +551,7 @@ function wire() {
     if (act === "price") { pricing = true; buying = null; refreshStocky(true); host.querySelector('[data-skform="price"] input[name=price]')?.focus(); }
     if (act === "unbuy") await unbuy(b.dataset.id);
     if (act === "edit") { editing = true; msg = ""; refreshStocky(true); }
-    if (act === "del") await removeItem(id);
+    if (act === "del") await removeItem(route().id);
     if (act === "plan") { plan[b.dataset.id] = Math.max(0, Math.min(21, (plan[b.dataset.id] || 0) + Number(b.dataset.step))); refreshStocky(true); }
     if (act === "plan-add") {
       const { foods, sets, meals } = mealData();
@@ -511,7 +561,7 @@ function wire() {
       location.hash = "#stocky";
     }
   });
-  host.addEventListener("submit", (ev) => {
+  both("submit", (ev) => {
     ev.preventDefault();
     const f = ev.target, k = f.dataset.skform;
     if (k === "buy") saveBuy(f);
@@ -519,8 +569,10 @@ function wire() {
     if (k === "item") saveItem(f);
     if (k === "row") addTyped(f);
   });
-  host.addEventListener("change", (ev) => { const f = ev.target.closest("form.mform"); if (f) f.dataset.dirty = "1"; syncForms(); });
-  host.addEventListener("input", (ev) => {
+  both("change", (ev) => { const f = ev.target.closest("form.mform"); if (f) f.dataset.dirty = "1"; syncForms(); });
+  // An item page part opened or shut stays that way through live redraws ("toggle" doesn't bubble).
+  host.addEventListener("toggle", (ev) => { const k = ev.target.dataset?.part; if (k) ev.target.open ? unfolded.add(k) : unfolded.delete(k); }, true);
+  both("input", (ev) => {
     const f = ev.target.closest("form"); if (!f) return;
     if (f.matches(".mform")) f.dataset.dirty = "1";
     if (ev.target.name === "kind" && ev.target.closest(".sk-kindf")) { openMenu(f, false); syncForms(); return; }
@@ -532,5 +584,5 @@ function wire() {
     if (ev.key === "Escape") closeMenus();
   });
   document.addEventListener("click", (ev) => { if (!$("stocky").contains(ev.target)) closeMenus(); });
-  host.addEventListener("focusout", () => setTimeout(() => { if (pending && !host.contains(document.activeElement)) refreshStocky(); }, 0));
+  both("focusout", () => setTimeout(() => { if (pending && !host.contains(document.activeElement) && !sheet.contains(document.activeElement)) refreshStocky(); }, 0));
 }

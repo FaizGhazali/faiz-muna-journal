@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buyRate, mealUse, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind, matchKind, kindsLike } from "../public/logic/stocky.js";
+import { buyRate, mealUse, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind, matchKind, kindsLike, shelves } from "../public/logic/stocky.js";
 
 const T = "2026-11-22";
 const rice = { id: "rice", name: "Beras", kind: "food", unit: "g", pack: 5000, food: "f-nasi" };
@@ -191,4 +191,22 @@ test("the Kind field: typed names match a kind, or make a new one on save", () =
   assert.deepEqual(kindsLike("me", kinds).map((k) => k.id), ["home", "k1"]);
   assert.deepEqual(kindsLike("zzz", kinds), []);
   assert.deepEqual(kindsLike("medicines", kinds).map((k) => k.id), ["k1"]);
+});
+
+test("shelves group by kind, neediest first, and skip empty kinds", () => {
+  const kinds = allKinds([{ id: "k-med", name: "Medicine", created: 1 }, { id: "k-pet", name: "Pet", created: 2 }]);
+  const pantry = [
+    { id: "a", name: "Telur", kind: "food" }, { id: "b", name: "Beras", kind: "food" }, { id: "c", name: "Minyak", kind: "food" },
+    { id: "d", name: "Sabun", kind: "home" }, { id: "e", name: "Panadol", kind: "k-med" }, { id: "f", name: "Old", kind: "gone" },
+  ];
+  const ests = { a: { status: "ok", daysLeft: 20 }, b: { status: "low", daysLeft: 2 }, c: { status: "out", daysLeft: 0 },
+    d: { status: "soon", daysLeft: 5 }, e: { status: "unknown", daysLeft: null }, f: { status: "ok", daysLeft: 40 } };
+  const s = shelves(pantry, ests, kinds);
+  assert.deepEqual(s.map((x) => x.kind.id), ["food", "home", "k-med"]); // Pet has nothing, so no shelf
+  assert.deepEqual(s[0].items.map((p) => p.id), ["c", "b", "a"]);
+  assert.equal(s[0].need, 2);
+  assert.deepEqual(s[1].items.map((p) => p.id), ["d", "f"]); // an unknown kind sits on Home
+  assert.equal(s[1].need, 1);
+  assert.equal(s[2].need, 0);
+  assert.deepEqual(shelves([], {}, kinds), []);
 });

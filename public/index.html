@@ -298,6 +298,7 @@ try {
   <section class="info" aria-labelledby="l-new">
     <h2 id="l-new">What's new</h2>
     <ol class="changes">
+      <li><time datetime="2026-11-22">22 Nov 2026</time> Stocky's At home is now shelves: small tiles grouped by kind, what needs buying first, and each shelf folds away. Tap a tile to say how much is left, mark it bought or add it to the list without leaving the page.</li>
       <li><time datetime="2026-11-22">22 Nov 2026</time> Stocky, a groceries journal on the round button: it guesses when rice, eggs or soap will run out from how often you buy them and the meals you log, puts them on a shared shopping list, compares prices between shops (sale or normal), and turns your meal plan for the week into a list.</li>
       <li><time datetime="2026-11-20">20 Nov 2026</time> Dearly tags are easier: tap a tag you've used before, and "part time", "Part-time" or "parts times" all stay one tag. Type "mkan" and it asks "Did you mean #makan?", or add it as new.</li>
       <li><time datetime="2026-11-20">20 Nov 2026</time> Reflections: the mood you pick on a diary entry now becomes your mood for the day (several entries are averaged). Tap a day in the year in pixels to see what happened, and find a new looking-back card on the dashboard each day.</li>
@@ -424,6 +425,7 @@ try {
   </div>
   <div class="view diary" id="diary" hidden aria-label="Dearly, your diary"></div>
   <div class="view stocky" id="stocky" hidden aria-label="Stocky, your groceries"></div>
+  <dialog class="gsheet sk-sheet" id="skSheet" aria-labelledby="skSheetTitle"></dialog>
   <div class="view" id="mealsets" hidden>
     <div class="fdtop"><button type="button" id="setsBack">← Back</button></div>
     <section class="panel mlib" id="mealLib" aria-label="Meal sets and foods"></section>
