@@ -3,6 +3,7 @@
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from "./fs.js";
 import { SLOTS, LEARN_AFTER, slotAt, portion, total, dayTotal, plateOf, rowFor, logItems, rankSets, readFood, fitsSlot, burnOf, intakeRange, weightOn, verdict, shadeOf, yearStats } from "./meals.js";
 import { iso, parse, addDays } from "./suggest.js";
+import { offerWidget } from "./widget.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -582,6 +583,7 @@ export function initWheel() {
     if (!go) return;
     if (go === "tips") { store.set(TIP_KEY, "0"); setMenu(false); showTip(); return; }
     hide();
+    if (go === "widget") { offerWidget(); return; }
     if (go === "backup") {
       // The backup card lives in the Weight journal; open it first when another journal is showing.
       const go2 = () => document.querySelector("#app .data")?.scrollIntoView({ behavior: "smooth", block: "start" });

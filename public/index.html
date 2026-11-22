@@ -548,6 +548,7 @@ try {
     <section class="panel fd" id="mdBoost"></section>
     <p class="note">Mood is how each of you rated your own day, from hard to great. Only you choose it; the app never guesses. The averages and comparisons are a rough guide to notice patterns, not a health measure.</p>
   </div>
+  <dialog class="gsheet" id="widgetSheet" aria-labelledby="wsTitle"></dialog>
   <button type="button" class="wheelbtn" id="wheelBtn" aria-label="Switch journal" aria-controls="wheel"><span aria-hidden="true">🍽️</span></button>
   <div class="wheel" id="wheel" hidden>
     <div class="wring" id="wheelRing" role="group" aria-label="Journals"></div>
@@ -557,6 +558,7 @@ try {
       <button type="button" role="menuitem" data-go="guide"><span aria-hidden="true">📘</span>Show me how</button>
       <button type="button" role="menuitem" data-go="mealsets"><span aria-hidden="true">🥗</span>Meal sets and foods</button>
       <button type="button" role="menuitem" data-go="backup"><span aria-hidden="true">💾</span>Backup</button>
+      <button type="button" role="menuitem" data-go="widget" hidden><span aria-hidden="true">📲</span>Home-screen widget</button>
       <button type="button" role="menuitem" data-go="tips"><span aria-hidden="true">💡</span>Show tips again</button>
     </div>
     <div class="wtip" id="wheelTip" role="note" hidden>

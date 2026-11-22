@@ -18,6 +18,7 @@ import { initMeals, startMeals, stopMeals, refreshMeals, refreshCalories, initWh
 import { initCollapse } from "./collapse.js";
 import { initZoom, zoomable, xWindow, isZoomed } from "./zoom.js";
 import { initGuides } from "./tour.js";
+import { initWidget, offerWidget } from "./widget.js";
 import { initDiary, startDiary, stopDiary, refreshDiary, diaryList } from "./diaryui.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
@@ -637,6 +638,14 @@ showTheme();
 
 let installEvent = null;
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvent = e; $("install").hidden = false; });
-$("install").addEventListener("click", async () => { if (!installEvent) return; installEvent.prompt(); await installEvent.userChoice; installEvent = null; $("install").hidden = true; });
-window.addEventListener("appinstalled", () => { $("install").hidden = true; });
+$("install").addEventListener("click", async () => {
+  if (!installEvent) return;
+  installEvent.prompt();
+  const { outcome } = await installEvent.userChoice;
+  installEvent = null; $("install").hidden = true;
+  if (outcome === "accepted") setTimeout(offerWidget, 800); // Android: offer the home-screen widget too (widget.js)
+});
+// Also fires when the app is installed from the browser's own menu. offerWidget() won't open twice.
+window.addEventListener("appinstalled", () => { $("install").hidden = true; setTimeout(offerWidget, 800); });
+initWidget();
 if ("serviceWorker" in navigator && !LOCAL) navigator.serviceWorker.register("/sw.js");
