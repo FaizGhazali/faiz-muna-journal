@@ -24,7 +24,8 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
+      # The Ubuntu runner already has the Android SDK (ANDROID_HOME); Gradle fetches any missing platform itself.
+      # (android-actions/setup-android@v3 fails: it asks for the retired "tools" package.)
 
       - uses: gradle/actions/setup-gradle@v4
 
