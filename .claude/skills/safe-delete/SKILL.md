@@ -5,7 +5,7 @@ description: The rule for every delete in Our Journal. Apply it by default, with
 
 # Safe delete: always ask before anything is lost
 
-The family are two non-technical people on phones. A stray tap must never lose a diary entry, a food, a buy or anything else. So **every action that deletes or removes something the user made asks first**, with the one shared prompt in `public/confirm.js`.
+The family are two non-technical people on phones. A stray tap must never lose a diary entry, a food, a buy or anything else. So **every action that deletes or removes something the user made asks first**, with the one shared prompt in `public/core/confirm.js`.
 
 ## The rule
 

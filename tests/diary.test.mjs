@@ -1,9 +1,9 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { words, titleOf, preview, parseTags, tagStats, showTags, tagMatches, looksLike, diaryStats, onThisDay, filterEntries, neighbours, tagsOf, expired, KEEP_DELETED_DAYS, ago } from "../public/diary.js";
-import { tagKey } from "../public/util.js";
-import { styleProfile, styleSource, describeStyle, samplesFor, buildMessages, cleanOutput, unsupported, dropped, langOf, noteLang, targetWords, MIN_STYLE, aboutSuggestions, addToAbout, looksGarbled } from "../public/writestyle.js";
+import { words, titleOf, preview, parseTags, tagStats, showTags, tagMatches, looksLike, diaryStats, onThisDay, filterEntries, neighbours, tagsOf, expired, KEEP_DELETED_DAYS, ago } from "../public/logic/diary.js";
+import { tagKey } from "../public/core/util.js";
+import { styleProfile, styleSource, describeStyle, samplesFor, buildMessages, cleanOutput, unsupported, dropped, langOf, noteLang, targetWords, MIN_STYLE, aboutSuggestions, addToAbout, looksGarbled } from "../public/logic/writestyle.js";
 
 const e = (id, date, body, more = {}) => ({ id, person: "p1", date, body, created: 0, ...more });
 

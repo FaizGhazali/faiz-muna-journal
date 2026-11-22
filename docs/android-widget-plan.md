@@ -19,7 +19,7 @@ Build locally (needs the Android SDK; `ANDROID_HOME` set): `cd android; .\gradle
 
 ## How it was built
 
-- `public/activities.js` → `publishMoves()` (called from `renderMove()`) writes both people's pick to `nextMove/{person}` when it differs from what Firestore has. `currentMove(p)` also keeps the published pick, so phones agree: for the "For" person this phone's own pick wins, for the other person the published one does.
+- `public/features/activities/activities.js` → `publishMoves()` (called from `renderMove()`) writes both people's pick to `nextMove/{person}` when it differs from what Firestore has. `currentMove(p)` also keeps the published pick, so phones agree: for the "For" person this phone's own pick wins, for the other person the published one does.
 - `android/app/src/main/java/com/faizmuna/journal/widget/`: `Api.kt` (REST: init.json, sign-in, token refresh, Firestore reads), `Store.kt` (SharedPreferences: refresh token, person, last move), `MoveWidget.kt` (the `AppWidgetProvider`), `SetupActivity.kt` (password → pick name → add to home screen).
 - If App Check *enforcement* is ever switched on for Firestore, the widget's REST reads will be refused. It would need App Check (Play Integrity) first.
 
@@ -34,7 +34,7 @@ Build locally (needs the Android SDK; `ANDROID_HOME` set): `cd android; .\gradle
 
 ## Design
 
-1. **Web app publishes the pick.** In `public/activities.js`, work out the current pick for *both* people, not just the one selected, and write `nextMove/{p1|p2}` → `{ person, title, type, why, date, updated }`. Use `{ title: null }` when there's nothing to suggest. Write only when it changed, keeping the last written value in localStorage. This means `currentMove()` / `mine()` / `logs()` / `ctxNow()` need a person parameter that defaults to `me`. Note this in CLAUDE.md's data model. The widget then shows exactly what the app shows; the suggestion logic is never copied to Kotlin.
+1. **Web app publishes the pick.** In `public/features/activities/activities.js`, work out the current pick for *both* people, not just the one selected, and write `nextMove/{p1|p2}` → `{ person, title, type, why, date, updated }`. Use `{ title: null }` when there's nothing to suggest. Write only when it changed, keeping the last written value in localStorage. This means `currentMove()` / `mine()` / `logs()` / `ctxNow()` need a person parameter that defaults to `me`. Note this in CLAUDE.md's data model. The widget then shows exactly what the app shows; the suggestion logic is never copied to Kotlin.
 2. **Android app in `android/`.** Kotlin, classic `AppWidgetProvider` + `RemoteViews`, no Firebase SDK. Use only `HttpURLConnection` + `org.json`.
    - Setup screen: family password + choose Faiz or Muna. Sign in with the REST endpoint `identitytoolkit.googleapis.com/v1/accounts:signInWithPassword` using `FAMILY_EMAIL` (`family@journal.invalid`, see `public/app.js`). Store only the **refresh token**, never the password.
    - Refresh: `securetoken.googleapis.com/v1/token` (grant_type=refresh_token) → idToken. Then `GET firestore.googleapis.com/v1/projects/{projectId}/databases/(default)/documents/nextMove/{person}` with a Bearer token. Also send `Referer: https://faiz-muna-journal-c43ab.web.app/` in case the API key is limited to that site.

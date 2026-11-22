@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { countryOf, flagOf, isBot, summarise, UNKNOWN } from "../public/visits.js";
+import { countryOf, flagOf, isBot, summarise, UNKNOWN } from "../public/logic/visits.js";
 
 test("countryOf maps time zones to countries", () => {
   assert.equal(countryOf("Asia/Kuala_Lumpur"), "MY");

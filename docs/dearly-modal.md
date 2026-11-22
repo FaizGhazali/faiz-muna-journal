@@ -57,7 +57,7 @@ as it's written.
 
    It prints an address like `https://<your-workspace>--dearly-writer-web.modal.run`. Copy it.
 
-6. **Put the address in the app:** in `public/cloudai.js`, set `CLOUD_URL` to that address, then push. Or just paste the
+6. **Put the address in the app:** in `public/features/diary/cloudai.js`, set `CLOUD_URL` to that address, then push. Or just paste the
    address to Claude and ask it to do this.
 
 ## How it's kept safe

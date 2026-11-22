@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { slotAt, portion, total, dayTotal, usual, plateOf, logItems, rankSets, readFood, fitsSlot, shadeOf, yearStats, LEARN_AFTER, bmr, burnOf, intakeRange, weightOn, verdict } from "../public/meals.js";
+import { slotAt, portion, total, dayTotal, usual, plateOf, logItems, rankSets, readFood, fitsSlot, shadeOf, yearStats, LEARN_AFTER, bmr, burnOf, intakeRange, weightOn, verdict } from "../public/logic/meals.js";
 
 const rice = { id: "rice", name: "Rice", kcal: 130, carb: 28, protein: 2.7, fat: 0.3 };
 const fish = { id: "fish", name: "Fried fish", kcal: 220, carb: 2, protein: 18, fat: 16 };

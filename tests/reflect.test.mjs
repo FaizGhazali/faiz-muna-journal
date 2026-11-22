@@ -1,8 +1,8 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { reflections, pickReflection } from "../public/reflect.js";
-import { addDays } from "../public/util.js";
+import { reflections, pickReflection } from "../public/logic/reflect.js";
+import { addDays } from "../public/core/util.js";
 
 const T = "2026-11-20";
 const e = (id, date, mood, extra = {}) => ({ id, person: "p1", date, mood, body: `Dear Diary,\n\nEntry ${id}.`, tags: [], created: 1, ...extra });

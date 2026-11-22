@@ -7,28 +7,28 @@ import { getAuth, connectAuthEmulator, onAuthStateChanged, signInWithEmailAndPas
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, terminate, clearIndexedDbPersistence,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { collection, doc, setDoc, onSnapshot, useMemory } from "./fs.js";
-import { openMemory } from "./memdb.js";
-import { sampleData } from "./sample.js";
-import { DEMO, initDemo } from "./demo.js";
-import { initWeight, renderPeople, renderFeed, renderFoot } from "./weightui.js";
-import { initEntryForm, setPeople } from "./entryform.js";
-import { initSetup, buildSetup } from "./setup.js";
-import { visitors } from "./visitors.js";
-import { initTheme } from "./theme.js";
-import { initInstall } from "./install.js";
-import { initActivities, startActivities, stopActivities, refresh as refreshActivities, refreshMove, currentPerson, habitFacts } from "./activities.js";
-import { initBackup } from "./backup.js";
-import { initFitDetail, refreshFitDetail } from "./fitdetail.js";
-import { initMood, refreshMood } from "./moodui.js";
-import { initMeals, startMeals, stopMeals, refreshMeals, refreshCalories, initWheel, mealData } from "./mealsui.js";
-import { initStocky, startStocky, stopStocky, refreshStocky, stockOf, listFood } from "./stockyui.js";
-import { initCollapse } from "./collapse.js";
-import { initZoom } from "./zoom.js";
-import { initGuides } from "./tour.js";
-import { initWidget } from "./widget.js";
-import { initDiary, startDiary, stopDiary, refreshDiary, diaryList } from "./diaryui.js";
-import { $, today } from "./util.js";
+import { collection, doc, setDoc, onSnapshot, useMemory } from "./core/fs.js";
+import { openMemory } from "./core/memdb.js";
+import { sampleData } from "./shell/sample.js";
+import { DEMO, initDemo } from "./shell/demo.js";
+import { initWeight, renderPeople, renderFeed, renderFoot } from "./features/weight/weightui.js";
+import { initEntryForm, setPeople } from "./features/weight/entryform.js";
+import { initSetup, buildSetup } from "./shell/setup.js";
+import { visitors } from "./shell/visitors.js";
+import { initTheme } from "./shell/theme.js";
+import { initInstall } from "./shell/install.js";
+import { initActivities, startActivities, stopActivities, refresh as refreshActivities, refreshMove, currentPerson, habitFacts } from "./features/activities/activities.js";
+import { initBackup } from "./shell/backup.js";
+import { initFitDetail, refreshFitDetail } from "./features/weight/fitdetail.js";
+import { initMood, refreshMood } from "./features/mood/moodui.js";
+import { initMeals, startMeals, stopMeals, refreshMeals, refreshCalories, initWheel, mealData } from "./features/meals/mealsui.js";
+import { initStocky, startStocky, stopStocky, refreshStocky, stockOf, listFood } from "./features/stocky/stockyui.js";
+import { initCollapse } from "./core/collapse.js";
+import { initZoom } from "./core/zoom.js";
+import { initGuides } from "./shell/tour.js";
+import { initWidget } from "./shell/widget.js";
+import { initDiary, startDiary, stopDiary, refreshDiary, diaryList } from "./features/diary/diaryui.js";
+import { $, today } from "./core/util.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";

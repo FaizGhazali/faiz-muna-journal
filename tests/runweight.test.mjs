@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pairRunsWithWeight, runsWithWeight, weightBands, bandWidth, linearRegression, median, similarEffort, usualHr, runEntries, ageOn, ageText } from "../public/runweight.js";
+import { pairRunsWithWeight, runsWithWeight, weightBands, bandWidth, linearRegression, median, similarEffort, usualHr, runEntries, ageOn, ageText } from "../public/logic/runweight.js";
 
 const run = (person, date, pace, hr, extra = {}) => ({ person, date, run: { source: "coros", km: 5, secs: pace * 5, pace, hr }, ...extra });
 const weigh = (person, date, weight) => ({ person, date, weight });

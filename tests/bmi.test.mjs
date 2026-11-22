@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { r1, bmiOf, range, statusOf } from "../public/bmi.js";
+import { r1, bmiOf, range, statusOf } from "../public/logic/bmi.js";
 
 const p = { cm: 172 };
 

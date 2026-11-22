@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { QUOTES, quoteFor, moodMap, periods, boosters, yearGrid, lastSeven, mondayOf, moodMix, MIN_DAYS } from "../public/mood.js";
+import { QUOTES, quoteFor, moodMap, periods, boosters, yearGrid, lastSeven, mondayOf, moodMix, MIN_DAYS } from "../public/logic/mood.js";
 
 test("moodMap keeps one person's valid ratings only", () => {
   const map = moodMap([
@@ -112,7 +112,7 @@ test("moodMix pct: share of rated days, whole numbers that add up to 100", () =>
 });
 
 test("diary moods set the day's mood, and several in a day are averaged", async () => {
-  const { dayMoods } = await import("../public/mood.js");
+  const { dayMoods } = await import("../public/logic/mood.js");
   const entries = [{ person: "p1", date: "2026-11-02", mood: 2 }, { person: "p1", date: "2026-11-04", mood: 3 }];
   const diary = [
     { person: "p1", date: "2026-11-01", mood: 4 },

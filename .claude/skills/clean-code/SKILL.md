@@ -15,9 +15,9 @@ Don't edit a file you haven't read, and don't assume how something works from it
 
 - Read `CLAUDE.md` first: it is the map of the app (modules, data model, care points). Find the section for the area you're touching.
 - Read the file you'll change, and `grep` for every caller of a function before changing its signature or behaviour.
-- Look for existing helpers before writing one: `public/util.js` (`$`, `esc`, `iso`, `parse`, `dayNum`, `tagKey`, …), `public/confirm.js`, `public/face.js`, `public/fs.js`, `public/zoom.js`, `public/collapse.js`.
+- Look for existing helpers before writing one: `public/core/util.js` (`$`, `esc`, `iso`, `parse`, `dayNum`, `tagKey`, …), `public/core/confirm.js`, `public/core/face.js`, `public/core/fs.js`, `public/core/zoom.js`, `public/core/collapse.js`.
 - Check `git status` first. Untracked or modified files you didn't make may be someone's work in progress: leave them alone and don't commit them.
-- For data changes, read the matching collection in the CLAUDE.md data model, and `public/backup.js` / `public/memdb.js` / `public/sample.js`, which must keep working with it.
+- For data changes, read the matching collection in the CLAUDE.md data model, and `public/shell/backup.js` / `public/core/memdb.js` / `public/shell/sample.js`, which must keep working with it.
 
 ## 2. Plan before implementing
 
@@ -33,21 +33,22 @@ If the plan has a real choice the user should make (UX, data model, removing som
 
 ## 3. Build modularly
 
-The app's layers, and what belongs in each:
+The app's layers, and what belongs in each. Each layer is a folder in `public/` (see "Folder layout" in CLAUDE.md), so a file's folder says what it may import:
 
-| Layer | Examples | Rules |
+| Layer (folder) | Examples | Rules |
 |---|---|---|
-| **Pure logic** | `suggest.js`, `fitness.js`, `runweight.js`, `mood.js`, `reflect.js`, `meals.js`, `stocky.js`, `diary.js`, `writestyle.js`, `bmi.js`, `visits.js` | No DOM, no Firestore, no `localStorage`, no `Date.now()` hidden inside (pass "today" in). Plain data in, plain data out. Unit-tested in `tests/*.test.mjs`. Tunable numbers are named constants at the top (`PACE`, `LOW_DAYS`, `MIN_DAYS`, …). |
-| **UI modules** | `activities.js`, `moodui.js`, `mealsui.js`, `stockyui.js`, `fitdetail.js`, `diaryui.js` + `diary/*.js`, `tour.js` | Draw with template strings, read/write Firestore through `./fs.js`, call pure modules for every decision. One delegated listener per page, dispatching by `data-*` action name (see `diary/`'s `actions` pattern). |
-| **Wiring** | `app.js` | Firebase setup, auth, snapshots, passing data and hooks into `init*()` functions. Keep feature logic out of it; move it to a module when it grows. |
-| **Infrastructure** | `fs.js`, `memdb.js`, `sw.js`, `backup.js`, `util.js` | Shared by everyone; change carefully and keep `fs.js` and `memdb.js` in step. |
+| **Pure logic** (`logic/`) | `suggest.js`, `fitness.js`, `runweight.js`, `mood.js`, `reflect.js`, `meals.js`, `stocky.js`, `diary.js`, `writestyle.js`, `bmi.js`, `visits.js` | No DOM, no Firestore, no `localStorage`, no `Date.now()` hidden inside (pass "today" in). Plain data in, plain data out. Imports only `logic/` and `core/util.js`. Unit-tested in `tests/*.test.mjs`. Tunable numbers are named constants at the top (`PACE`, `LOW_DAYS`, `MIN_DAYS`, …). |
+| **Journal screens** (`features/<journal>/`) | `weight/`, `meals/`, `diary/`, `stocky/`, `mood/`, `activities/` | Draw with template strings, read/write Firestore through `core/fs.js`, call pure modules for every decision. One delegated listener per page, dispatching by `data-*` action name (see `features/diary/`'s `actions` pattern). |
+| **App pieces** (`shell/`) | `setup.js`, `demo.js`, `visitors.js`, `theme.js`, `install.js`, `widget.js`, `tour.js`, `backup.js`, `landing.js` | Standalone parts of the app that aren't a journal. Same rules as screens. |
+| **Wiring** (`app.js`, root) | `app.js` | Firebase setup, auth, snapshots, passing data and hooks into `init*()` functions. Keep feature logic out of it; move it to a module when it grows. |
+| **Reusable building blocks** (`core/`) | `util.js`, `fs.js`, `memdb.js`, `confirm.js`, `face.js`, `zoom.js`, `collapse.js`, `journal.js` | Know nothing about any journal; import only other `core/` files. Shared by everyone; change carefully and keep `fs.js` and `memdb.js` in step. `sw.js` stays at the root. |
 
 Guidelines:
 
-- **One job per module, one job per function.** A function that needs "and" in its name, or a file past ~500 lines doing several things, is a sign to split (as `diary/` was split into one file per page).
+- **One job per module, one job per function.** A function that needs "and" in its name, or a file past ~500 lines doing several things, is a sign to split (as `features/diary/` was split into one file per page).
 - **Decisions go in pure code.** If a UI function contains an `if` about the data (thresholds, ranking, dates, maths), move that into the pure module and test it there.
 - **Modules talk through small explicit hooks**, not by reaching into each other's DOM or Firestore paths (e.g. `initMeals({ stock: { of, list, changed } })`). Pass functions and data in; don't import a UI module from a pure one.
-- **No new dependencies, no build step, no framework.** Plain ES modules, plain DOM, CDN imports only where already pinned. All Firestore calls through `./fs.js`.
+- **No new dependencies, no build step, no framework.** Plain ES modules, plain DOM, CDN imports only where already pinned. All Firestore calls through `core/fs.js`.
 - **Names say what the thing is** in the app's own words (`intakeRange`, `buyRate`, `moodMap`), not `data2` or `handleStuff`. Short is fine when it's clear.
 - **Worked out, not stored.** Scores, estimates, averages and "running low" lists are computed when drawing. Store only what the person entered, plus dates.
 - **Keep the data forgiving**: missing fields and old docs must still draw. Never rewrite old data to fit new code; read both shapes.
@@ -55,7 +56,7 @@ Guidelines:
 ## 4. Reuse before duplicating
 
 - Before writing a helper, search for it: `grep -rn "function name\|const name" public/`. If something close exists, use or extend it.
-- Shared helpers live in `public/util.js`; import them, never copy them. If you find the same few lines in two places, move them there (or into the pure module both use) as part of your change.
+- Shared helpers live in `public/core/util.js`; import them, never copy them. If you find the same few lines in two places, move them there (or into the pure module both use) as part of your change.
 - Reuse the shared building blocks: `confirmDelete()` for deletes, `face()` for mood faces, `zoomable()` / `xWindow()` for charts, `.panel` / `.fold` cards, `esc()` for every user string in `innerHTML`, the `--m1`…`--m5` and other CSS tokens in `styles.css`.
 - Reuse existing CSS classes and patterns before adding new ones; match the look of neighbouring cards.
 - Don't copy rules between languages or places (e.g. suggestion rules stay only in `suggest.js`, never in Kotlin).
