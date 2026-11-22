@@ -3,7 +3,7 @@
 // Maths and the data model live in stocky.js. Meals are read, never written: what meals use is worked out.
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "../../core/fs.js";
 import { confirmDelete } from "../../core/confirm.js";
-import { UNITS, LEVELS, allKinds, kindOf, shelves, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice } from "../../logic/stocky.js";
+import { UNITS, LEVELS, allKinds, kindOf, shelves, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice, setCost } from "../../logic/stocky.js";
 import { readFood } from "../../logic/meals.js";
 import { $, esc, iso, parse, today } from "../../core/util.js";
 
@@ -19,8 +19,10 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} },
 };
 
+let pricesChanged = () => {}; // the meal sets show what they cost from the Price book
 export function initStocky(opts) {
   ({ commit, me, people, mealData } = opts);
+  if (opts.pricesChanged) pricesChanged = opts.pricesChanged;
   for (const c of ["pantry", "buys", "prices", "shopList", "foods", "kinds"]) cols[c] = collection(opts.db, c);
   byShop = store.get("journal-stocky-byshop", "") === "1";
   try { shut = new Set(JSON.parse(store.get("journal-stocky-shut", "[]"))); } catch (_) { shut = new Set(); }
@@ -29,9 +31,9 @@ export function initStocky(opts) {
 }
 export function startStocky() {
   const on = (c, set) => unsubs.push(onSnapshot(cols[c], (s) => { set(s.docs.map((d) => ({ id: d.id, ...d.data() }))); refreshStocky(); }));
-  on("pantry", (v) => { pantry = v.sort((a, b) => a.name.localeCompare(b.name)); });
-  on("buys", (v) => { buys = v; });
-  on("prices", (v) => { prices = v; });
+  on("pantry", (v) => { pantry = v.sort((a, b) => a.name.localeCompare(b.name)); pricesChanged(); });
+  on("buys", (v) => { buys = v; pricesChanged(); });
+  on("prices", (v) => { prices = v; pricesChanged(); });
   on("shopList", (v) => { list = v.sort((a, b) => (a.created || 0) - (b.created || 0)); });
   on("kinds", (v) => { kinds = allKinds(v); repaintMenus(); });
 }
@@ -50,6 +52,10 @@ export function stockOf(foodId) {
   const e = ests[p.id] || estimate(p, buys, mealData().meals, today());
   return { item: p.id, name: p.name, status: e.status, daysLeft: e.daysLeft, listed: onList(p.id) };
 }
+// For the meal set editor: every Price book item to pick as an ingredient, by name.
+export const priceItems = () => pantry.map((p) => ({ id: p.id, name: p.name, unit: p.unit })).sort((a, b) => a.name.localeCompare(b.name));
+// What a meal set costs a plate, from the Price book (setCost in stocky.js).
+export const costOf = (set) => setCost(set, pantry, buys, prices, today());
 // Put the item linked to a food on the list (from the meal card).
 export async function listFood(foodId) {
   const p = pantry.find((x) => x.food === foodId);

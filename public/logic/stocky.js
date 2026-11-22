@@ -166,10 +166,42 @@ export function priceBoard(itemId, buys, prices, today) {
 // How a price compares with what this item usually costs (the median of normal prices across shops).
 // { usual, pct } where pct < 0 means cheaper than usual. null if nothing to compare with.
 export function vsUsual(itemId, unitPrice, buys, prices, today) {
-  const ps = priceRecords(itemId, buys, prices, today).filter((r) => !r.sale).map(perUnit).sort((a, b) => a - b);
-  if (!ps.length || !(unitPrice > 0)) return null;
-  const m = ps.length >> 1, usual = ps.length % 2 ? ps[m] : (ps[m - 1] + ps[m]) / 2;
+  const usual = usualPrice(itemId, buys, prices, today, false);
+  if (usual == null || !(unitPrice > 0)) return null;
   return { usual, pct: Math.round(((unitPrice - usual) / usual) * 100) };
+}
+// What one unit (g, ml or piece) of an item usually costs: the median of its normal prices across shops.
+// With anySale, sale prices count when there's no normal price yet. null if it has no price at all.
+export function usualPrice(itemId, buys, prices, today, anySale = true) {
+  const rs = priceRecords(itemId, buys, prices, today), normal = rs.filter((r) => !r.sale);
+  const ps = (normal.length || !anySale ? normal : rs).map(perUnit).sort((a, b) => a - b);
+  if (!ps.length) return null;
+  const m = ps.length >> 1;
+  return ps.length % 2 ? ps[m] : (ps[m - 1] + ps[m]) / 2;
+}
+
+// ---------- what a meal set costs ----------
+// A meal set is made "cooked" (ingredients from the Price book for the whole pot, which makes `serves` plates)
+// or "bought" (no ingredients; `price` = what one plate costs outside). Missing = not said, so no cost.
+//   mealSets: { ..., made?: "cooked"|"bought", ingredients?: [{ item, qty }], serves?, price? }
+// Ingredients with no price yet are listed in `missing`, never counted as zero.
+// { made, plate, pot?, serves?, missing: [names], priced } or null when there's nothing to say.
+export const SERVES_MAX = 50;
+export function setCost(set, pantry, buys, prices, today) {
+  if (set?.made === "bought") return Number(set.price) > 0 ? { made: "bought", plate: Number(set.price), missing: [], priced: 1 } : null;
+  if (set?.made !== "cooked") return null;
+  const byId = new Map(pantry.map((p) => [p.id, p]));
+  const rows = (set.ingredients || []).filter((x) => byId.has(x.item) && Number(x.qty) > 0);
+  if (!rows.length) return null;
+  let pot = 0, priced = 0;
+  const missing = [];
+  for (const x of rows) {
+    const u = usualPrice(x.item, buys, prices, today);
+    if (u == null) { missing.push(byId.get(x.item).name); continue; }
+    pot += u * Number(x.qty); priced++;
+  }
+  const serves = Math.min(SERVES_MAX, Math.max(1, Math.round(Number(set.serves) || 1)));
+  return { made: "cooked", pot, serves, plate: pot / serves, missing, priced };
 }
 
 // Every shop name used, most used first, for the shop picker.

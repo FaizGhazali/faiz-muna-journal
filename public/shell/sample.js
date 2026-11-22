@@ -112,10 +112,12 @@ export function sampleData(now = new Date()) {
   const foods = Object.fromEntries(Object.entries(foodList).map(([id, [name, kcal, carb, protein, fat]]) => [id, { name, kcal, carb, protein, fat }]));
   const mealSets = {
     "s-patin": { name: "Nasi + patin + sayur", items: [{ food: "f-nasi", g: 180 }, { food: "f-patin", g: 120 }, { food: "f-sayur", g: 80 }], slots: ["lunch", "dinner"] },
-    "s-ayam": { name: "Nasi ayam goreng", items: [{ food: "f-nasi", g: 180 }, { food: "f-ayam", g: 120 }, { food: "f-sayur", g: 60 }], slots: ["lunch", "dinner"] },
-    "s-roti": { name: "Roti canai + teh tarik", items: [{ food: "f-roti", g: 100 }, { food: "f-teh", g: 250 }], slots: ["breakfast"] },
-    "s-oat": { name: "Oat + pisang", items: [{ food: "f-oat", g: 50 }, { food: "f-pisang", g: 100 }], slots: ["breakfast", "snack"] },
-    "s-mee": { name: "Mee goreng + telur", items: [{ food: "f-mee", g: 250 }, { food: "f-telur", g: 50 }], slots: ["breakfast", "lunch", "dinner"] },
+    "s-ayam": { name: "Nasi ayam goreng", items: [{ food: "f-nasi", g: 180 }, { food: "f-ayam", g: 120 }, { food: "f-sayur", g: 60 }], slots: ["lunch", "dinner"],
+      made: "cooked", ingredients: [{ item: "k-ayam", qty: 1000 }, { item: "k-beras", qty: 600 }, { item: "k-daunkari", qty: 20 }], serves: 4 }, // Daun kari has no price yet
+
+    "s-roti": { name: "Roti canai + teh tarik", items: [{ food: "f-roti", g: 100 }, { food: "f-teh", g: 250 }], slots: ["breakfast"], made: "bought", price: 4.5 },
+    "s-oat": { name: "Oat + pisang", items: [{ food: "f-oat", g: 50 }, { food: "f-pisang", g: 100 }], slots: ["breakfast", "snack"], made: "cooked", ingredients: [{ item: "k-oat", qty: 50 }, { item: "k-susu", qty: 150 }], serves: 1 },
+    "s-mee": { name: "Mee goreng + telur", items: [{ food: "f-mee", g: 250 }, { food: "f-telur", g: 50 }], slots: ["breakfast", "lunch", "dinner"], made: "bought", price: 7 },
     "s-snack": { name: "Pisang + teh tarik", items: [{ food: "f-pisang", g: 100 }, { food: "f-teh", g: 250 }], slots: ["snack"] },
   };
   const size = { p1: 1.3, p2: 1.2 }, menu = { breakfast: ["s-roti", "s-oat"], snack: ["s-snack"], lunch: ["s-patin", "s-ayam", "s-mee"], dinner: ["s-patin", "s-ayam", "s-mee"] };
@@ -170,6 +172,7 @@ export function sampleData(now = new Date()) {
     "k-telur": { name: "Telur", kind: "food", unit: "pcs", pack: 30, food: "f-telur", each: 55, created: stamp(80) },
     "k-ayam": { name: "Ayam", kind: "food", unit: "g", pack: 1500, food: "f-ayam", created: stamp(80) },
     "k-susu": { name: "Susu", kind: "food", unit: "ml", pack: 2000, created: stamp(80) },
+    "k-daunkari": { name: "Daun kari", kind: "food", unit: "g", pack: 50, created: stamp(80) },
     "k-oat": { name: "Oat", kind: "food", unit: "g", pack: 1000, food: "f-oat", created: stamp(80) },
     "k-tisu": { name: "Tisu", kind: "home", unit: "pcs", pack: 10, created: stamp(80) },
     "k-sabun": { name: "Sabun basuh", kind: "d-kind-clean", unit: "g", pack: 3000, created: stamp(80) },

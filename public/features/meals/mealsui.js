@@ -3,6 +3,7 @@
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from "../../core/fs.js";
 import { SLOTS, LEARN_AFTER, slotAt, portion, total, dayTotal, plateOf, rowFor, logItems, rankSets, readFood, fitsSlot, burnOf, intakeRange, weightOn, verdict, shadeOf, yearStats } from "../../logic/meals.js";
 
+import { money, SERVES_MAX } from "../../logic/stocky.js";
 import { offerWidget } from "../../shell/widget.js";
 import { confirmDelete } from "../../core/confirm.js";
 import { $, esc, iso, parse, addDays, today } from "../../core/util.js";
@@ -22,11 +23,13 @@ let date = today(), slot = slotAt(new Date().getHours()), picked = null, rows = 
 // Library editing: { kind: "food"|"set", id|null }. Deletes ask through confirmDelete().
 let moreSets = false; // showing other meals' sets on the card
 let editing = null, setRows = [], setSlots = [], libMsg = "";
+// How the set being edited is made: "cooked" (ingredients from the Price book) or "bought" (a price per plate).
+let setMade = "", setIngr = [], setServes = "", setPrice = "";
 
 export function initMeals(opts) {
   ({ commit, me, people, entries } = opts);
-  // Stocky hooks (stockyui.js, passed in by app.js): { of(foodId), list(foodId), changed() }.
-  stock = opts.stock || { of: () => null, list: () => {}, changed: () => {} };
+  // Stocky hooks (stockyui.js, passed in by app.js): { of(foodId), list(foodId), items(), cost(set), changed() }.
+  stock = { of: () => null, list: () => {}, items: () => [], cost: () => null, changed: () => {}, ...opts.stock };
   const db = opts.db;
   foodsCol = collection(db, "foods");
   setsCol = collection(db, "mealSets");
@@ -105,6 +108,7 @@ function renderPlate() {
     ${stockHtml()}
     ${left.length ? `<select id="mealAddFood" aria-label="Add a food"><option value="">+ Add a food</option>${left.map((f) => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join("")}</select>` : ""}
     <div class="mtot" id="mealTot">${totHtml(t)}</div>
+    <p class="note mcost" id="mealCost">${plateCost()}</p>
     ${naming ? `<div class="addrow1"><input type="text" id="setName" maxlength="60" placeholder="Name, like Nasi + patin + sayur" aria-label="Set name"><button type="button" data-act="save-set" class="primary">Save set</button><button type="button" data-act="name-no">Cancel</button></div>` : ""}
     <div class="actions">
       <button type="button" class="primary" data-act="log"${rows.length ? "" : " disabled"}>Add to ${SLOTS[slot].toLowerCase()}</button>
@@ -121,6 +125,26 @@ function stockHtml() {
     ${s.listed ? `<span class="note">On the list</span>` : `<button type="button" class="mini" data-act="stock-list" data-food="${esc(food)}">Add to list</button>`}</p>`).join("")}</div>`;
 }
 const totHtml = (t) => `<div><b>${t.kcal}</b><small>kcal</small></div><div><b>${num(t.carb)}</b><small>carbs g</small></div><div><b>${num(t.protein)}</b><small>protein g</small></div><div><b>${num(t.fat)}</b><small>fat g</small></div>`;
+// What the picked set costs a plate (from the Price book), while the plate is still that set.
+function plateCost() {
+  const s = sets.find((x) => x.id === picked);
+  return s && !changed() ? costLine(s) : "";
+}
+// One line saying how a set is made and what a plate costs. Ingredients with no price yet are named, never counted as free.
+function costLine(s) {
+  if (s.made !== "cooked" && s.made !== "bought") return "";
+  const c = stock.cost(s);
+  if (s.made === "bought") return c ? `🛍️ Bought · <b>${money(c.plate)}</b> a plate` : "🛍️ Bought";
+  if (!c) return "🍳 Cooked · add what goes in the pot to see the cost";
+  const none = c.missing.length ? `no price yet for ${esc(c.missing.join(", "))}` : "";
+  if (!c.priced) return `🍳 Cooked · ${none}`;
+  return `🍳 Cooked · about <b>${money(c.plate)}</b> a plate${c.serves > 1 ? ` (${money(c.pot)} makes ${c.serves})` : ""}${none ? ` · ${none}` : ""}`;
+}
+// Prices in Stocky changed: update the costs shown, but never redraw a set form someone is filling in.
+export function refreshMealCost() {
+  const el = $("mealCost"); if (el) el.innerHTML = plateCost();
+  if (!editing) renderLib();
+}
 // True when the foods on the plate aren't the picked set's.
 function changed() {
   const s = sets.find((x) => x.id === picked);
@@ -194,7 +218,7 @@ function renderLib() {
   const ed = (kind, id) => editing && editing.kind === kind && editing.id === id;
   host.innerHTML = `<h2>Your meal sets</h2>
     <p class="note">A set is a plate you eat often. The grams here are a starting point: after you weigh a food ${LEARN_AFTER} times, your usual amount is filled in for you.</p>
-    <div class="mlist">${sets.map((s) => ed("set", s.id) ? setForm(s) : `<div class="mitem"><div><b>${esc(s.name)}</b><small class="slottags">${(s.slots?.length ? s.slots.filter((k) => SLOTS[k]).map((k) => SLOTS[k]) : ["Any meal"]).map((t) => `<span>${esc(t)}</span>`).join("")}</small><small>${esc((s.items || []).filter((x) => fname(x.food)).map((x) => `${fname(x.food)} ${x.g} g`).join(" · ") || "No foods")}</small></div><span class="btns">${delBtns("set", s.id)}</span></div>`).join("")}</div>
+    <div class="mlist">${sets.map((s) => ed("set", s.id) ? setForm(s) : `<div class="mitem"><div><b>${esc(s.name)}</b><small class="slottags">${(s.slots?.length ? s.slots.filter((k) => SLOTS[k]).map((k) => SLOTS[k]) : ["Any meal"]).map((t) => `<span>${esc(t)}</span>`).join("")}</small><small>${esc((s.items || []).filter((x) => fname(x.food)).map((x) => `${fname(x.food)} ${x.g} g`).join(" · ") || "No foods")}</small>${s.made ? `<small class="mcost">${costLine(s)}</small>` : ""}</div><span class="btns">${delBtns("set", s.id)}</span></div>`).join("")}</div>
     ${ed("set", null) ? setForm(null) : foods.length ? `<button type="button" data-act="new" data-kind="set">+ New meal set</button>` : ""}
     <h2 id="foodLib">Your foods <small>per 100 g</small></h2>
     <p class="note">Find the numbers on the pack or a nutrition website. They're for 100 g, so any portion works them out.</p>
@@ -225,8 +249,29 @@ function setForm(s) {
       <label class="inline"><input type="number" data-sg="${i}" min="1" max="3000" inputmode="numeric" value="${r.g}" aria-label="Grams"> g</label>
       <button type="button" class="mini" data-act="srow-drop" data-i="${i}" aria-label="Remove">✕</button></div>`).join("")}
     <button type="button" class="mini" data-act="srow-add">+ Another food</button>
+    <fieldset class="madepick"><legend>Made</legend>
+      <div class="seg">${[["cooked", "🍳 Cooked"], ["bought", "🛍️ Bought"]].map(([k, v]) => `<input type="radio" name="made" id="made-${k}" value="${k}"${setMade === k ? " checked" : ""}><label for="made-${k}">${v}</label>`).join("")}</div>
+      ${setMade === "cooked" ? cookedHtml() : setMade === "bought" ? boughtHtml() : `<small class="note">Cooked at home or bought outside? Pick one to see what a plate costs.</small>`}
+    </fieldset>
     <div class="actions"><button type="submit" class="primary">${s ? "Save changes" : "Save set"}</button><button type="button" data-act="cancel">Cancel</button></div>
   </form>`;
+}
+// Cooked: what goes in the whole pot, picked from the Price book, and how many plates it makes.
+function cookedHtml() {
+  const items = stock.items();
+  if (!items.length) return `<p class="note">Nothing in the Price book yet. <a href="#stocky/add">Add the ingredients in Stocky</a> first, then pick them here.</p>`;
+  const unitOf = (id) => items.find((x) => x.id === id)?.unit || "g";
+  return `<small class="note">What goes in the whole pot, from the Price book.</small>
+    ${setIngr.map((r, i) => `<div class="srow">
+      <select data-irow="${i}" aria-label="Ingredient ${i + 1}"><option value="">Pick an ingredient</option>${items.map((x) => `<option value="${esc(x.id)}"${x.id === r.item ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select>
+      <label class="inline"><input type="number" data-iq="${i}" min="0" step="any" inputmode="decimal" value="${esc(r.qty)}" aria-label="How much"> ${unitOf(r.item)}</label>
+      <button type="button" class="mini" data-act="irow-drop" data-i="${i}" aria-label="Remove">✕</button></div>`).join("")}
+    <button type="button" class="mini" data-act="irow-add">+ Another ingredient</button>
+    <label class="inline mserves">Makes <input type="number" name="serves" min="1" max="${SERVES_MAX}" inputmode="numeric" value="${esc(setServes)}" placeholder="1" aria-label="How many plates"> plates</label>`;
+}
+function boughtHtml() {
+  return `<label class="inline mserves">One plate costs RM <input type="number" name="price" min="0" max="1000" step="0.1" inputmode="decimal" value="${esc(setPrice)}" placeholder="8.50" aria-label="Price of one plate"></label>
+    <small class="note">Bought outside, so no ingredients to look up.</small>`;
 }
 function libSay(t) { libMsg = t; const el = $("libMsg"); if (el) el.textContent = t; }
 
@@ -249,10 +294,27 @@ async function submitSet(form) {
   const id = editing.id;
   if (sets.some((s) => s.id !== id && s.name.toLowerCase() === name.toLowerCase())) { libSay("There's already a set with that name."); return; }
   const slots = Object.keys(SLOTS).filter((k) => setSlots.includes(k));
-  editing = null; setRows = []; setSlots = []; libMsg = `Saved "${name}".`;
+  const { made, error } = readMade();
+  if (error) { libSay(error); return; }
+  editing = null; setRows = []; setSlots = []; setMade = ""; setIngr = []; libMsg = `Saved "${name}".`;
   const now = Date.now(), times = { created: sets.find((s) => s.id === id)?.created || now, updated: now };
-  await commit(() => setDoc(id ? doc(setsCol, id) : doc(setsCol), slots.length ? { name, items, slots, ...times } : { name, items, ...times }));
+  await commit(() => setDoc(id ? doc(setsCol, id) : doc(setsCol), { name, items, ...(slots.length ? { slots } : {}), ...made, ...times }));
   renderLib();
+}
+
+// The "Made" part of the set form as fields to save: {} when not picked.
+function readMade() {
+  if (setMade === "bought") {
+    if (setPrice === "" || setPrice == null) return { made: { made: "bought" } };
+    const price = Math.round(Number(setPrice) * 100) / 100;
+    return price > 0 && price <= 1000 ? { made: { made: "bought", price } } : { error: "A plate costs between RM 0.10 and RM 1000." };
+  }
+  if (setMade !== "cooked") return { made: {} };
+  const ingredients = setIngr.filter((r) => r.item).map((r) => ({ item: r.item, qty: Number(r.qty) || 0 }));
+  if (ingredients.some((r) => !(r.qty > 0 && r.qty <= 100000))) return { error: "Put how much of each ingredient goes in the pot." };
+  const serves = setServes === "" ? 1 : Math.round(Number(setServes));
+  if (!(serves >= 1 && serves <= SERVES_MAX)) return { error: `A pot makes 1 to ${SERVES_MAX} plates.` };
+  return { made: { made: "cooked", ingredients, serves } };
 }
 
 // ---------- events ----------
@@ -305,10 +367,13 @@ function wire() {
     const { act, kind, id } = b.dataset;
     if (act === "new" || act === "edit") {
       editing = { kind, id: id || null }; libMsg = "";
-      if (kind === "set") { const s = sets.find((x) => x.id === id); setRows = s ? (s.items || []).map((x) => ({ ...x })) : [{ food: "", g: 100 }]; setSlots = s ? [...(s.slots || [])] : []; }
+      if (kind === "set") { const s = sets.find((x) => x.id === id); setRows = s ? (s.items || []).map((x) => ({ ...x })) : [{ food: "", g: 100 }]; setSlots = s ? [...(s.slots || [])] : [];
+        setMade = s?.made || ""; setIngr = (s?.ingredients || []).map((x) => ({ ...x })); setServes = s?.serves ?? ""; setPrice = s?.price ?? ""; }
       renderLib(); lib.querySelector(".mform input")?.focus();
     }
-    if (act === "cancel") { editing = null; setRows = []; setSlots = []; libMsg = ""; renderLib(); }
+    if (act === "cancel") { editing = null; setRows = []; setSlots = []; setMade = ""; setIngr = []; libMsg = ""; renderLib(); }
+    if (act === "irow-add") { readSetRows(); setIngr.push({ item: "", qty: "" }); renderLib(); }
+    if (act === "irow-drop") { readSetRows(); setIngr.splice(+b.dataset.i, 1); renderLib(); }
     if (act === "srow-add") { readSetRows(); setRows.push({ food: "", g: 100 }); renderLib(); }
     if (act === "srow-drop") { readSetRows(); setRows.splice(+b.dataset.i, 1); renderLib(); }
     if (act === "del") {
@@ -331,6 +396,14 @@ function wire() {
     if (ev.target.dataset.form === "set") { readSetRows(); submitSet(ev.target); }
   });
   lib.addEventListener("input", () => { if (libMsg) libSay(""); });
+  // Picking Cooked / Bought, or an ingredient (its unit shows beside the amount), redraws the form.
+  lib.addEventListener("change", (ev) => {
+    const t = ev.target;
+    if (t.name !== "made" && t.dataset.irow === undefined) return;
+    readSetRows();
+    if (t.name === "made" && setMade === "cooked" && !setIngr.length) setIngr.push({ item: "", qty: "" });
+    renderLib();
+  });
 
   // A new person picked with "For": start a fresh plate for them.
   $("me").addEventListener("change", () => { whoId = null; picked = null; rows = []; naming = false; cardMsg = ""; burnEdit = null; refreshMeals(); });
@@ -483,7 +556,11 @@ function readSetRows() {
     food: $("mealLib").querySelector(`[data-srow="${i}"]`)?.value ?? r.food,
     g: $("mealLib").querySelector(`[data-sg="${i}"]`)?.value ?? r.g,
   }));
-  const boxes = $("mealLib").querySelectorAll('input[name="slots"]');
+  const lib = $("mealLib"), val = (sel, d) => lib.querySelector(sel)?.value ?? d;
+  setIngr = setIngr.map((r, i) => ({ item: val(`[data-irow="${i}"]`, r.item), qty: val(`[data-iq="${i}"]`, r.qty) }));
+  setMade = lib.querySelector('input[name="made"]:checked')?.value ?? setMade;
+  setServes = val('input[name="serves"]', setServes); setPrice = val('input[name="price"]', setPrice);
+  const boxes = lib.querySelectorAll('input[name="slots"]');
   if (boxes.length) setSlots = [...boxes].filter((b) => b.checked).map((b) => b.value);
 }
 

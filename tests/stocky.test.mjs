@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buyRate, mealUse, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind, matchKind, kindsLike, shelves } from "../public/logic/stocky.js";
+import { buyRate, mealUse, estimate, lowItems, priceBoard, vsUsual, usualPrice, setCost, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind, matchKind, kindsLike, shelves } from "../public/logic/stocky.js";
 
 const T = "2026-11-22";
 const rice = { id: "rice", name: "Beras", kind: "food", unit: "g", pack: 5000, food: "f-nasi" };
@@ -209,4 +209,29 @@ test("shelves group by kind, neediest first, and skip empty kinds", () => {
   assert.equal(s[1].need, 1);
   assert.equal(s[2].need, 0);
   assert.deepEqual(shelves([], {}, kinds), []);
+});
+
+test("usualPrice is the median normal price, sale only when nothing else", () => {
+  const buys = [buy("2026-11-01", 5000, { price: 20, shop: "A" }), buy("2026-11-10", 5000, { price: 22, shop: "B" }), buy("2026-11-12", 5000, { price: 10, shop: "A", sale: true })];
+  assert.ok(Math.abs(usualPrice("rice", buys, [], T) - 21 / 5000) < 1e-12);
+  const onlySale = [buy("2026-11-12", 5000, { price: 10, shop: "A", sale: true })];
+  assert.equal(usualPrice("rice", onlySale, [], T), 10 / 5000);
+  assert.equal(usualPrice("rice", onlySale, [], T, false), null);
+  assert.equal(usualPrice("rice", [], [], T), null);
+});
+
+test("setCost for cooked and bought sets", () => {
+  const pantry = [rice, { id: "ayam", name: "Ayam", unit: "g" }, { id: "kari", name: "Daun kari", unit: "g" }, { id: "telur", name: "Telur", unit: "pcs" }];
+  const buys = [buy("2026-11-01", 5000, { price: 20, shop: "A" }), { item: "ayam", date: "2026-11-15", qty: 1000, price: 12, shop: "Pasar" }, { item: "telur", date: "2026-11-15", qty: 30, price: 12, shop: "A" }];
+  const set = { made: "cooked", serves: 4, ingredients: [{ item: "rice", qty: 500 }, { item: "ayam", qty: 1000 }, { item: "telur", qty: 2 }, { item: "kari", qty: 10 }, { item: "gone", qty: 5 }] };
+  const c = setCost(set, pantry, buys, [], T);
+  assert.ok(Math.abs(c.pot - (2 + 12 + 0.8)) < 1e-9); // 500 g of RM 20 / 5 kg, 1 kg ayam, 2 of 30 eggs at RM 12
+  assert.ok(Math.abs(c.plate - 14.8 / 4) < 1e-9);
+  assert.deepEqual(c.missing, ["Daun kari"]); // no price yet: listed, not counted as zero; deleted items skipped
+  assert.equal(c.priced, 3);
+  assert.equal(setCost({ ...set, serves: 0 }, pantry, buys, [], T).serves, 1);
+  assert.equal(setCost({ made: "cooked", ingredients: [] }, pantry, buys, [], T), null);
+  assert.deepEqual(setCost({ made: "bought", price: 8 }, pantry, buys, [], T), { made: "bought", plate: 8, missing: [], priced: 1 });
+  assert.equal(setCost({ made: "bought" }, pantry, buys, [], T), null);
+  assert.equal(setCost({ name: "old set" }, pantry, buys, [], T), null);
 });
