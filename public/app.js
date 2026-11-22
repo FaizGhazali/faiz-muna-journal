@@ -643,7 +643,7 @@ $("install").addEventListener("click", async () => {
   installEvent.prompt();
   const { outcome } = await installEvent.userChoice;
   installEvent = null; $("install").hidden = true;
-  if (outcome === "accepted") setTimeout(offerWidget, 800); // Android: offer the home-screen widget too (widget.js)
+  if (outcome === "accepted") offerWidget({ auto: true }); // Android: download the home-screen widget too (widget.js)
 });
 // Also fires when the app is installed from the browser's own menu. offerWidget() won't open twice.
 window.addEventListener("appinstalled", () => { $("install").hidden = true; setTimeout(offerWidget, 800); });

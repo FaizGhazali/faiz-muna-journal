@@ -5,9 +5,14 @@ const $ = (id) => document.getElementById(id);
 
 export const canWidget = () => /Android/i.test(navigator.userAgent) && sessionStorage.getItem("journal-demo") !== "1";
 
-export function offerWidget() {
+const OFFERED = "journal-widget-offered";
+const standalone = () => matchMedia("(display-mode: standalone)").matches;
+
+/** auto: also start the download (right after "Install app", while the tap still counts). */
+export function offerWidget({ auto = false } = {}) {
   const sheet = $("widgetSheet");
   if (!sheet || !canWidget() || sheet.open) return;
+  try { localStorage.setItem(OFFERED, "1"); } catch {}
   sheet.innerHTML = `<form method="dialog" class="gsin">
     <div class="gshead"><span class="gico big" aria-hidden="true">📲</span>
       <div><p class="eyebrow">Android widget</p><h3 id="wsTitle">Your next move on the home screen</h3></div></div>
@@ -26,6 +31,22 @@ export function offerWidget() {
   sheet.querySelector("a.primary").addEventListener("click", () => setTimeout(() => sheet.close(), 300));
   sheet.showModal();
   sheet.querySelector("a.primary").focus();
+  if (auto) {
+    location.href = APK; // the sheet stays open with the steps; the button is there if the download didn't start
+    sheet.querySelector("li span").innerHTML = "The download has started. Open <b>next-move.apk</b> when it's done (or tap <b>Download widget</b> again).";
+  }
+}
+
+/** First time the installed app opens on Android (any install path, also Chrome's own menu): offer the widget once. */
+function firstOpen() {
+  if (!canWidget() || !standalone()) return;
+  try { if (localStorage.getItem(OFFERED)) return; } catch { return; }
+  const app = $("app");
+  if (!app) return;
+  const go = () => { if (!app.hidden) { obs.disconnect(); setTimeout(offerWidget, 1200); } };
+  const obs = new MutationObserver(go);
+  obs.observe(app, { attributes: true, attributeFilter: ["hidden"] });
+  go();
 }
 
 export function initWidget() {
@@ -33,4 +54,5 @@ export function initWidget() {
   sheet?.addEventListener("click", (ev) => { if (ev.target === sheet) sheet.close(); }); // tap outside closes
   // The wheel's ⋯ menu entry only shows where the widget can be installed.
   document.querySelectorAll("[data-go=widget]").forEach((b) => { b.hidden = !canWidget(); });
+  firstOpen();
 }

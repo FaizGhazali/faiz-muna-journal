@@ -42,6 +42,7 @@ class SetupActivity : Activity() {
     private fun show() {
         box.removeAllViews()
         heading("Next Move widget")
+        addWidgetOffer()
         when {
             !s.signedIn -> signInForm()
             s.person == null -> pickPerson()
@@ -101,18 +102,31 @@ class SetupActivity : Activity() {
 
     private fun done() {
         text("This phone shows ${s.personName ?: "your"}'s next move.")
-        val mgr = getSystemService(AppWidgetManager::class.java)
-        val placed = mgr.getAppWidgetIds(ComponentName(this, MoveWidget::class.java)).isNotEmpty()
-        if (placed) text("The widget is on your home screen. It refreshes every 30 minutes, or tap ↻ on it.")
-        else {
-            text("Now add it: touch and hold an empty spot on the home screen, tap Widgets, and pick Next Move.")
-            if (mgr.isRequestPinAppWidgetSupported) button("Add to home screen", primary = true) {
-                mgr.requestPinAppWidget(ComponentName(this, MoveWidget::class.java), null, null)
-            }
-        }
+        if (placed()) text("The widget is on your home screen. It refreshes every 30 minutes, or tap ↻ on it.")
         button("Refresh now") { MoveWidget.requestRefresh(this) }
         button("Change person") { s.person = null; s.lastMove = null; MoveWidget.requestRefresh(this); show() }
         button("Sign out") { s.signOut(); s.person = null; MoveWidget.requestRefresh(this); show() }
+    }
+
+    private fun placed() = getSystemService(AppWidgetManager::class.java)
+        .getAppWidgetIds(ComponentName(this, MoveWidget::class.java)).isNotEmpty()
+
+    /** Shown on every screen until the widget is placed: some phones' widget lists hide it or it's hard to find. */
+    private fun addWidgetOffer() {
+        if (placed()) return
+        val mgr = getSystemService(AppWidgetManager::class.java)
+        if (mgr.isRequestPinAppWidgetSupported) {
+            button("Add widget to home screen", primary = true) {
+                mgr.requestPinAppWidget(ComponentName(this, MoveWidget::class.java), null, null)
+            }
+            text("Nothing happened? Open this app's settings and allow home screen shortcuts (Xiaomi, Vivo and Oppo phones block it at first), then try again.")
+        }
+        text("Or: touch and hold an empty spot on the home screen, tap Widgets, and look for Next Move.")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::box.isInitialized) show() // e.g. back after placing the widget
     }
 
     // ---------- small view helpers ----------

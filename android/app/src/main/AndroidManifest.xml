@@ -20,10 +20,10 @@
             </intent-filter>
         </activity>
 
-        <!-- Not exported: only the system (widget updates) and this app (the refresh button) can reach it. -->
+        <!-- Exported: some phone makers' launchers leave out widgets that aren't. It only ever re-fetches the card. -->
         <receiver
             android:name=".MoveWidget"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
