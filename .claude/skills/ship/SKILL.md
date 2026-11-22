@@ -1,7 +1,6 @@
 ---
 name: ship
-description: Commit the working tree changes and make them live on the family's site (push main, which deploys Firebase Hosting), then confirm the deploy passed. Use only when the user asks to ship, release, "commit and make it live", or types /ship.
-disable-model-invocation: true
+description: Commit the working tree changes and make them live on the family's site (push main, which deploys Firebase Hosting), then confirm the deploy passed. This is the default end of every finished change in this project: run it once a requested change is done and tested, without asking, and also when the user asks to ship, release, "commit and make it live", or types /ship.
 ---
 
 # Ship: commit and make it live
