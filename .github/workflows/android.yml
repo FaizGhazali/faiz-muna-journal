@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # to publish the APK as a GitHub Release
 
 jobs:
   build:
@@ -51,14 +51,28 @@ jobs:
           chmod +x gradlew
           if [ -n "$SIGNING_STORE_FILE" ]; then
             ./gradlew --no-daemon assembleRelease
-            cp app/build/outputs/apk/release/app-release.apk "../next-move-${{ github.run_number }}.apk"
+            cp app/build/outputs/apk/release/app-release.apk ../next-move.apk
           else
             ./gradlew --no-daemon assembleDebug
-            cp app/build/outputs/apk/debug/app-debug.apk "../next-move-debug-${{ github.run_number }}.apk"
+            cp app/build/outputs/apk/debug/app-debug.apk ../next-move.apk
           fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: next-move-apk
-          path: next-move*.apk
+          path: next-move.apk
           retention-days: 30
+
+      # One release per build, always with the same file name, so this link is always the newest APK (no login):
+      # https://github.com/FaizGhazali/faiz-muna-journal/releases/latest/download/next-move.apk
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.run_number }}
+        run: |
+          if [ -n "$SIGNING_STORE_FILE" ]; then kind="signed"; else kind="debug"; fi
+          gh release create "widget-$RUN" next-move.apk \
+            --target "${{ github.sha }}" \
+            --title "Next Move widget 1.0.$RUN ($kind)" \
+            --notes "Home-screen widget for the journal, built from ${GITHUB_REF_NAME} (${GITHUB_SHA::7}). On the phone: download next-move.apk, open it, allow installing from this source once, then open Next Move and sign in. $( [ "$kind" = debug ] && echo 'Debug build: a later signed build will not install over it; uninstall this one first.' )" \
+            --latest
