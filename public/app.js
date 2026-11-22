@@ -14,7 +14,8 @@ import { initBackup } from "./backup.js";
 import { initFitDetail, refreshFitDetail } from "./fitdetail.js";
 import { initMood, refreshMood } from "./moodui.js";
 import { MOODS, isMood } from "./mood.js";
-import { initMeals, startMeals, stopMeals, refreshMeals, refreshCalories, initWheel } from "./mealsui.js";
+import { initMeals, startMeals, stopMeals, refreshMeals, refreshCalories, initWheel, mealData } from "./mealsui.js";
+import { initStocky, startStocky, stopStocky, refreshStocky, stockOf, listFood } from "./stockyui.js";
 import { initCollapse } from "./collapse.js";
 import { initZoom, zoomable, xWindow, isZoomed } from "./zoom.js";
 import { initGuides } from "./tour.js";
@@ -460,7 +461,8 @@ $("feed").addEventListener("click", async (ev) => {
 const exercisedToday = (pid) => entries.some((e) => e.person === pid && e.date === today() && (e.minutes > 0 || e.run));
 initActivities({ db, people: () => PEOPLE, commit, exercisedToday, onChange: () => refreshMood() });
 initBackup({ db });
-initMeals({ db, people: () => PEOPLE, me: currentPerson, entries: () => entries, commit });
+initMeals({ db, people: () => PEOPLE, me: currentPerson, entries: () => entries, commit, stock: { of: stockOf, list: listFood, changed: () => refreshStocky() } });
+initStocky({ db, people: () => PEOPLE, me: currentPerson, commit, mealData });
 initWheel();
 initCollapse();
 initZoom();
@@ -527,6 +529,7 @@ function startApp(user) {
     refreshActivities();
     refreshMeals();
     refreshDiary();
+    refreshStocky();
   }, denied));
   unsubs.push(onSnapshot(entriesCol, (snap) => {
     entries = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.date || ""));
@@ -535,8 +538,9 @@ function startApp(user) {
   startActivities();
   startMeals();
   startDiary();
+  startStocky();
 }
-function stop() { unsubs.forEach((u) => u()); unsubs = []; stopActivities(); stopMeals(); stopDiary(); }
+function stop() { unsubs.forEach((u) => u()); unsubs = []; stopActivities(); stopMeals(); stopDiary(); stopStocky(); }
 
 // ---------- Demo ----------
 // Keys the demo keeps in this tab. journal-theme stays so the day/night choice carries on.

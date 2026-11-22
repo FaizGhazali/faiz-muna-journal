@@ -15,9 +15,9 @@
 <meta name="twitter:card" content="summary">
 <script type="application/ld+json">
 {"@context":"https://schema.org","@graph":[
- {"@type":"WebApplication","name":"Faiz & Muna's Journal","alternateName":"Our Journal","url":"https://faiz-muna-journal-c43ab.web.app/","applicationCategory":"HealthApplication","operatingSystem":"Any (web browser, installable PWA)","inLanguage":"en","dateModified":"2026-11-20",
+ {"@type":"WebApplication","name":"Faiz & Muna's Journal","alternateName":"Our Journal","url":"https://faiz-muna-journal-c43ab.web.app/","applicationCategory":"HealthApplication","operatingSystem":"Any (web browser, installable PWA)","inLanguage":"en","dateModified":"2026-11-22",
   "description":"A private weight, BMI and running journal for two people, with run reading from a COROS watch picture, a fitness score, activity suggestions and a daily habit checklist.",
-  "featureList":["Weight and BMI tracking with WHO ranges","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file","Try-it demo with sample data","Daily mood rating with a quote, year in pixels and what goes with good days","Visitor count by country, guessed from time zone","Meals journal with your own food list, one-tap meal sets and learned portions","Daily calories against a range from BMI and calorie burn","Journal switcher wheel","Show me how: searchable how-tos with step-by-step walkthroughs that light up what to tap","Dearly diary: turn a few words in English, Malay or Manglish into a diary entry with a free, private AI writer","Diary moods set the day's mood, averaged across entries","Tap a day to see what happened that day","Daily reflection cards that look back over your moods and diary"]},
+  "featureList":["Weight and BMI tracking with WHO ranges","Groceries journal: days left from your buying pattern and logged meals, a shared shopping list, cheapest shop and sale prices, and a list from your meal plan","Run logging from a COROS watch picture, read on the device","Fitness score from pace and heart rate","Weight vs pace and distance graphs","Activity suggestions that learn your routine","Daily habit checklist","Works offline and installs as an app","Backup to a file","Try-it demo with sample data","Daily mood rating with a quote, year in pixels and what goes with good days","Visitor count by country, guessed from time zone","Meals journal with your own food list, one-tap meal sets and learned portions","Daily calories against a range from BMI and calorie burn","Journal switcher wheel","Show me how: searchable how-tos with step-by-step walkthroughs that light up what to tap","Dearly diary: turn a few words in English, Malay or Manglish into a diary entry with a free, private AI writer","Diary moods set the day's mood, averaged across entries","Tap a day to see what happened that day","Daily reflection cards that look back over your moods and diary"]},
  {"@type":"FAQPage","mainEntity":[
   {"@type":"Question","name":"What is Our Journal?","acceptedAnswer":{"@type":"Answer","text":"A private web app for two people to track weight, BMI, running and daily habits together. It runs in the browser and can be installed on a phone like an app."}},
   {"@type":"Question","name":"How does it read my run from a picture?","acceptedAnswer":{"@type":"Answer","text":"You choose the screenshot of your COROS run. Text recognition runs on your own phone to pick out distance, time, pace and heart rate. The picture is never uploaded or saved, and you check the numbers before saving."}},
@@ -26,6 +26,7 @@
   {"@type":"Question","name":"How does the mood card work?","acceptedAnswer":{"@type":"Answer","text":"Each person taps one of five faces to rate how yesterday felt, from hard to great, and gets a short quote to match. The app never guesses your mood. A mood picked on a diary entry counts too, and several in a day are averaged. The Mood history page shows a year in pixels where tapping a day shows what happened that day and how many hard to great days that month (or week) had, reflection cards that look back over your days, and what tends to go with your good days, like exercise or habits."}},
   {"@type":"Question","name":"How does the meals journal work?","acceptedAnswer":{"@type":"Answer","text":"You add the foods you usually eat once, with calories, carbs, protein and fat per 100 g, from the pack or a nutrition website. Then you save plates you eat often as meal sets. To log a meal, pick the set, check the grams and add it. After you weigh a food three times, the journal fills in your usual portion. A chart compares each day's calories with a range from your BMI and an estimate of what you burn, or the burn from your watch if you type it in. Days you don't log are left out, not counted as zero. A Year view colours one square per day, from far under to far over, with days logged, percent in range, average and best streak. The round button at the bottom switches between journals."}},
   {"@type":"Question","name":"How does the Dearly diary writer work?","acceptedAnswer":{"@type":"Answer","text":"Jot a few words about your day, in English, Malay, Manglish or a mix, and the writer turns them into a diary entry you can edit before saving. On a computer it can run inside the browser, using its graphics chip, so your notes are never sent to any AI company and there is no cost. You download the model once (about 0.3 to 1.7 GB) and it needs a browser with WebGPU. On phones, where that is too heavy, it uses your family’s own free cloud writer instead, and you can always write yourself."}},
+  {"@type":"Question","name":"How does Stocky know when groceries run out?","acceptedAnswer":{"@type":"Answer","text":"Each time you tap Bought, Stocky notes the day and how much. From how often you buy something it works out how fast it goes and how many days are left. Food linked to your Meals foods is also used up by the meals you log, which can only bring the date closer, since meals don't count cooking for others. Say how much is left (full, half, low or out) to put the guess right. Add the price and shop when you buy, or a price you spot, and it compares shops per kg, per litre or per piece and shows which prices are sales."}},
   {"@type":"Question","name":"Can anyone sign up?","acceptedAnswer":{"@type":"Answer","text":"Not at the moment. This journal is private to one family, and only they can sign in. Anyone can open the demo to try every feature with sample data."}},
   {"@type":"Question","name":"How are visitors counted?","acceptedAnswer":{"@type":"Answer","text":"Each phone or computer that opens this page is counted once, under the country its time zone points to. No location, IP address or personal detail is looked up or saved, only a number per country."}},
   {"@type":"Question","name":"Is anything I do in the demo saved?","acceptedAnswer":{"@type":"Answer","text":"No. The demo uses made-up sample data kept only in your browser tab. Nothing is sent to a server, and it is all gone when you close the tab."}}]}
@@ -245,6 +246,21 @@ try {
     </div>
   </section>
 
+  <section class="scene" aria-labelledby="l-stocky">
+    <div class="copy">
+      <p class="eyebrow">Stocky groceries</p>
+      <h2 id="l-stocky">Know what's running out, and where it's cheapest</h2>
+      <p>Tap Bought when you shop and Stocky learns how fast each thing goes. Link food to your Meals foods and the meals you log use it up too. Running low shows up on the shopping list by itself, and the meal card warns you. Add the price and shop when you buy, or a price you spot, and it compares shops per kg, per litre or per piece, so you can see if a price is a real sale or just the normal price. Pick the meal sets you'll cook this week and it adds what's missing.</p>
+      <ul><li>Days left, guessed from how often you buy it</li><li>Meals you log use up the stock</li><li>Cheapest shop, sale or normal price</li><li>Shopping list from your meal plan</li><li>Food and household things, shared by you both</li></ul>
+    </div>
+    <div class="demo panel mealdemo" aria-hidden="true">
+      <div class="mdrow flip" data-at="0.15"><span>Telur</span><b>2 left</b><small>about 1 day</small></div>
+      <div class="mdrow flip" data-at="0.3"><span>Beras</span><b>6 days</b><small>Lotus's RM 3.58/kg · sale</small></div>
+      <div class="mdrow flip" data-at="0.45"><span>Susu</span><b>4 days</b><small>Mydin RM 5.75/L</small></div>
+      <p class="ok flip" data-at="0.7">✓ Added to the shopping list</p>
+    </div>
+  </section>
+
   <section class="scene" aria-labelledby="l-how">
     <div class="copy">
       <p class="eyebrow">Show me how</p>
@@ -282,6 +298,7 @@ try {
   <section class="info" aria-labelledby="l-new">
     <h2 id="l-new">What's new</h2>
     <ol class="changes">
+      <li><time datetime="2026-11-22">22 Nov 2026</time> Stocky, a groceries journal on the round button: it guesses when rice, eggs or soap will run out from how often you buy them and the meals you log, puts them on a shared shopping list, compares prices between shops (sale or normal), and turns your meal plan for the week into a list.</li>
       <li><time datetime="2026-11-20">20 Nov 2026</time> Dearly tags are easier: tap a tag you've used before, and "part time", "Part-time" or "parts times" all stay one tag. Type "mkan" and it asks "Did you mean #makan?", or add it as new.</li>
       <li><time datetime="2026-11-20">20 Nov 2026</time> Reflections: the mood you pick on a diary entry now becomes your mood for the day (several entries are averaged). Tap a day in the year in pixels to see what happened, and find a new looking-back card on the dashboard each day.</li>
       <li><time datetime="2026-11-20">20 Nov 2026</time> On phones, Dearly's writer now uses the cloud writer only. The on-device one was too heavy for phones; it still works on a computer.</li>
@@ -406,6 +423,7 @@ try {
     <p class="note">Calories, carbs, protein and fat come from the numbers you type for each food, so they're as good as those numbers. The range comes from your BMI and an estimate of what you burn. Use them as a guide, not an exact count.</p>
   </div>
   <div class="view diary" id="diary" hidden aria-label="Dearly, your diary"></div>
+  <div class="view stocky" id="stocky" hidden aria-label="Stocky, your groceries"></div>
   <div class="view" id="mealsets" hidden>
     <div class="fdtop"><button type="button" id="setsBack">← Back</button></div>
     <section class="panel mlib" id="mealLib" aria-label="Meal sets and foods"></section>

@@ -163,5 +163,35 @@ export function sampleData(now = new Date()) {
     diary[`d-diary-${i}`] = { person, date, ...(title ? { title } : {}), body: `Dear Diary,\n\n${text}`, mood, tags, fav: i === 4 || i === 7, created: at, updated: at };
   });
 
-  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns, diary };
+  // Stocky (groceries): shared stock with made-up shops and prices. Buys are spaced so rice and eggs run low,
+  // chicken is out (the meals logged used it), milk is due soon and the household things are fine.
+  const pantry = {
+    "k-beras": { name: "Beras", kind: "food", unit: "g", pack: 5000, food: "f-nasi", each: 2.5, created: stamp(80) },
+    "k-telur": { name: "Telur", kind: "food", unit: "pcs", pack: 30, food: "f-telur", each: 55, created: stamp(80) },
+    "k-ayam": { name: "Ayam", kind: "food", unit: "g", pack: 1500, food: "f-ayam", created: stamp(80) },
+    "k-susu": { name: "Susu", kind: "food", unit: "ml", pack: 2000, created: stamp(80) },
+    "k-oat": { name: "Oat", kind: "food", unit: "g", pack: 1000, food: "f-oat", created: stamp(80) },
+    "k-tisu": { name: "Tisu", kind: "home", unit: "pcs", pack: 10, created: stamp(80) },
+    "k-sabun": { name: "Sabun basuh", kind: "home", unit: "g", pack: 3000, created: stamp(80) },
+  };
+  // [item, days ago, qty, price, shop, sale?]
+  const bought = [
+    ["k-beras", 66, 5000, 19.5, "Mydin"], ["k-beras", 48, 5000, 18.9, "Mydin"], ["k-beras", 30, 5000, 20.9, "Lotus's"], ["k-beras", 12, 5000, 17.9, "Lotus's", true],
+    ["k-telur", 40, 30, 12.5, "Mydin"], ["k-telur", 26, 30, 11.8, "Pasar"], ["k-telur", 13, 30, 12.9, "Mydin"],
+    ["k-ayam", 16, 1500, 14.9, "Pasar"], ["k-ayam", 9, 1500, 15.8, "Mydin"],
+    ["k-susu", 30, 2000, 13.5, "Lotus's"], ["k-susu", 23, 2000, 13.5, "Lotus's"], ["k-susu", 16, 2000, 12.9, "Mydin"], ["k-susu", 9, 2000, 13.5, "Lotus's"], ["k-susu", 3, 2000, 11.5, "Mydin", true],
+    ["k-oat", 34, 1000, 9.9, "Lotus's"], ["k-oat", 10, 1000, 10.5, "Mydin"],
+    ["k-tisu", 40, 10, 15.9, "Mydin"], ["k-tisu", 8, 10, 14.5, "Lotus's"],
+    ["k-sabun", 80, 3000, 24.9, "Lotus's"], ["k-sabun", 40, 3000, 26.5, "Mydin"], ["k-sabun", 5, 3000, 21.9, "Lotus's", true],
+  ];
+  const buys = Object.fromEntries(bought.map(([item, n, qty, price, shop, sale], i) => [`d-buy-${i}`, { item, date: ago(n), qty, price, shop, ...(sale ? { sale: true } : {}), by: i % 2 ? "p2" : "p1", at: stamp(n) }]));
+  // Prices spotted without buying: [item, days ago, qty, price, shop, sale ends in n days?]
+  const seen = [
+    ["k-beras", 3, 10000, 36, "Giant"], ["k-telur", 4, 30, 13.2, "Lotus's"], ["k-telur", 2, 30, 10.9, "Giant", 5],
+    ["k-ayam", 2, 1000, 9.5, "Pasar"], ["k-susu", 6, 1000, 7.2, "Giant"],
+  ];
+  const prices = Object.fromEntries(seen.map(([item, n, qty, price, shop, until], i) => [`d-price-${i}`, { item, date: ago(n), qty, price, shop, ...(until ? { sale: true, until: ago(-until) } : {}), at: stamp(n) }]));
+  const shopList = { "d-list-0": { name: "Bawang merah", qty: 500, unit: "g", from: "manual", created: stamp(1) } };
+
+  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns, diary, pantry, buys, prices, shopList };
 }

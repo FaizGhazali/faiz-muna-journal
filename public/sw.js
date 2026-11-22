@@ -1,6 +1,6 @@
 // Keeps the app opening without a connection. Journal data is cached by Firestore, not here.
-const CACHE = "journal-v49";
-const SHELL = ["/", "/app.js", "/suggest.js", "/activities.js", "/fitness.js", "/runweight.js", "/fitdetail.js", "/mood.js", "/moodui.js", "/reflect.js", "/meals.js", "/mealsui.js", "/collapse.js", "/zoom.js", "/tour.js", "/coros.js", "/backup.js", "/diary.js", "/diaryui.js", "/writestyle.js", "/localai.js", "/aiworker.js", "/cloudai.js", "/fs.js", "/widget.js", "/memdb.js", "/sample.js", "/landing.js", "/visits.js", "/styles.css", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/robots.txt", "/sitemap.xml", "/google6e6a8a8f21a7fbb1.html"];
+const CACHE = "journal-v50";
+const SHELL = ["/", "/app.js", "/suggest.js", "/activities.js", "/fitness.js", "/runweight.js", "/fitdetail.js", "/mood.js", "/moodui.js", "/reflect.js", "/meals.js", "/mealsui.js", "/stocky.js", "/stockyui.js", "/collapse.js", "/zoom.js", "/tour.js", "/coros.js", "/backup.js", "/diary.js", "/diaryui.js", "/writestyle.js", "/localai.js", "/aiworker.js", "/cloudai.js", "/fs.js", "/widget.js", "/memdb.js", "/sample.js", "/landing.js", "/visits.js", "/styles.css", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/robots.txt", "/sitemap.xml", "/google6e6a8a8f21a7fbb1.html"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -44,6 +44,7 @@ const GUIDES = [
   { id: "run", icon: "🏃", title: "Add a run", blurb: "In the Weight journal's entry card, add a picture of your COROS run and check the numbers.", words: "exercise coros watch running picture photo pace heart fitness" },
   { id: "mood", icon: "🙂", title: "Rate your day", blurb: "Tap a face on the Yesterday card.", words: "mood face feeling yesterday happy" },
   { id: "diary", icon: "📔", title: "Write in your diary", blurb: "Round button, then Dearly, then Write today's diary. Jot a few words and tap Write it for me, or write it yourself.", words: "dearly diary journal write entry ai writer notes malay manglish dear" },
+  { id: "stocky", icon: "🛒", title: "Track your groceries", blurb: "Round button, then Stocky. Add the things you buy often and tap Bought each time you shop. Stocky tells you what's running low, puts it on the list and shows the cheapest shop.", words: "groceries grocery stocky shopping list pantry stock buy bought price shop cheap sale barang dapur running out" },
   { id: "fold", icon: "✋", title: "Fold a card", blurb: "Hold the knob on a card's top edge to tuck it away. Tap it to open again.", words: "hide collapse tidy close card" },
   { id: "zoom", icon: "🔍", title: "Zoom a graph", blurb: "Pinch with two fingers. Double-tap to see it all again.", words: "chart graph pinch closer detail" },
 ];

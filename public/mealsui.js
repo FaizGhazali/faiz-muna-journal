@@ -10,7 +10,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 const today = () => iso(new Date());
 const num = (n) => (Math.round(n * 10) / 10).toLocaleString();
 
-let commit, me, people, entries, foodsCol, setsCol, mealsCol, burnsCol, unsubs = [];
+let commit, me, people, entries, stock, foodsCol, setsCol, mealsCol, burnsCol, unsubs = [];
 let foods = [], sets = [], meals = [], burns = {};
 // Who the meals are for: picked on the card, starting from the "For" switch at the top.
 let whoId = null;
@@ -25,6 +25,8 @@ let editing = null, setRows = [], setSlots = [], confirmDel = null, confirmMeal 
 
 export function initMeals(opts) {
   ({ commit, me, people, entries } = opts);
+  // Stocky hooks (stockyui.js, passed in by app.js): { of(foodId), list(foodId), changed() }.
+  stock = opts.stock || { of: () => null, list: () => {}, changed: () => {} };
   const db = opts.db;
   foodsCol = collection(db, "foods");
   setsCol = collection(db, "mealSets");
@@ -33,12 +35,14 @@ export function initMeals(opts) {
   wire();
 }
 export function startMeals() {
-  unsubs.push(onSnapshot(foodsCol, (s) => { foods = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort(byName); refreshMeals(); }));
-  unsubs.push(onSnapshot(setsCol, (s) => { sets = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort(byName); refreshMeals(); }));
+  unsubs.push(onSnapshot(foodsCol, (s) => { foods = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort(byName); refreshMeals(); stock.changed(); }));
+  unsubs.push(onSnapshot(setsCol, (s) => { sets = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort(byName); refreshMeals(); stock.changed(); }));
   // A year and a bit: enough for the year strip and to learn usual portions.
-  unsubs.push(onSnapshot(query(mealsCol, where("date", ">=", addDays(today(), -380))), (s) => { meals = s.docs.map((d) => ({ id: d.id, ...d.data() })); renderPicker(); renderDay(); refreshCalories(); }));
+  unsubs.push(onSnapshot(query(mealsCol, where("date", ">=", addDays(today(), -380))), (s) => { meals = s.docs.map((d) => ({ id: d.id, ...d.data() })); renderPicker(); renderDay(); refreshCalories(); stock.changed(); }));
   unsubs.push(onSnapshot(query(burnsCol, where("date", ">=", addDays(today(), -380))), (s) => { burns = Object.fromEntries(s.docs.map((d) => [d.id, d.data()])); refreshCalories(); }));
 }
+// Foods, sets and meals for Stocky (it reads them, never writes meals).
+export const mealData = () => ({ foods, sets, meals });
 export function stopMeals() { unsubs.forEach((u) => u()); unsubs = []; }
 const byName = (a, b) => String(a.name).localeCompare(String(b.name));
 
@@ -98,6 +102,7 @@ function renderPlate() {
       <b class="pk" id="pk-${i}">${portion(r.per100, r.g || 0).kcal}</b>
       <button type="button" class="mini" data-act="drop" data-i="${i}" aria-label="Take ${esc(r.name)} off the plate">✕</button>
     </div>`).join("") || `<p class="note">Add the foods on your plate.</p>`}
+    ${stockHtml()}
     ${left.length ? `<select id="mealAddFood" aria-label="Add a food"><option value="">+ Add a food</option>${left.map((f) => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join("")}</select>` : ""}
     <div class="mtot" id="mealTot">${totHtml(t)}</div>
     ${naming ? `<div class="addrow1"><input type="text" id="setName" maxlength="60" placeholder="Name, like Nasi + patin + sayur" aria-label="Set name"><button type="button" data-act="save-set" class="primary">Save set</button><button type="button" data-act="name-no">Cancel</button></div>` : ""}
@@ -106,6 +111,14 @@ function renderPlate() {
       ${rows.length && changed() && !naming ? `<button type="button" data-act="name">Save as a set</button>` : ""}
       <button type="button" data-act="clear">Cancel</button>
     </div></div>`;
+}
+// Foods on the plate that Stocky says are low or out at home.
+function stockHtml() {
+  const low = rows.map((r) => ({ food: r.food, s: stock.of(r.food) })).filter(({ s }) => s && ["low", "out"].includes(s.status));
+  if (!low.length) return "";
+  const line = (s) => (s.status === "out" ? `Probably out of <b>${esc(s.name)}</b>` : `Low on <b>${esc(s.name)}</b>${s.daysLeft != null ? `, about ${s.daysLeft} day${s.daysLeft === 1 ? "" : "s"} left` : ""}`);
+  return `<div class="mstock">${low.map(({ food, s }) => `<p><span>🛒 ${line(s)}</span>
+    ${s.listed ? `<span class="note">On the list</span>` : `<button type="button" class="mini" data-act="stock-list" data-food="${esc(food)}">Add to list</button>`}</p>`).join("")}</div>`;
 }
 const totHtml = (t) => `<div><b>${t.kcal}</b><small>kcal</small></div><div><b>${num(t.carb)}</b><small>carbs g</small></div><div><b>${num(t.protein)}</b><small>protein g</small></div><div><b>${num(t.fat)}</b><small>fat g</small></div>`;
 // True when the foods on the plate aren't the picked set's.
@@ -264,6 +277,7 @@ function wire() {
     if (act === "name") { naming = true; renderPlate(); $("setName")?.focus(); }
     if (act === "name-no") { naming = false; renderPlate(); }
     if (act === "save-set") saveSetFromPlate();
+    if (act === "stock-list") { b.replaceWith(Object.assign(document.createElement("span"), { className: "note", textContent: "On the list" })); stock.list(b.dataset.food); }
   });
   card.addEventListener("input", (ev) => {
     const i = ev.target.dataset.i;
@@ -469,7 +483,7 @@ export const JOURNALS = [
   { id: "meals", name: "Meals", icon: "🍽️" },
   { id: "weight", name: "Weight", icon: "⚖️" },
   { id: "diary", name: "Dearly", icon: "📔" },
-  { id: "soon-2", name: "Empty", icon: "＋", soon: true },
+  { id: "stocky", name: "Stocky", icon: "🛒" },
   { id: "soon-3", name: "Empty", icon: "＋", soon: true },
 ];
 const store = {
@@ -479,7 +493,7 @@ const store = {
 // How many times the "More lives here" tip shows before it stops by itself (journal-tip-more: count, or "off").
 const TIP_VIEWS = 5, TIP_KEY = "journal-tip-more";
 // The view the Dashboard tab opens: the last journal picked on this phone, Meals at first.
-export function journalView() { const t = store.get("journal-type", "meals"); return t === "weight" ? "home" : t === "diary" ? "diary" : "meals"; }
+export function journalView() { const t = store.get("journal-type", "meals"); return t === "weight" ? "home" : t === "diary" ? "diary" : t === "stocky" ? "stocky" : "meals"; }
 
 export function initWheel() {
   const fab = $("wheelBtn"), wheel = $("wheel"), ring = $("wheelRing"), hub = $("wheelHub");
