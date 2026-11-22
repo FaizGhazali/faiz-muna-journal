@@ -4,8 +4,17 @@ import { collection, doc, getDocs, writeBatch } from "./fs.js";
 
 const APP = "our-journal";
 const VERSION = 1;
-const COLS = ["config", "entries", "activities", "habitDays", "moves", "foods", "mealSets", "meals", "burns", "diary", "diaryPhotos", "diaryStyle", "pantry", "buys", "prices", "shopList", "kinds"];
-const LABELS = { entries: "journal entries", diary: "diary entries", diaryPhotos: "diary photos", activities: "activities", habitDays: "habit days", moves: "history items" };
+export const COLS = ["config", "entries", "activities", "habitDays", "moves", "foods", "mealSets", "meals", "burns", "diary", "diaryPhotos", "diaryStyle", "pantry", "buys", "prices", "shopList", "kinds"];
+// Not backed up on purpose: nextMove (rebuilt by the app) and visits (public visitor count).
+export const COLS_SKIPPED = ["nextMove", "visits"];
+const LABELS = {
+  entries: "journal entries", meals: "meals", foods: "foods", mealSets: "meal sets", burns: "watch burns",
+  diary: "diary entries", diaryPhotos: "diary photos", diaryStyle: "diary settings",
+  activities: "activities", habitDays: "habit days", moves: "history items",
+  pantry: "Stocky items", buys: "buys", prices: "prices", shopList: "shopping list items", kinds: "kinds",
+};
+const summary = (counts) => Object.keys(LABELS).filter((k) => counts[k]).map((k) => `${counts[k]} ${counts[k] === 1 ? one(LABELS[k]) : LABELS[k]}`);
+function one(label) { return label.replace(/ies$/, "y").replace(/s$/, ""); } // "diary entries" → "diary entry"
 const BATCH = 400; // Firestore allows 500 writes per batch
 
 const $ = (id) => document.getElementById(id);
@@ -51,8 +60,8 @@ async function exportData() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-    const n = Object.keys(data.entries).length;
-    say(`Saved a backup with ${n} journal ${n === 1 ? "entry" : "entries"}. Keep the file somewhere safe.`);
+    const parts = summary(Object.fromEntries(COLS.map((c) => [c, Object.keys(data[c]).length])));
+    say(`Saved a backup with ${parts.join(", ") || "nothing yet"}. Keep the file somewhere safe.`);
   } catch (_) {
     say("Couldn't make the backup. Check your connection and try again.");
   } finally { btn.disabled = false; }
@@ -79,7 +88,7 @@ async function readFile(file) {
 
   const counts = {};
   writes.forEach((w) => { counts[w.name] = (counts[w.name] || 0) + 1; });
-  const parts = Object.keys(LABELS).filter((k) => counts[k]).map((k) => `${counts[k]} ${LABELS[k]}`);
+  const parts = summary(counts);
   if (counts.config) parts.push("names and heights");
   const when = typeof parsed.exported === "string" && !isNaN(Date.parse(parsed.exported))
     ? new Date(parsed.exported).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "an unknown date";
