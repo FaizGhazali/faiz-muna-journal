@@ -104,7 +104,7 @@ export function openDay(date) {
 function rate(date, v) {
   const pid = me();
   if (!pid || !isMood(v) || date > today()) return;
-  commit(() => setDoc(doc(db, "entries", `${pid}_${date}`), { person: pid, date, mood: v }, { merge: true }));
+  commit(() => setDoc(doc(db, "entries", `${pid}_${date}`), { person: pid, date, mood: v, moodAt: Date.now() }, { merge: true }));
 }
 
 // Called when entries, habits or the selected person change.

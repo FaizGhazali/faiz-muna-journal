@@ -117,12 +117,12 @@ const replace = (id, body) => commit(() => setDoc(doc(actsCol, id), { ...body, u
 // Note what was done or passed over. Returns a function that takes the note back (for Undo).
 function logMove(a, act) {
   const ref = doc(movesCol), now = new Date();
-  commit(() => setDoc(ref, { owner: me, item: a.id, type: a.type, act, date: iso(now), hour: now.getHours() }));
+  commit(() => setDoc(ref, { owner: me, item: a.id, type: a.type, act, date: iso(now), hour: now.getHours(), at: now.getTime() }));
   return () => commit(() => deleteDoc(ref));
 }
 function markHabit(id, state, date = today()) {
   const ref = doc(daysCol, `${me}_${date}`);
-  const body = { owner: me, date, done: state === "done" ? arrayUnion(id) : arrayRemove(id), skipped: state === "skipped" ? arrayUnion(id) : arrayRemove(id) };
+  const body = { owner: me, date, done: state === "done" ? arrayUnion(id) : arrayRemove(id), skipped: state === "skipped" ? arrayUnion(id) : arrayRemove(id), updated: Date.now() };
   return commit(() => setDoc(ref, body, { merge: true }));
 }
 

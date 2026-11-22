@@ -163,7 +163,7 @@ async function saveSetFromPlate() {
   if (sets.some((s) => s.name.toLowerCase() === name.toLowerCase())) { setMsg("There's already a set with that name."); return; }
   const ref = doc(setsCol);
   naming = false;
-  await commit(() => setDoc(ref, { name, items: rows.map((r) => ({ food: r.food, g: Math.round(r.g) || 100 })), slots: [slot] })); // offered at this meal; change it on the sets page
+  await commit(() => setDoc(ref, { name, items: rows.map((r) => ({ food: r.food, g: Math.round(r.g) || 100 })), slots: [slot], created: Date.now(), updated: Date.now() })); // offered at this meal; change it on the sets page
   picked = ref.id;
   renderPicker(); renderPlate();
   setMsg(`Saved "${name}". Next time it's one tap.`);
@@ -238,7 +238,8 @@ async function submitFood(form) {
   const id = editing.id;
   if (foods.some((f) => f.id !== id && f.name.toLowerCase() === food.name.toLowerCase())) { libSay("That food is already in the list."); return; }
   editing = null; libMsg = id ? `Saved ${food.name}.` : `Added ${food.name}.`;
-  await commit(() => setDoc(id ? doc(foodsCol, id) : doc(foodsCol), food));
+  const now = Date.now(), was = id ? foods.find((f) => f.id === id) : null;
+  await commit(() => setDoc(id ? doc(foodsCol, id) : doc(foodsCol), { ...food, created: was?.created || now, updated: now }));
   renderLib();
 }
 async function submitSet(form) {
@@ -250,7 +251,8 @@ async function submitSet(form) {
   if (sets.some((s) => s.id !== id && s.name.toLowerCase() === name.toLowerCase())) { libSay("There's already a set with that name."); return; }
   const slots = Object.keys(SLOTS).filter((k) => setSlots.includes(k));
   editing = null; setRows = []; setSlots = []; libMsg = `Saved "${name}".`;
-  await commit(() => setDoc(id ? doc(setsCol, id) : doc(setsCol), slots.length ? { name, items, slots } : { name, items }));
+  const now = Date.now(), times = { created: sets.find((s) => s.id === id)?.created || now, updated: now };
+  await commit(() => setDoc(id ? doc(setsCol, id) : doc(setsCol), slots.length ? { name, items, slots, ...times } : { name, items, ...times }));
   renderLib();
 }
 
@@ -471,7 +473,7 @@ function wireCalories() {
 async function saveBurn(pid) {
   const v = Number($("burnIn").value), id = `${pid}_${date}`;
   if (!(v >= 800 && v <= 8000)) { $("burnMsg").textContent = "Enter the day's total burn, between 800 and 8000 kcal."; return; }
-  const body = { person: pid, date, kcal: Math.round(v) };
+  const body = { person: pid, date, kcal: Math.round(v), at: Date.now() };
   burns[id] = body; burnEdit = null; refreshCalories();
   await commit(() => setDoc(doc(burnsCol, id), body));
 }

@@ -362,7 +362,7 @@ async function saveEntry() {
   for (const p of ed.photos) {
     if (p.old) { kept.push(p.id); continue; }
     const pref = doc(photosCol);
-    batch.set(pref, { entry: ref.id, person: pid(), data: p.data, w: p.w, h: p.h });
+    batch.set(pref, { entry: ref.id, person: pid(), data: p.data, w: p.w, h: p.h, created: now });
     kept.push(pref.id);
   }
   const cover = ed.photos[0]?.thumb || (ed.photos[0]?.old ? old?.cover : null);
@@ -851,7 +851,7 @@ function wire() {
     if (act === "more") { shown += PAGE; paintList(); }
     if (act === "clear") { Object.assign(filt, { q: "", month: "", tag: "", fav: false }); shown = PAGE; renderDash(true); }
     if (act === "tag") { Object.assign(filt, { q: "", month: "", fav: false, tag: b.dataset.tag }); shown = PAGE; location.hash = "#diary"; }
-    if (act === "fav") { const e = find(id); if (e) { e.fav = !e.fav; renderRead(id); await commit(() => updateDoc(doc(diaryCol, id), { fav: e.fav })); } }
+    if (act === "fav") { const e = find(id); if (e) { e.fav = !e.fav; renderRead(id); await commit(() => updateDoc(doc(diaryCol, id), { fav: e.fav, updated: Date.now() })); } }
     if (act === "del") {
       const e = find(id); if (!e) return;
       const n = (e.photos || []).length;

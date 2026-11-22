@@ -434,6 +434,9 @@ $("form").addEventListener("submit", async (ev) => {
   if (n) body.note = n;
   const md = (wasEditing ? before : keep).mood; // the mood is rated on its own card, so keep it
   if (isMood(md)) body.mood = md;
+  const was = wasEditing ? before : keep, now = Date.now(); // when it was written, for looking back later
+  body.created = was.created || now; body.updated = now;
+  if (was.moodAt) body.moodAt = was.moodAt;
   $("save").disabled = true;
   await commit(() => setDoc(doc(entriesCol, id), body));
   if (wasEditing && wasEditing !== id) await commit(() => deleteDoc(doc(entriesCol, wasEditing)));
@@ -473,7 +476,7 @@ initDiary({ db, people: () => PEOPLE, me: currentPerson, commit, onChange: () =>
 initMood({ db, people: () => PEOPLE, entries: () => entries, diary: diaryList, me: currentPerson, habitFacts, commit });
 initFitDetail({
   people: () => PEOPLE, entries: () => entries,
-  saveBorn: (pid, born) => commit(() => setDoc(doc(db, "config", "people"), { people: PEOPLE.map((p) => (p.id === pid ? { ...p, born } : p)) })),
+  saveBorn: (pid, born) => commit(() => setDoc(doc(db, "config", "people"), { people: PEOPLE.map((p) => (p.id === pid ? { ...p, born } : p)), updated: Date.now() }, { merge: true })),
 });
 
 let lastWidth = "";
@@ -503,10 +506,10 @@ $("setupForm").addEventListener("submit", async (ev) => {
     if (!name || !(age >= 1 && age <= 120) || !(cm >= 100 && cm <= 250) || !(kg >= 30 && kg <= 250)) { msg.textContent = `Fill in every field for person ${n}. Height is 100 to 250 cm and weight is 30 to 250 kg.`; return; }
     const id = "p" + n;
     people.push({ id, name, age, sex: $(`s${n}-sex`).value, cm });
-    batch.set(doc(entriesCol, `${id}_${date}`), { person: id, date, weight: kg, note: "Starting weight." });
+    batch.set(doc(entriesCol, `${id}_${date}`), { person: id, date, weight: kg, note: "Starting weight.", created: Date.now(), updated: Date.now() });
   }
   if (!date) { msg.textContent = "Pick the date of these weights."; return; }
-  batch.set(doc(db, "config", "people"), { people });
+  batch.set(doc(db, "config", "people"), { people, created: Date.now(), updated: Date.now() });
   $("setupSave").disabled = true;
   try { await batch.commit(); } catch (_) { msg.textContent = "That didn't save. Check your connection and try again."; $("setupSave").disabled = false; }
 });

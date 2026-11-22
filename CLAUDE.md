@@ -62,6 +62,7 @@ npx firebase deploy    # deploy hosting + firestore rules to production
 - Everything user-entered that goes into `innerHTML` must pass through `esc()`.
 - BMI ranges are WHO adult cut-offs (18.5 / 25 / 30); the footer also mentions the Asian 22.9 cut-off. Goal pace is `PACE` kg/week, weekly exercise target is `WEEKLY_MINUTES`.
 - If you add or rename a file in `public/`, add it to `SHELL` in `sw.js` and bump `CACHE` (e.g. `journal-v2` → `journal-v3`).
+- **Every saved doc is dated** so the data can be analysed later: day records carry `date` (`YYYY-MM-DD`) plus a ms time (`at`, or `created` / `updated`; entries also `moodAt`); library docs (foods, meal sets, kinds, pantry, diary photos) carry `created` / `updated`. Keep `created` when re-saving. New collections must do the same.
 - Dates are local-time `YYYY-MM-DD` strings; use the `iso` / `parse` / `dayNum` helpers rather than `Date` parsing.
 - UI copy is plain and short, written for two non-technical users on phones. Check layouts at phone width.
 

@@ -412,7 +412,7 @@ async function saveItem(f) {
     const r = readFood({ name: item.name, kcal: el.kcal.value, carb: el.carb.value, protein: el.protein.value, fat: el.fat.value });
     if (r.error) { setMsg(f, r.error); return; }
     const same = foods.find((x) => x.name.toLowerCase() === r.food.name.toLowerCase());
-    if (same) item.food = same.id; else newFood = { ref: doc(cols.foods), body: r.food };
+    if (same) item.food = same.id; else newFood = { ref: doc(cols.foods), body: { ...r.food, created: Date.now(), updated: Date.now() } };
   }
   let buy = null;
   if (!id && el.bought.checked) {
@@ -424,7 +424,7 @@ async function saveItem(f) {
   if (newFood) { item.food = newFood.ref.id; await commit(() => setDoc(newFood.ref, newFood.body)); }
   const ref = id ? doc(cols.pantry, id) : doc(cols.pantry);
   const old = id ? pantry.find((p) => p.id === id) : null;
-  const body = { ...item, created: old?.created || Date.now(), ...(old?.check ? { check: old.check } : {}) };
+  const body = { ...item, created: old?.created || Date.now(), updated: Date.now(), ...(old?.check ? { check: old.check } : {}) };
   editing = false; msg = id ? "Saved." : `Added ${item.name}.${newFood ? " It's in your Meals foods too." : ""}`;
   await commit(() => setDoc(ref, body));
   if (buy) await commit(() => setDoc(doc(cols.buys), { item: ref.id, date: today(), ...buy, by: me(), at: Date.now() }));
