@@ -733,10 +733,18 @@ html.touring .wheel.hint .wmore::after { display: none }
 .madepick .mserves { display: flex; align-items: center; gap: 6px; flex-wrap: wrap }
 .madepick .mserves input { width: 80px }
 .mcost { display: block; margin: 2px 0 0 }
-/* Stocky item: other Meals foods it goes into */
-.sk-also { display: grid; gap: 6px; margin-top: 6px }
-.sk-also > button { justify-self: start }
-.sk-also .srow input { width: 80px }
+/* Stocky item: Used in meals, one row per meal food: food × amount unit ✕ */
+.sk-links { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; min-width: 0 }
+.sk-links legend { font-weight: 700; padding: 0; margin-bottom: 4px }
+.sk-links > button { justify-self: start }
+.mform .sk-links .srow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px }
+.sk-links .srow select { flex: 1 1 220px; min-width: 0 }
+.sk-links .sk-amt { display: flex; align-items: center; gap: 6px; margin-left: auto }
+.sk-links .sk-amt input { width: 80px }
+.sk-links .sk-x, .sk-links .sk-unit { color: var(--muted) }
+.sk-links .sk-unit { min-width: 2.2em }
+.sk-links .srow + .srow { border-top: 1px solid var(--line); padding-top: 8px }
+.sk-links .sk-eg { font-size: 12px }
 
 /* ---------- One card per person: weight on top, then the part for the picked journal ---------- */
 #people .pextra { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); min-width: 0 }

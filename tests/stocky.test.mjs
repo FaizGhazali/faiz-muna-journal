@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buyRate, mealUse, estimate, lowItems, priceBoard, vsUsual, usualPrice, setCost, linksOf, linksTo, cookedIn, itemUse, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind, matchKind, kindsLike, shelves } from "../public/logic/stocky.js";
+import { buyRate, mealUse, estimate, lowItems, priceBoard, vsUsual, usualPrice, setCost, linkRows, linksOf, linksTo, cookedIn, itemUse, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind, matchKind, kindsLike, shelves } from "../public/logic/stocky.js";
 
 const T = "2026-11-22";
 const rice = { id: "rice", name: "Beras", kind: "food", unit: "g", pack: 5000, food: "f-nasi" };
@@ -170,19 +170,29 @@ test("plates from a cooked set use a share of the pot, not their foods again", (
   assert.equal(itemUse({ id: "x", name: "X", unit: "g" }, ms, sets, "2026-11-20", T), 0);
 });
 
-test("readItem keeps the other foods an item goes into", () => {
-  const r = readItem({ name: "Ayam", kind: "food", unit: "g", pack: 1500, food: "f-ayam", also: [{ food: "f-bihun", per100: "20" }, { food: "", per100: "" }, { food: "f-bihun", per100: "5" }, { food: "f-ayam", per100: "9" }] });
-  assert.deepEqual(r.item.also, [{ food: "f-bihun", per100: 20 }]);
-  assert.ok(readItem({ name: "Ayam", kind: "food", unit: "g", pack: 1500, also: [{ food: "f-bihun", per100: "" }] }).error);
-  assert.equal(readItem({ name: "Tisu", kind: "home", unit: "pcs", pack: 10, also: [{ food: "f-bihun", per100: 2 }] }).item.also, undefined);
+test("readItem keeps the meal foods an item is used in", () => {
+  const r = readItem({ name: "Ayam", kind: "food", unit: "g", pack: 1500, links: [{ food: "f-ayam", per100: "100" }, { food: "", per100: "" }, { food: "f-bihun", per100: "20" }, { food: "f-bihun", per100: "5" }] });
+  assert.deepEqual(r.item.links, [{ food: "f-ayam", per100: 100 }, { food: "f-bihun", per100: 20 }]);
+  assert.ok(readItem({ name: "Ayam", kind: "food", unit: "g", pack: 1500, links: [{ food: "f-bihun", per100: "" }] }).error);
+  assert.ok(readItem({ name: "Telur", kind: "food", unit: "pcs", pack: 30, links: [{ food: "f-telur", per100: "500" }] }).error);
+  assert.equal(readItem({ name: "Telur", kind: "food", unit: "pcs", pack: 30, links: [{ food: "f-telur", per100: "1.8" }] }).item.links[0].per100, 1.8);
+  assert.equal(readItem({ name: "Tisu", kind: "home", unit: "pcs", pack: 10, links: [{ food: "f-bihun", per100: 2 }] }).item.links, undefined);
+});
+
+test("old links (food + each, also) read as Used in meals rows", () => {
+  const old = { id: "rice", name: "Beras", unit: "g", food: "f-nasi", each: 2.5, also: [{ food: "f-nasigoreng", per100: 30 }, { food: "f-nasi", per100: 9 }] };
+  assert.deepEqual(linkRows(old), [{ food: "f-nasi", per100: 40 }, { food: "f-nasigoreng", per100: 30 }]);
+  assert.deepEqual(linkRows({ unit: "pcs", food: "f-telur" }), [{ food: "f-telur", per100: "" }]); // never said grams per egg
+  assert.deepEqual(linksOf({ unit: "pcs", food: "f-telur" }), []); // so not counted until it's filled in
+  assert.equal(linksTo({ unit: "pcs", food: "f-telur" }, "f-telur"), true);
+  const now = { links: [{ food: "f-nasi", per100: 40 }] };
+  assert.deepEqual(linksOf(now), [{ food: "f-nasi", per: 0.4 }]);
 });
 
 test("readItem and readPrice check what's typed", () => {
   assert.equal(readItem({ name: "" }).error, "Give it a name.");
   assert.ok(readItem({ name: "Tisu", kind: "home", unit: "pcs", pack: "" }).error);
-  assert.deepEqual(readItem({ name: " Tisu ", kind: "home", unit: "pcs", pack: "10", food: "x" }).item, { name: "Tisu", kind: "home", unit: "pcs", pack: 10 });
-  assert.ok(readItem({ name: "Telur", kind: "food", unit: "pcs", pack: 30, food: "f-telur" }).error); // grams per egg needed
-  assert.equal(readItem({ name: "Telur", kind: "food", unit: "pcs", pack: 30, food: "f-telur", each: 55 }).item.each, 55);
+  assert.deepEqual(readItem({ name: " Tisu ", kind: "home", unit: "pcs", pack: "10", links: [{ food: "x", per100: 1 }] }).item, { name: "Tisu", kind: "home", unit: "pcs", pack: 10 });
   assert.deepEqual(readPrice({ qty: "5000" }).rec, { qty: 5000 });
   assert.equal(readPrice({ qty: 1, price: "12.9" }).error, "Which shop?");
   assert.deepEqual(readPrice({ qty: 1, price: "12.9", shop: "Mydin", sale: true, until: "2026-11-30" }).rec, { qty: 1, price: 12.9, shop: "Mydin", sale: true, until: "2026-11-30" });
@@ -201,10 +211,9 @@ test("cooked weight: meals of cooked rice use up less dry rice", () => {
   const dry = { ...rice, each: 2.5 };
   const e = estimate(dry, [buy("2026-11-20", 5000)], [meal("2026-11-21", 2500)], T);
   assert.equal(e.left, 4000); // 2.5 kg cooked = 1 kg dry
-  const item = (each) => readItem({ name: "Beras", kind: "food", unit: "g", pack: 5000, food: "f-nasi", each });
-  assert.equal(item("2.5").item.each, 2.5);
-  assert.equal(item("1").item.each, undefined);
-  assert.ok(item("50").error);
+  // the same as Used in meals: 40 g beras in 100 g nasi
+  const now = { ...rice, links: [{ food: "f-nasi", per100: 40 }] };
+  assert.equal(estimate(now, [buy("2026-11-20", 5000)], [meal("2026-11-21", 2500)], T).left, 4000);
 });
 
 test("kinds: built-in Food and Home, the family's own, and removed kinds fall back to Home", () => {
@@ -218,8 +227,8 @@ test("kinds: built-in Food and Home, the family's own, and removed kinds fall ba
   assert.ok(readKind("baby", kinds).error);
   assert.ok(readKind("HOME", kinds).error);
   const ids = kinds.map((k) => k.id);
-  assert.equal(readItem({ name: "Lampin", kind: "k1", unit: "pcs", pack: 40, food: "x" }, ids).item.kind, "k1");
-  assert.equal(readItem({ name: "Lampin", kind: "k1", unit: "pcs", pack: 40 }, ids).item.food, undefined);
+  assert.equal(readItem({ name: "Lampin", kind: "k1", unit: "pcs", pack: 40, links: [{ food: "x", per100: 1 }] }, ids).item.kind, "k1");
+  assert.equal(readItem({ name: "Lampin", kind: "k1", unit: "pcs", pack: 40, links: [{ food: "x", per100: 1 }] }, ids).item.links, undefined);
   assert.equal(readItem({ name: "Lampin", kind: "nope", unit: "pcs", pack: 40 }, ids).item.kind, "food");
 });
 

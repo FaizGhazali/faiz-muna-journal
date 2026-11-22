@@ -3,7 +3,7 @@
 // Maths and the data model live in stocky.js. Meals are read, never written: what meals use is worked out.
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "../../core/fs.js";
 import { confirmDelete } from "../../core/confirm.js";
-import { UNITS, LEVELS, allKinds, kindOf, shelves, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice, setCost, linksTo, ALSO_MAX } from "../../logic/stocky.js";
+import { UNITS, LEVELS, allKinds, kindOf, shelves, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice, setCost, linksTo, linkRows, LINKS_MAX } from "../../logic/stocky.js";
 import { readFood } from "../../logic/meals.js";
 import { $, esc, iso, parse, today } from "../../core/util.js";
 
@@ -268,7 +268,7 @@ function itemPage(id) {
   const p = pantry.find((x) => x.id === id);
   if (!p) return `${nav("")}<section class="panel"><p>${pantry.length ? "This item isn't here any more." : "Opening…"}</p><a class="btn" href="#stocky">← Back</a></section>`;
   const e = ests[p.id], board = boards[p.id], { foods } = mealData();
-  const linked = [p.food, ...(p.also || []).map((a) => a.food)].map((id) => foods.find((f) => f.id === id)?.name).filter(Boolean);
+  const linked = linkRows(p).map((r) => foods.find((f) => f.id === r.food)?.name).filter(Boolean);
   const hist = buys.filter((b) => b.item === p.id).sort((a, b) => b.date.localeCompare(a.date) || (b.at || 0) - (a.at || 0)).slice(0, 10);
   const key = "item-" + p.id;
   return `<div class="fdtop"><a class="btn" href="#stocky">← Back</a></div>
@@ -314,11 +314,14 @@ function priceForm(p) {
     ${datalist()}
   </form>`;
 }
-// One "also goes into" row: a Meals food and how much of the item is in 100 g of it.
-const alsoRow = (foods, a = {}, unit = "g") => `<div class="srow" data-also-row>
-  <select name="alsoFood" aria-label="Meals food it goes into"><option value="">Pick a food</option>${foods.map((f) => `<option value="${esc(f.id)}"${f.id === a.food ? " selected" : ""}>${esc(f.name)}</option>`).join("")}</select>
-  <label class="inline"><input type="number" name="alsoPer" min="0" step="any" inputmode="decimal" value="${esc(a.per100 ?? "")}" placeholder="20" aria-label="How much in 100 g"> <span data-also-unit>${esc(unit)}</span></label>
-  <button type="button" class="mini" data-sk="also-drop" aria-label="Remove">✕</button></div>`;
+// One "Used in meals" row: meal food × how much of the item goes into 100 g of it.
+// "+ New meal food from this" makes a Meals food out of the item itself (filled in with the numbers per 100 g).
+const linkRow = (foods, a = {}, unit = "g") => `<div class="srow" data-link-row>
+  <select name="linkFood" aria-label="Meal food"><option value="">Pick a meal food</option>${foods.map((f) => `<option value="${esc(f.id)}"${f.id === a.food ? " selected" : ""}>${esc(f.name)}</option>`).join("")}<option value="new">+ New meal food from this</option></select>
+  <span class="sk-amt"><span class="sk-x" aria-hidden="true">×</span>
+  <input type="number" name="linkPer" min="0" step="any" inputmode="decimal" value="${esc(a.per100 ?? "")}" placeholder="${unit === "pcs" ? "0.5" : "40"}" aria-label="How much in 100 g of that food">
+  <span class="sk-unit" data-link-unit>${esc(unit)}</span>
+  <button type="button" class="mini" data-sk="link-drop" aria-label="Remove">✕</button></span></div>`;
 // Add or edit an item. Food can be linked to a Meals food, or a new Meals food made from it.
 function itemForm(p) {
   const { foods } = mealData(), v = (k, d = "") => esc(p?.[k] ?? d);
@@ -327,20 +330,16 @@ function itemForm(p) {
     <div class="two">${kindField(p ? kindOf(p.kind, kinds).id : "food")}
       <label>Counted in<select name="unit">${Object.keys(UNITS).map((u) => `<option value="${u}"${(p?.unit || "g") === u ? " selected" : ""}>${{ g: "grams", ml: "ml", pcs: "pieces" }[u]}</option>`).join("")}</select></label></div>
     <label>Usually bought at once<input type="number" name="pack" inputmode="decimal" min="0" value="${v("pack")}" placeholder="5000 for a 5 kg bag, 30 for a tray"></label>
-    <div data-sk-show="food">
-      <label>Meals food<select name="food"><option value="">Not linked</option>${foods.map((f) => `<option value="${esc(f.id)}"${p?.food === f.id ? " selected" : ""}>${esc(f.name)}</option>`).join("")}<option value="new">+ New Meals food from this</option></select></label>
-      <small class="note">Linked, the meals you log use it up, and the meal card warns you when it's low.</small>
-      <label data-sk-show="each" hidden>Grams in one piece<input type="number" name="each" inputmode="numeric" min="1" value="${p?.unit === "pcs" ? v("each") : ""}" placeholder="An egg is about 55"></label>
-      <label data-sk-show="ratio" hidden>Weight once cooked<input type="number" name="ratio" inputmode="decimal" min="0.1" max="10" step="0.1" value="${p && p.unit !== "pcs" ? v("each", 1) : 1}"><small>Meals counts cooked food. 1 g of dry rice cooks to about 2.5 g, so type 2.5. Leave 1 if it's eaten as bought.</small></label>
-      <div data-sk-show="newfood" hidden><p class="note">Per 100 g, from the pack:</p><div class="four">
+    <fieldset class="sk-links" data-sk-show="food">
+      <legend>Used in meals</legend>
+      <small class="note">Each meal food it goes into × how much of it is in 100 g of that food. Logging those meals uses it up.</small>
+      ${(p ? linkRows(p) : []).map((a) => linkRow(foods, a, p.unit)).join("")}
+      <button type="button" class="mini" data-sk="link-add">+ Add a meal food</button>
+      <small class="note sk-eg">Like: Nasi putih × 40 g (dry rice cooks to 2.5×) · Ayam kam heong × 60 g · Telur rebus × 1.8 pcs.</small>
+      <div data-sk-show="newfood" hidden><p class="note">The new meal food, per 100 g from the pack:</p><div class="four">
         <label>kcal<input type="number" name="kcal" inputmode="decimal" min="0" max="900"></label><label>Carbs g<input type="number" name="carb" inputmode="decimal" min="0" max="100" step="0.1"></label>
         <label>Protein g<input type="number" name="protein" inputmode="decimal" min="0" max="100" step="0.1"></label><label>Fat g<input type="number" name="fat" inputmode="decimal" min="0" max="100" step="0.1"></label></div></div>
-      <div class="sk-also" data-sk-also>
-        <p class="note">Also goes into other Meals foods? Say how much is in 100 g of each, so eating them uses it up too.</p>
-        ${(p?.also || []).map((a) => alsoRow(foods, a, p.unit)).join("")}
-        <button type="button" class="mini" data-sk="also-add">+ Another food it's in</button>
-      </div>
-    </div>
+    </fieldset>
     ${p ? "" : `<label class="sk-check"><input type="checkbox" name="bought" checked data-sk-toggle="bought"> I just bought it</label>
     <div data-sk-show="bought"><div class="two"><label>Price paid, RM<input type="number" name="price" inputmode="decimal" min="0" step="0.01" placeholder="optional"></label>
       <label>Shop<input type="text" name="shop" list="skShops" maxlength="40" placeholder="optional"></label></div>
@@ -391,15 +390,14 @@ function syncForms() {
   for (const f of [...$("stocky").querySelectorAll("form.mform"), ...$("skSheet").querySelectorAll("form.mform")]) {
     const el = f.elements, show = (k, on) => f.querySelectorAll(`[data-sk-show="${k}"]`).forEach((x) => { x.hidden = !on; });
     if (el.kind) kindNote(f);
-    if (el.kind && el.food) {
-      const food = isFood(f);
+    if (el.kind && f.querySelector(".sk-links")) {
+      const food = isFood(f), rows = [...f.querySelectorAll("[data-link-row]")];
       show("food", food);
-      show("newfood", food && el.food.value === "new");
-      const linked = food && !!el.food.value;
-      show("each", linked && el.unit.value === "pcs");
-      show("ratio", linked && el.unit.value !== "pcs");
-      f.querySelectorAll("[data-also-unit]").forEach((x) => { x.textContent = el.unit.value; });
-      const add = f.querySelector('[data-sk="also-add"]'); if (add) add.hidden = f.querySelectorAll("[data-also-row]").length >= ALSO_MAX;
+      show("newfood", food && rows.some((r) => r.querySelector("select").value === "new"));
+      f.querySelectorAll("[data-link-unit]").forEach((x) => { x.textContent = el.unit.value; });
+      // A meal food made from the item itself is all item: 100 g in 100 g unless something else is typed.
+      rows.forEach((r) => { r.querySelector('[name="linkPer"]').placeholder = r.querySelector("select").value === "new" && el.unit.value !== "pcs" ? "100" : el.unit.value === "pcs" ? "0.5" : "40"; });
+      const add = f.querySelector('[data-sk="link-add"]'); if (add) { add.hidden = rows.length >= LINKS_MAX; add.textContent = rows.length ? "+ Another meal food" : "+ Add a meal food"; }
     }
     if (el.bought) show("bought", el.bought.checked);
     if (el.until) show("until", el.sale.checked);
@@ -442,7 +440,7 @@ async function saveBuy(f) {
     else {
       const k = kindFrom(f);
       if (k.error) { setMsg(f, k.error); return; }
-      const { item, error: e2 } = readItem({ name: r.name, kind: k.id, unit: el.unit?.value, pack: rec.qty, food: r.food }, k.ids);
+      const { item, error: e2 } = readItem({ name: r.name, kind: k.id, unit: el.unit?.value, pack: rec.qty, links: r.food && el.unit?.value !== "pcs" ? [{ food: r.food, per100: 100 }] : [] }, k.ids); // a planned food bought as it is eaten
       if (e2) { setMsg(f, e2); return; }
       await commitKind(k);
       const ref = doc(cols.pantry); itemId = ref.id;
@@ -467,20 +465,21 @@ async function saveItem(f) {
   const el = f.elements, id = route().page === "item" ? route().id : null, { foods } = mealData();
   const k = kindFrom(f);
   if (k.error) { setMsg(f, k.error); return; }
-  let food = k.id === "food" ? el.food.value : "";
-  const also = [...f.querySelectorAll("[data-also-row]")].map((r) => ({ food: r.querySelector('[name="alsoFood"]').value, per100: r.querySelector('[name="alsoPer"]').value }));
-  const fd = { name: el.name.value, kind: k.id, unit: el.unit.value, pack: el.pack.value, each: el.unit.value === "pcs" ? el.each.value : el.ratio.value, food: food === "new" ? "new" : food, also };
-  const { item, error } = readItem(fd, k.ids);
-  if (error) { setMsg(f, error); return; }
-  if (pantry.some((p) => p.id !== id && p.name.toLowerCase() === item.name.toLowerCase())) { setMsg(f, "That's already in Stocky."); return; }
-  // "+ New Meals food from this": the numbers per 100 g become a food in the Meals library.
+  const links = k.id === "food" ? [...f.querySelectorAll("[data-link-row]")].map((r) => ({ food: r.querySelector('[name="linkFood"]').value, per100: r.querySelector('[name="linkPer"]').value })) : [];
+  // "+ New meal food from this": the numbers per 100 g become a food in the Meals library (one per save).
+  // Eaten as it is bought, so 100 g of it in 100 g of the food unless something else is typed.
   let newFood = null;
-  if (food === "new") {
-    const r = readFood({ name: item.name, kcal: el.kcal.value, carb: el.carb.value, protein: el.protein.value, fat: el.fat.value });
+  if (links.some((l) => l.food === "new")) {
+    const r = readFood({ name: el.name.value.trim(), kcal: el.kcal.value, carb: el.carb.value, protein: el.protein.value, fat: el.fat.value });
     if (r.error) { setMsg(f, r.error); return; }
     const same = foods.find((x) => x.name.toLowerCase() === r.food.name.toLowerCase());
-    if (same) item.food = same.id; else newFood = { ref: doc(cols.foods), body: { ...r.food, created: Date.now(), updated: Date.now() } };
+    const foodId = same ? same.id : doc(cols.foods).id;
+    if (!same) newFood = { ref: doc(cols.foods, foodId), body: { ...r.food, created: Date.now(), updated: Date.now() } };
+    for (const l of links) if (l.food === "new") { l.food = foodId; if (l.per100 === "") l.per100 = el.unit.value === "pcs" ? "" : 100; }
   }
+  const { item, error } = readItem({ name: el.name.value, kind: k.id, unit: el.unit.value, pack: el.pack.value, links }, k.ids);
+  if (error) { setMsg(f, error); return; }
+  if (pantry.some((p) => p.id !== id && p.name.toLowerCase() === item.name.toLowerCase())) { setMsg(f, "That's already in Stocky."); return; }
   let buy = null;
   if (!id && el.bought.checked) {
     const p = readPrice({ qty: item.pack, price: el.price.value, shop: el.shop.value, sale: el.sale.checked });
@@ -488,7 +487,7 @@ async function saveItem(f) {
     buy = p.rec;
   }
   await commitKind(k);
-  if (newFood) { item.food = newFood.ref.id; await commit(() => setDoc(newFood.ref, newFood.body)); }
+  if (newFood) await commit(() => setDoc(newFood.ref, newFood.body));
   const ref = id ? doc(cols.pantry, id) : doc(cols.pantry);
   const old = id ? pantry.find((p) => p.id === id) : null;
   const body = { ...item, created: old?.created || Date.now(), updated: Date.now(), ...(old?.check ? { check: old.check } : {}) };
@@ -567,9 +566,9 @@ function wire() {
     if (act === "unlist") await unlist(b.dataset.id);
     if (act === "kind-del") await removeKind(b.dataset.id);
     if (act === "kindmenu") { const f = b.closest("form"), menu = f.querySelector(".sk-menu"); if (menu.hidden || !menu.dataset.all) openMenu(f, true); else closeMenus(); } // suggestions open → show them all
-    // "Also goes into" rows are added and removed in place, so what's typed elsewhere in the form stays.
-    if (act === "also-add") { const f = b.closest("form"), unit = f.elements.unit?.value || "g"; b.insertAdjacentHTML("beforebegin", alsoRow(mealData().foods, {}, unit)); f.dataset.dirty = "1"; syncForms(); b.previousElementSibling?.querySelector("select")?.focus(); }
-    if (act === "also-drop") { const f = b.closest("form"); b.closest("[data-also-row]").remove(); f.dataset.dirty = "1"; syncForms(); }
+    // "Used in meals" rows are added and removed in place, so what's typed elsewhere in the form stays.
+    if (act === "link-add") { const f = b.closest("form"), unit = f.elements.unit?.value || "g"; b.insertAdjacentHTML("beforebegin", linkRow(mealData().foods, {}, unit)); f.dataset.dirty = "1"; syncForms(); b.previousElementSibling?.querySelector("select")?.focus(); }
+    if (act === "link-drop") { const f = b.closest("form"); b.closest("[data-link-row]").remove(); f.dataset.dirty = "1"; syncForms(); }
     if (act === "kindpick") { const f = b.closest("form"); f.elements.kind.value = b.dataset.name; f.dataset.dirty = "1"; closeMenus(); syncForms(); }
     if (act === "list") { const p = pantry.find((x) => x.id === b.dataset.id); if (p) { msg = `${p.name} is on the list.`; await addRow({ name: p.name, item: p.id, qty: p.pack, unit: p.unit, from: "manual" }); } }
     if (act === "level") {

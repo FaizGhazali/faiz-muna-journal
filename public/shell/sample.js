@@ -168,12 +168,12 @@ export function sampleData(now = new Date()) {
   // Stocky (groceries): shared stock with made-up shops and prices. Buys are spaced so rice and eggs run low,
   // chicken is out (the meals logged used it), milk is due soon and the household things are fine.
   const pantry = {
-    "k-beras": { name: "Beras", kind: "food", unit: "g", pack: 5000, food: "f-nasi", each: 2.5, created: stamp(80) },
-    "k-telur": { name: "Telur", kind: "food", unit: "pcs", pack: 30, food: "f-telur", each: 55, created: stamp(80) },
-    "k-ayam": { name: "Ayam", kind: "food", unit: "g", pack: 1500, food: "f-ayam", also: [{ food: "f-mee", per100: 10 }], created: stamp(80) }, // mee goreng has a little ayam in it
+    "k-beras": { name: "Beras", kind: "food", unit: "g", pack: 5000, links: [{ food: "f-nasi", per100: 40 }], created: stamp(80) },
+    "k-telur": { name: "Telur", kind: "food", unit: "pcs", pack: 30, links: [{ food: "f-telur", per100: 1.8 }], created: stamp(80) },
+    "k-ayam": { name: "Ayam", kind: "food", unit: "g", pack: 1500, links: [{ food: "f-ayam", per100: 100 }, { food: "f-mee", per100: 10 }], created: stamp(80) }, // mee goreng has a little ayam in it
     "k-susu": { name: "Susu", kind: "food", unit: "ml", pack: 2000, created: stamp(80) },
     "k-daunkari": { name: "Daun kari", kind: "food", unit: "g", pack: 50, created: stamp(80) },
-    "k-oat": { name: "Oat", kind: "food", unit: "g", pack: 1000, food: "f-oat", created: stamp(80) },
+    "k-oat": { name: "Oat", kind: "food", unit: "g", pack: 1000, links: [{ food: "f-oat", per100: 100 }], created: stamp(80) },
     "k-tisu": { name: "Tisu", kind: "home", unit: "pcs", pack: 10, created: stamp(80) },
     "k-sabun": { name: "Sabun basuh", kind: "d-kind-clean", unit: "g", pack: 3000, created: stamp(80) },
   };
