@@ -11,8 +11,8 @@ Status (2026-11-22): built on the `android-widget` branch. The web app publishes
    keytool -genkeypair -v -keystore next-move.jks -alias nextmove -keyalg RSA -keysize 2048 -validity 10000
    ```
 2. **Add the repo secrets** (GitHub → Settings → Secrets and variables → Actions): `WIDGET_KEYSTORE` = the file as base64 (`[Convert]::ToBase64String([IO.File]::ReadAllBytes("next-move.jks"))` in PowerShell), `WIDGET_STORE_PASSWORD`, `WIDGET_KEY_ALIAS` (`nextmove`), `WIDGET_KEY_PASSWORD`. Losing the key means uninstalling the widget app before the next version installs.
-3. **Build:** any push that changes `android/**` runs `.github/workflows/android.yml` (or run it by hand from the Actions tab). Without the secrets it makes a debug APK.
-4. **Install:** on the phone, open the run on GitHub (signed in), download `next-move-apk`, unzip, open the APK and allow "install unknown apps" for the browser / Files app once.
+3. **Build:** any push that changes `android/**` runs `.github/workflows/android.yml` (or run it by hand from the Actions tab). Without the secrets it makes a debug APK. Each build is published as a GitHub Release `widget-<run number>` with the file `next-move.apk` (also kept as a run artifact for 30 days).
+4. **Install:** on the phone, open https://github.com/FaizGhazali/faiz-muna-journal/releases/latest/download/next-move.apk (always the newest build, no GitHub login), open the download, and allow "install unknown apps" for the browser once. The repo is public, so anyone can download the APK; it holds no keys or data, and it only works with the family password.
 5. **Set up:** open "Next Move", type the family password, pick your name, then "Add to home screen".
 
 Build locally (needs the Android SDK; `ANDROID_HOME` set): `cd android; .\gradlew.bat assembleDebug`.
