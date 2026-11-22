@@ -58,6 +58,7 @@ npx firebase deploy    # deploy hosting + firestore rules to production
 
 ## Conventions
 
+- **Clean code and architecture:** follow the `clean-code` skill (`.claude/skills/clean-code/SKILL.md`) by default for any non-trivial change: inspect before modifying, plan before implementing, build modularly (pure logic in tested modules, UI modules only draw and wire, `app.js` only wires), reuse before duplicating, test before finishing, and record decisions in this file.
 - Keep it dependency-free and build-free. Plain DOM, template strings, `$()` = `getElementById`. Shared helpers (`$`, `esc`, the date helpers, `tagKey`) live in `public/util.js`; import them, never copy them. The mood face SVG is `face()` in `public/face.js`.
 - **Every delete asks first** through `confirmDelete()` in `public/confirm.js` (title names the thing, body says what else goes, "Keep" is the default). Follow the `safe-delete` skill (`.claude/skills/safe-delete/SKILL.md`) by default whenever you add or change anything that deletes. Every journal uses it: entries, activities, meals, foods, meal sets, the typed watch burn, Dearly (delete, delete forever, discard draft, start fresh, remove photo, reset style) and Stocky. It answers from the button tap, not the dialog "close" event (some browsers skip that event). Pass `note` when it can be undone (Recently deleted).
 - Everything user-entered that goes into `innerHTML` must pass through `esc()`.
