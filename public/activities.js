@@ -10,7 +10,7 @@ import {
 import {
   TYPES, ALL_DAYS, guessType, isScheduled, habitState, habitWeek, describe, firstOpenStep, scoreOf, pickNext, learn,
 } from "./suggest.js";
-import { journalView } from "./mealsui.js";
+import { journalView } from "./journal.js";
 import { confirmDelete } from "./confirm.js";
 import { $, esc, iso, parse, dayNum, addDays, today } from "./util.js";
 
@@ -92,7 +92,7 @@ const RESUME = /^#(activities|mood|mealsets|fitness\/[\w-]+|diary(?:\/(?:write|a
 function showView() {
   const h = location.hash;
   store.set("journal-page", RESUME.test(h) ? h : "");
-  // The Dashboard tab shows the journal picked on the wheel (journalView in mealsui.js).
+  // The Dashboard tab shows the journal picked on the wheel (journalView in journal.js).
   const view = h === "#activities" ? "activities" : h.startsWith("#fitness") ? "fitness" : h === "#mood" ? "mood" : h === "#soon" ? "soon" : h === "#guide" ? "guide"
     : h.startsWith("#diary") ? "diary" : h.startsWith("#stocky") ? "stocky" : h === "#meals" ? "meals" : h === "#mealsets" ? "mealsets" : journalView();
   ["home", "meals", "mealsets", "soon", "guide", "diary", "stocky", "activities", "fitness", "mood"].forEach((v) => { $(v).hidden = v !== view; });

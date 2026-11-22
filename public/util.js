@@ -13,3 +13,10 @@ export const dayNum = (s) => { const [y, m, d] = s.split("-").map(Number); retur
 export const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return iso(d); };
 export const today = () => iso(new Date());
 export const fmt = (s, o) => parse(s).toLocaleDateString(undefined, o);
+
+// One key for names that mean the same thing (diary tags, Stocky kinds): case, spaces, dashes and a plural "s"
+// don't count, so "part time", "Part-time", "parttime" and "parts times" are all one.
+export function tagKey(t) {
+  return String(t || "").toLowerCase().split(/[\s\-_.]+/).filter(Boolean)
+    .map((w) => (w.length > 3 && /[^s]s$/.test(w) ? w.slice(0, -1) : w)).join("");
+}

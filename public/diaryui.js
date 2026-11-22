@@ -6,15 +6,15 @@
 // Pure logic: diary.js (entries) and writestyle.js (style profile, prompt). The model: localai.js (WebLLM, in the browser).
 // Data: diary/{id} (see diary.js), diaryPhotos/{id} -> { entry, person, data, w, h }, diaryStyle/{person} -> { on, since? }.
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDocs, query, where, writeBatch } from "./fs.js";
-import { PAGE, OPENING, words, bodyText, titleOf, preview, parseTags, live, diaryStats, onThisDay, tagsOf, filterEntries, tagKey, tagStats, showTags, tagMatches, looksLike, MAX_TAGS, neighbours, expired,
+import { PAGE, OPENING, words, bodyText, titleOf, preview, parseTags, live, diaryStats, onThisDay, tagsOf, filterEntries, tagStats, showTags, tagMatches, looksLike, MAX_TAGS, neighbours, expired,
   prettyDate, ago, lineFor, greeting, iso, KEEP_DELETED_DAYS } from "./diary.js";
 import { MIN_STYLE, ABOUT_MAX, aboutSuggestions, addToAbout, styleSource, styleProfile, describeStyle, samplesFor, buildMessages, cleanOutput, unsupported, dropped, looksGarbled } from "./writestyle.js";
 import * as ai from "./localai.js";
 import * as cloud from "./cloudai.js";
 import { MOODS, isMood } from "./mood.js";
-import { face } from "./moodui.js";
+import { face } from "./face.js";
 import { confirmDelete } from "./confirm.js";
-import { $, esc, today } from "./util.js";
+import { $, esc, today, tagKey } from "./util.js";
 
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },

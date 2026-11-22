@@ -6,6 +6,7 @@ import { SLOTS, LEARN_AFTER, slotAt, portion, total, dayTotal, plateOf, rowFor, 
 import { offerWidget } from "./widget.js";
 import { confirmDelete } from "./confirm.js";
 import { $, esc, iso, parse, addDays, today } from "./util.js";
+import { currentJournal, setJournal } from "./journal.js";
 
 const num = (n) => (Math.round(n * 10) / 10).toLocaleString();
 
@@ -501,8 +502,6 @@ const store = {
 };
 // How many times the "More lives here" tip shows before it stops by itself (journal-tip-more: count, or "off").
 const TIP_VIEWS = 5, TIP_KEY = "journal-tip-more";
-// The view the Dashboard tab opens: the last journal picked on this phone, Meals at first.
-export function journalView() { const t = store.get("journal-type", "meals"); return t === "weight" ? "home" : t === "diary" ? "diary" : t === "stocky" ? "stocky" : "meals"; }
 
 export function initWheel() {
   const fab = $("wheelBtn"), wheel = $("wheel"), ring = $("wheelRing"), hub = $("wheelHub");
@@ -514,7 +513,7 @@ export function initWheel() {
   // Without this, that click lands on the dark backdrop and shuts the wheel the moment it opens.
   const ghost = () => dragging || performance.now() - Math.max(openedAt, liftedAt) < 400;
 
-  const current = () => (location.hash === "#soon" ? null : store.get("journal-type", "meals"));
+  const current = () => (location.hash === "#soon" ? null : currentJournal());
   const paintFab = () => { const j = JOURNALS.find((x) => x.id === current()); fab.firstElementChild.textContent = j ? j.icon : "＋"; fab.setAttribute("aria-label", `Switch journal. Now: ${j ? j.name : "empty slot"}`); };
   const place = () => {
     const r = R();
@@ -561,7 +560,7 @@ export function initWheel() {
     if (!j) return;
     if (j.soon) { location.hash = "#soon"; }
     else {
-      store.set("journal-type", j.id);
+      setJournal(j.id);
       if (location.hash && location.hash !== "#") location.hash = "";
       else window.dispatchEvent(new HashChangeEvent("hashchange"));
     }
@@ -619,6 +618,6 @@ export function initWheel() {
   $("guideBack").addEventListener("click", () => { location.hash = ""; scrollTo({ top: 0 }); });
   addEventListener("keydown", (ev) => { if (open && ev.key === "Escape") hide(); });
   addEventListener("hashchange", paintFab);
-  $("soonBack").addEventListener("click", () => choose(store.get("journal-type", "meals")));
+  $("soonBack").addEventListener("click", () => choose(currentJournal()));
   paintFab();
 }

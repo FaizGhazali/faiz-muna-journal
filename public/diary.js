@@ -1,7 +1,7 @@
 // Dearly, the diary journal: the pure parts (no Firebase, no DOM). Tests in tests/diary.test.mjs.
 // diary/{auto id} -> { person, date, title?, body, notes?, mood?, tags: [], fav?, cover?, photos?: [ids], ai?, noStyle?,
 //                      created, updated, deleted? }. Several entries a day are fine. "deleted" (ms) = in Recently deleted.
-import { iso, parse, addDays } from "./util.js";
+import { iso, parse, addDays, tagKey } from "./util.js";
 
 export const PAGE = 8; // memories shown at a time; "Show more" adds this many
 export const KEEP_DELETED_DAYS = 30; // Recently deleted keeps an entry this long
@@ -25,12 +25,6 @@ export function preview(e, max = 150) {
   return t.length > max ? t.slice(0, max - 1).replace(/\s+\S*$/, "") + "…" : t;
 }
 
-// One key for tags that mean the same thing: case, spaces, dashes and a plural "s" don't count,
-// so "part time", "Part-time", "parttime" and "parts times" are all one tag.
-export function tagKey(t) {
-  return String(t || "").toLowerCase().split(/[\s\-_.]+/).filter(Boolean)
-    .map((w) => (w.length > 3 && /[^s]s$/.test(w) ? w.slice(0, -1) : w)).join("");
-}
 const cleanTag = (t) => String(t || "").trim().toLowerCase().replace(/^#+/, "").replace(/\s+/g, " ").slice(0, 24).trim();
 
 // Typed text -> tags. A tag that matches one already used ("known") takes that spelling, so no near-copies are made.
