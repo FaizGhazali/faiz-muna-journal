@@ -25,6 +25,7 @@ let moreSets = false; // showing other meals' sets on the card
 let editing = null, setRows = [], setSlots = [], libMsg = "";
 // How the set being edited is made: "cooked" (ingredients from the Price book) or "bought" (a price per plate).
 let setMade = "", setIngr = [], setServes = "", setPrice = "";
+let setTitle = ""; // the name typed in the set form, kept when the form redraws
 
 export function initMeals(opts) {
   ({ commit, me, people, entries } = opts);
@@ -241,7 +242,7 @@ function foodForm(f) {
 }
 function setForm(s) {
   return `<form class="mform" data-form="set" novalidate>
-    <label>Set name<input type="text" name="name" maxlength="60" value="${s ? esc(s.name) : ""}" placeholder="Nasi + patin + sayur"></label>
+    <label>Set name<input type="text" name="name" maxlength="60" value="${esc(setTitle)}" placeholder="Nasi + patin + sayur"></label>
     <fieldset class="slotpick"><legend>Eaten at</legend><div class="chips">${Object.entries(SLOTS).map(([k, v]) => `<label class="chip"><input type="checkbox" name="slots" value="${k}"${setSlots.includes(k) ? " checked" : ""}> ${v}</label>`).join("")}</div>
       <small class="note">It's offered only at these meals. Leave all empty for any meal.</small></fieldset>
     ${setRows.map((r, i) => `<div class="srow">
@@ -296,7 +297,7 @@ async function submitSet(form) {
   const slots = Object.keys(SLOTS).filter((k) => setSlots.includes(k));
   const { made, error } = readMade();
   if (error) { libSay(error); return; }
-  editing = null; setRows = []; setSlots = []; setMade = ""; setIngr = []; libMsg = `Saved "${name}".`;
+  editing = null; setRows = []; setSlots = []; setMade = ""; setIngr = []; setTitle = ""; libMsg = `Saved "${name}".`;
   const now = Date.now(), times = { created: sets.find((s) => s.id === id)?.created || now, updated: now };
   await commit(() => setDoc(id ? doc(setsCol, id) : doc(setsCol), { name, items, ...(slots.length ? { slots } : {}), ...made, ...times }));
   renderLib();
@@ -367,11 +368,11 @@ function wire() {
     const { act, kind, id } = b.dataset;
     if (act === "new" || act === "edit") {
       editing = { kind, id: id || null }; libMsg = "";
-      if (kind === "set") { const s = sets.find((x) => x.id === id); setRows = s ? (s.items || []).map((x) => ({ ...x })) : [{ food: "", g: 100 }]; setSlots = s ? [...(s.slots || [])] : [];
+      if (kind === "set") { const s = sets.find((x) => x.id === id); setRows = s ? (s.items || []).map((x) => ({ ...x })) : [{ food: "", g: 100 }]; setSlots = s ? [...(s.slots || [])] : []; setTitle = s?.name || "";
         setMade = s?.made || ""; setIngr = (s?.ingredients || []).map((x) => ({ ...x })); setServes = s?.serves ?? ""; setPrice = s?.price ?? ""; }
       renderLib(); lib.querySelector(".mform input")?.focus();
     }
-    if (act === "cancel") { editing = null; setRows = []; setSlots = []; setMade = ""; setIngr = []; libMsg = ""; renderLib(); }
+    if (act === "cancel") { editing = null; setRows = []; setSlots = []; setMade = ""; setIngr = []; setTitle = ""; libMsg = ""; renderLib(); }
     if (act === "irow-add") { readSetRows(); setIngr.push({ item: "", qty: "" }); renderLib(); }
     if (act === "irow-drop") { readSetRows(); setIngr.splice(+b.dataset.i, 1); renderLib(); }
     if (act === "srow-add") { readSetRows(); setRows.push({ food: "", g: 100 }); renderLib(); }
@@ -559,6 +560,7 @@ function readSetRows() {
   const lib = $("mealLib"), val = (sel, d) => lib.querySelector(sel)?.value ?? d;
   setIngr = setIngr.map((r, i) => ({ item: val(`[data-irow="${i}"]`, r.item), qty: val(`[data-iq="${i}"]`, r.qty) }));
   setMade = lib.querySelector('input[name="made"]:checked')?.value ?? setMade;
+  setTitle = lib.querySelector('form[data-form="set"] input[name="name"]')?.value ?? setTitle;
   setServes = val('input[name="serves"]', setServes); setPrice = val('input[name="price"]', setPrice);
   const boxes = lib.querySelectorAll('input[name="slots"]');
   if (boxes.length) setSlots = [...boxes].filter((b) => b.checked).map((b) => b.value);
