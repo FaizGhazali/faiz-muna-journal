@@ -170,7 +170,7 @@ export function sampleData(now = new Date()) {
   const pantry = {
     "k-beras": { name: "Beras", kind: "food", unit: "g", pack: 5000, food: "f-nasi", each: 2.5, created: stamp(80) },
     "k-telur": { name: "Telur", kind: "food", unit: "pcs", pack: 30, food: "f-telur", each: 55, created: stamp(80) },
-    "k-ayam": { name: "Ayam", kind: "food", unit: "g", pack: 1500, food: "f-ayam", created: stamp(80) },
+    "k-ayam": { name: "Ayam", kind: "food", unit: "g", pack: 1500, food: "f-ayam", also: [{ food: "f-mee", per100: 10 }], created: stamp(80) }, // mee goreng has a little ayam in it
     "k-susu": { name: "Susu", kind: "food", unit: "ml", pack: 2000, created: stamp(80) },
     "k-daunkari": { name: "Daun kari", kind: "food", unit: "g", pack: 50, created: stamp(80) },
     "k-oat": { name: "Oat", kind: "food", unit: "g", pack: 1000, food: "f-oat", created: stamp(80) },

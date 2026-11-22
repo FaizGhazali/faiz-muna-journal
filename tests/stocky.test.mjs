@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buyRate, mealUse, estimate, lowItems, priceBoard, vsUsual, usualPrice, setCost, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind, matchKind, kindsLike, shelves } from "../public/logic/stocky.js";
+import { buyRate, mealUse, estimate, lowItems, priceBoard, vsUsual, usualPrice, setCost, linksOf, linksTo, cookedIn, itemUse, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind, matchKind, kindsLike, shelves } from "../public/logic/stocky.js";
 
 const T = "2026-11-22";
 const rice = { id: "rice", name: "Beras", kind: "food", unit: "g", pack: 5000, food: "f-nasi" };
@@ -126,11 +126,55 @@ test("planNeeds and shortfall round to packs", () => {
   const sets = [{ id: "s1", name: "Nasi ikan", items: [{ food: "f-nasi", g: 200 }, { food: "f-ikan", g: 100 }] }];
   const people = [{ id: "p1" }, { id: "p2" }];
   const need = planNeeds(sets, { s1: 3 }, foods, [], people);
-  assert.deepEqual(need, { "f-nasi": 1200, "f-ikan": 600 });
+  assert.deepEqual(need, { foods: { "f-nasi": 1200, "f-ikan": 600 }, items: {} });
   const pantry = [{ ...rice }];
   const short = shortfall(need, pantry, { rice: { left: 500 } }, foods);
   assert.deepEqual(short, [{ name: "Beras", item: "rice", food: "f-nasi", qty: 5000, unit: "g" }, { name: "Ikan", food: "f-ikan", qty: 600, unit: "g" }].sort((a, b) => a.name.localeCompare(b.name)));
-  assert.deepEqual(shortfall({ "f-nasi": 400 }, pantry, { rice: { left: 500 } }, foods), []);
+  assert.deepEqual(shortfall({ foods: { "f-nasi": 400 }, items: {} }, pantry, { rice: { left: 500 } }, foods), []);
+});
+
+test("planNeeds: a cooked set is one pot a time, a bought set needs nothing", () => {
+  const sets = [
+    { id: "kh", made: "cooked", serves: 4, ingredients: [{ item: "ayam", qty: 1000 }, { item: "rice", qty: 600 }], items: [{ food: "f-kh", g: 150 }] },
+    { id: "out", made: "bought", price: 8, items: [{ food: "f-nl", g: 300 }] },
+  ];
+  const need = planNeeds(sets, { kh: 2, out: 5 }, [{ id: "f-kh", name: "KH" }, { id: "f-nl", name: "NL" }], [], [{ id: "p1" }]);
+  assert.deepEqual(need, { foods: {}, items: { ayam: 2000, rice: 1200 } });
+  const ayam = { id: "ayam", name: "Ayam", kind: "food", unit: "g", pack: 1500 };
+  assert.deepEqual(shortfall(need, [rice, ayam], { rice: { left: 5000 }, ayam: { left: 400 } }, []), [{ name: "Ayam", item: "ayam", qty: 3000, unit: "g" }]);
+});
+
+test("one item can go into many foods", () => {
+  const ayam = { id: "ayam", name: "Ayam", kind: "food", unit: "g", pack: 1500, food: "f-ayam", also: [{ food: "f-bihun", per100: 20 }, { food: "f-tomyam", per100: 30 }] };
+  assert.deepEqual(linksOf(ayam), [{ food: "f-ayam", per: 1 }, { food: "f-bihun", per: 0.2 }, { food: "f-tomyam", per: 0.3 }]);
+  assert.equal(linksTo(ayam, "f-tomyam"), true);
+  assert.equal(linksTo(ayam, "f-nasi"), false);
+  const ms = [meal("2026-11-20", 100, "f-ayam"), meal("2026-11-21", 300, "f-bihun"), meal("2026-11-21", 200, "f-tomyam")];
+  assert.equal(itemUse(ayam, ms, [], "2026-11-20", T), 100 + 60 + 60);
+  // bihun goreng ayam needs some ayam and some bihun
+  const bihun = { id: "bihun", name: "Bihun", kind: "food", unit: "g", pack: 400, also: [{ food: "f-bihun", per100: 40 }] };
+  const short = shortfall({ foods: { "f-bihun": 1000 }, items: {} }, [ayam, bihun], { ayam: { left: 0 }, bihun: { left: 0 } }, []);
+  assert.deepEqual(short.map((r) => [r.name, r.qty]), [["Ayam", 1500], ["Bihun", 400]]);
+});
+
+test("plates from a cooked set use a share of the pot, not their foods again", () => {
+  const ayam = { id: "ayam", name: "Ayam", kind: "food", unit: "g", pack: 1500, food: "f-ayam" };
+  const sets = [{ id: "kh", made: "cooked", serves: 4, ingredients: [{ item: "ayam", qty: 1000 }] }];
+  const plate = (date, set) => ({ person: "p1", date, set, items: [{ food: "f-ayam", g: 150 }] });
+  const ms = [plate("2026-11-21", "kh"), plate("2026-11-21", "kh"), plate("2026-11-21")];
+  assert.equal(cookedIn(ayam, sets).get("kh"), 250);
+  assert.equal(itemUse(ayam, ms, sets, "2026-11-20", T), 250 + 250 + 150); // two plates of the pot + one plain plate
+  assert.equal(itemUse(ayam, ms, [], "2026-11-20", T), 450); // without sets, foods only
+  const e = estimate(ayam, [{ item: "ayam", date: "2026-11-20", qty: 1500, at: 0 }], ms, T, sets);
+  assert.equal(e.left, 1500 - 650);
+  assert.equal(itemUse({ id: "x", name: "X", unit: "g" }, ms, sets, "2026-11-20", T), 0);
+});
+
+test("readItem keeps the other foods an item goes into", () => {
+  const r = readItem({ name: "Ayam", kind: "food", unit: "g", pack: 1500, food: "f-ayam", also: [{ food: "f-bihun", per100: "20" }, { food: "", per100: "" }, { food: "f-bihun", per100: "5" }, { food: "f-ayam", per100: "9" }] });
+  assert.deepEqual(r.item.also, [{ food: "f-bihun", per100: 20 }]);
+  assert.ok(readItem({ name: "Ayam", kind: "food", unit: "g", pack: 1500, also: [{ food: "f-bihun", per100: "" }] }).error);
+  assert.equal(readItem({ name: "Tisu", kind: "home", unit: "pcs", pack: 10, also: [{ food: "f-bihun", per100: 2 }] }).item.also, undefined);
 });
 
 test("readItem and readPrice check what's typed", () => {

@@ -733,6 +733,10 @@ html.touring .wheel.hint .wmore::after { display: none }
 .madepick .mserves { display: flex; align-items: center; gap: 6px; flex-wrap: wrap }
 .madepick .mserves input { width: 80px }
 .mcost { display: block; margin: 2px 0 0 }
+/* Stocky item: other Meals foods it goes into */
+.sk-also { display: grid; gap: 6px; margin-top: 6px }
+.sk-also > button { justify-self: start }
+.sk-also .srow input { width: 80px }
 
 /* ---------- One card per person: weight on top, then the part for the picked journal ---------- */
 #people .pextra { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); min-width: 0 }

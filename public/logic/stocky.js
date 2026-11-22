@@ -1,8 +1,10 @@
 // Stocky (groceries) maths. Pure: no Firebase, no DOM (tests in tests/stocky.test.mjs).
-//   pantry/{auto id}   { name, kind: "food"|"home"|<kinds id>, unit: "g"|"ml"|"pcs", pack, each?, food?, check?: { date, at, level }, created }
+//   pantry/{auto id}   { name, kind: "food"|"home"|<kinds id>, unit: "g"|"ml"|"pcs", pack, each?, food?, also?: [{ food, per100 }], check?: { date, at, level }, created }
 //                      one thing the house buys. pack = the usual amount bought at once (in unit);
 //                      food = a Meals food id; each = grams of that food one unit makes: grams in one piece (pcs),
 //                      or how much it weighs once cooked (rice about 2.5, missing = 1), so logged meals can use it up.
+//                      also = other Meals foods it goes into (Bihun goreng ayam, Ayam tomyam): per100 = how much
+//                      of the item (in its unit) is in 100 g of that food.
 //   buys/{auto id}     { item, date, qty, price?, shop?, sale?, by, at }  one purchase; price = what was paid for qty
 //   prices/{auto id}   { item, date, qty, price, shop, sale?, until? }     a price seen in a shop without buying
 //   shopList/{auto id} { name, item?, food?, qty?, unit?, from: "manual"|"plan", created }
@@ -52,25 +54,53 @@ export function buyRate(buys) {
 }
 
 // Grams of a Meals food that both people logged on days from..to (both included).
-export function mealUse(meals, foodId, from, to) {
+// skip(meal) leaves a meal out (one from a cooked set that already counts this item as an ingredient).
+export function mealUse(meals, foodId, from, to, skip = () => false) {
   if (!foodId) return 0;
   let g = 0;
-  for (const m of meals) if (m.date >= from && m.date <= to) for (const it of m.items || []) if (it.food === foodId) g += Number(it.g) || 0;
+  for (const m of meals) if (m.date >= from && m.date <= to && !skip(m)) for (const it of m.items || []) if (it.food === foodId) g += Number(it.g) || 0;
   return g;
+}
+// Every Meals food an item is linked to, with how many units of the item one gram of that food uses.
+// [{ food, per }]; the main link is first. A pcs item with no grams per piece can't be counted from its main food.
+export function linksOf(item) {
+  const out = [], each = gramsPer(item);
+  if (item.food && each > 0) out.push({ food: item.food, per: 1 / each });
+  for (const a of item.also || []) if (a.food && a.food !== item.food && Number(a.per100) > 0 && !out.some((x) => x.food === a.food)) out.push({ food: a.food, per: Number(a.per100) / 100 });
+  return out;
+}
+export const linksTo = (item, foodId) => item.food === foodId || (item.also || []).some((a) => a.food === foodId);
+// The cooked sets that put this item in the pot: setId → units of it in one plate (the pot shared by its plates).
+export function cookedIn(item, sets) {
+  const per = new Map();
+  for (const s of sets || []) {
+    if (s.made !== "cooked") continue;
+    const q = (s.ingredients || []).filter((x) => x.item === item.id).reduce((a, x) => a + (Number(x.qty) || 0), 0);
+    if (q > 0) per.set(s.id, q / Math.max(1, Math.round(Number(s.serves) || 1)));
+  }
+  return per;
+}
+// Units of an item used by meals logged on days from..to: its linked foods by weight, and a share of the pot
+// for each plate logged from a cooked set that lists it. A plate from such a set isn't counted twice by its foods.
+export function itemUse(item, meals, sets, from, to) {
+  const pot = cookedIn(item, sets), skip = (m) => pot.has(m.set);
+  let u = 0;
+  for (const l of linksOf(item)) u += mealUse(meals, l.food, from, to, skip) * l.per;
+  if (pot.size) for (const m of meals) if (m.date >= from && m.date <= to && pot.has(m.set)) u += pot.get(m.set);
+  return u;
 }
 
 // Where an item stands today.
 // { left, base, share, rate, daysLeft, outOn, status: ok|soon|low|out|unknown, why: [lines] }
 // Meals only record what was eaten (not cooking, not guests), so they can only bring the date forward:
 // used = the larger of (buying pace × days) and (what meals used).
-export function estimate(item, buys, meals, today) {
+// sets = the meal sets, so plates from a cooked set use up its ingredients.
+export function estimate(item, buys, meals, today, sets = []) {
   const mine = buys.filter((b) => b.item === item.id).sort(byTime);
-  const each = gramsPer(item);
-  const toUnits = (g) => (each > 0 ? g / each : 0);
-  const fromMeals = (a, b) => (item.food && each > 0 ? toUnits(mealUse(meals, item.food, a, b)) : 0);
+  const fromMeals = (a, b) => itemUse(item, meals, sets, a, b);
   const bought = buyRate(mine);
   // A second pace from meals logged lately, for items bought only once.
-  const mealPace = item.food ? fromMeals(addDays(today, -MEAL_DAYS + 1), today) / MEAL_DAYS : 0;
+  const mealPace = fromMeals(addDays(today, -MEAL_DAYS + 1), today) / MEAL_DAYS;
   const rate = Math.max(bought || 0, mealPace) || null;
   const base = Number(item.pack) || mine.at(-1)?.qty || 0;
   const events = mine.map((b) => ({ date: b.date, at: b.at || 0, add: Number(b.qty) || 0 }));
@@ -97,7 +127,7 @@ export function estimate(item, buys, meals, today) {
   const anchor = events.at(-1);
   if (bought) why.push(`You buy about ${amount(bought * 7, item.unit)} a week${base ? `, a pack every ${Math.max(1, Math.round(base / bought))} days` : ""}.`);
   else if (mealPace) why.push(`From meals logged lately: about ${amount(mealPace * 7, item.unit)} a week.`);
-  else why.push("Buy it once more, or link it to a Meals food, and Stocky learns how fast it goes.");
+  else why.push("Buy it once more, link it to a Meals food, or put it in a cooked meal set, and Stocky learns how fast it goes.");
   if (sinceMeals > 0) why.push(`Meals logged since ${anchor.set != null ? "your check" : "the last buy"} used ${amount(sinceMeals, item.unit)}.`);
   if (anchor.set != null) why.push(`You said it was ${LEVELS.find(([l]) => l === item.check.level)?.[1].toLowerCase() || "checked"} on ${anchor.date}.`);
   const daysLeft = rate ? Math.floor(left / rate) : null;
@@ -227,34 +257,40 @@ export function shopTotals(rows, boards) {
 }
 
 // ---------- planning meals into a shopping list ----------
-// Grams of each food the planned sets need for both people: times[setId] = how often this week.
+// What the planned sets need: times[setId] = how often this week. A cooked set with ingredients is one pot
+// each time (items: units of each pantry item); any other set is plates for both people (foods: grams of each food).
+// Bought sets need nothing from home. { foods: { foodId: g }, items: { itemId: units } }
 export function planNeeds(sets, times, foods, meals, people) {
-  const need = {};
+  const need = { foods: {}, items: {} };
   for (const s of sets) {
     const n = Number(times[s.id]) || 0;
-    if (!n) continue;
-    for (const p of people) for (const r of plateOf(s, foods, meals, p.id)) need[r.food] = (need[r.food] || 0) + r.g * n;
+    if (!n || s.made === "bought") continue;
+    const pot = s.made === "cooked" ? (s.ingredients || []).filter((x) => x.item && Number(x.qty) > 0) : [];
+    if (pot.length) { for (const x of pot) need.items[x.item] = (need.items[x.item] || 0) + Number(x.qty) * n; continue; }
+    for (const p of people) for (const r of plateOf(s, foods, meals, p.id)) need.foods[r.food] = (need.foods[r.food] || 0) + r.g * n;
   }
   return need;
 }
 // What to buy for those needs after what's at home. Linked items are rounded up to whole packs;
 // foods with no pantry item yet are listed by name, rounded up to 100 g.
 // [{ name, item?, food, qty, unit }]
+// A food linked to several items (bihun goreng ayam: bihun and ayam) needs some of each.
 export function shortfall(need, pantry, ests, foods) {
-  const out = [];
-  for (const [food, g] of Object.entries(need)) {
-    const it = pantry.find((p) => p.food === food);
-    if (it) {
-      const each = gramsPer(it);
-      if (!each) continue;
-      const short = g / each - Math.max(0, ests[it.id]?.left || 0);
-      if (short <= 0) continue;
-      const pack = Number(it.pack) || short;
-      out.push({ name: it.name, item: it.id, food, qty: Math.ceil(short / pack - 1e-9) * pack, unit: it.unit });
-    } else {
-      const f = foods.find((x) => x.id === food);
-      if (f) out.push({ name: f.name, food, qty: Math.ceil(g / 100) * 100, unit: "g" });
-    }
+  const out = [], units = { ...need.items };
+  for (const [food, g] of Object.entries(need.foods)) {
+    const its = pantry.filter((p) => linksTo(p, food));
+    for (const it of its) { const l = linksOf(it).find((x) => x.food === food); if (l) units[it.id] = (units[it.id] || 0) + g * l.per; }
+    if (its.length) continue;
+    const f = foods.find((x) => x.id === food);
+    if (f) out.push({ name: f.name, food, qty: Math.ceil(g / 100) * 100, unit: "g" });
+  }
+  for (const [id, u] of Object.entries(units)) {
+    const it = pantry.find((p) => p.id === id);
+    if (!it) continue;
+    const short = u - Math.max(0, ests[it.id]?.left || 0);
+    if (short <= 1e-9) continue;
+    const pack = Number(it.pack) || short;
+    out.push({ name: it.name, item: it.id, ...(it.food ? { food: it.food } : {}), qty: Math.ceil(short / pack - 1e-9) * pack, unit: it.unit });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -293,7 +329,8 @@ export function readKind(name, kinds) {
 // ---------- checking what's typed ----------
 // A pantry item. Returns { item } or { error }.
 // `kinds` = the kind ids that exist (built-in + the family's own); anything else is saved as food.
-export function readItem({ name, kind, unit, pack, each, food }, kinds = BUILT_IN_KINDS.map((k) => k.id)) {
+export const ALSO_MAX = 12; // other foods one item can go into
+export function readItem({ name, kind, unit, pack, each, food, also }, kinds = BUILT_IN_KINDS.map((k) => k.id)) {
   const nm = String(name || "").trim().slice(0, 60);
   if (!nm) return { error: "Give it a name." };
   const u = UNITS[unit] ? unit : "pcs", p = Number(pack);
@@ -308,6 +345,19 @@ export function readItem({ name, kind, unit, pack, each, food }, kinds = BUILT_I
     const e = Number(each);
     if (!(e >= 0.1 && e <= 10)) return { error: "Cooked weight is 0.1 to 10 times the dry weight. Rice is about 2.5." };
     item.each = Math.round(e * 10) / 10;
+  }
+  // Other foods it goes into: rows with no food picked are skipped, a food twice (or the main one) counts once.
+  if (item.kind === "food") {
+    const rows = (also || []).filter((a) => a && a.food && a.food !== "new" && a.food !== item.food);
+    const seen = new Set(), out = [];
+    for (const a of rows) {
+      if (seen.has(a.food)) continue;
+      const v = Number(a.per100);
+      if (!(v > 0 && v <= (u === "pcs" ? 100 : 1000))) return { error: u === "pcs" ? "How many pieces are in 100 g of each food? Like 0.5 for half an egg." : `How much ${nm} is in 100 g of each food? Like 20 for 20 ${u}.` };
+      seen.add(a.food); out.push({ food: String(a.food), per100: Math.round(v * 100) / 100 });
+    }
+    if (out.length > ALSO_MAX) return { error: `Up to ${ALSO_MAX} foods.` };
+    if (out.length) item.also = out;
   }
   return { item };
 }

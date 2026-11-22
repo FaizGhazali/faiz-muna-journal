@@ -3,7 +3,7 @@
 // Maths and the data model live in stocky.js. Meals are read, never written: what meals use is worked out.
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "../../core/fs.js";
 import { confirmDelete } from "../../core/confirm.js";
-import { UNITS, LEVELS, allKinds, kindOf, shelves, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice, setCost } from "../../logic/stocky.js";
+import { UNITS, LEVELS, allKinds, kindOf, shelves, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice, setCost, linksTo, ALSO_MAX } from "../../logic/stocky.js";
 import { readFood } from "../../logic/meals.js";
 import { $, esc, iso, parse, today } from "../../core/util.js";
 
@@ -40,16 +40,23 @@ export function startStocky() {
 export function stopStocky() { unsubs.forEach((u) => u()); unsubs = []; }
 
 function compute() {
-  const { meals } = mealData(), t = today();
+  const { meals, sets } = mealData(), t = today();
   ests = {}; boards = {};
-  for (const p of pantry) { ests[p.id] = estimate(p, buys, meals, t); boards[p.id] = priceBoard(p.id, buys, prices, t); }
+  for (const p of pantry) { ests[p.id] = estimate(p, buys, meals, t, sets); boards[p.id] = priceBoard(p.id, buys, prices, t); }
 }
 
+// The pantry item behind a Meals food. A food can come from several (bihun goreng ayam: bihun and ayam),
+// so the one nearest to running out speaks for it.
+const WORST = { out: 0, low: 1, soon: 2, unknown: 3, ok: 4 };
+function linkedItem(foodId) {
+  const its = pantry.filter((x) => linksTo(x, foodId));
+  return its.sort((a, b) => (WORST[ests[a.id]?.status] ?? 3) - (WORST[ests[b.id]?.status] ?? 3))[0] || null;
+}
 // For the meal card: how the pantry item linked to a Meals food is doing. null if no item is linked.
 export function stockOf(foodId) {
-  const p = pantry.find((x) => x.food === foodId);
+  const p = linkedItem(foodId);
   if (!p) return null;
-  const e = ests[p.id] || estimate(p, buys, mealData().meals, today());
+  const e = ests[p.id] || estimate(p, buys, mealData().meals, today(), mealData().sets);
   return { item: p.id, name: p.name, status: e.status, daysLeft: e.daysLeft, listed: onList(p.id) };
 }
 // For the meal set editor: every Price book item to pick as an ingredient, by name.
@@ -58,7 +65,7 @@ export const priceItems = () => pantry.map((p) => ({ id: p.id, name: p.name, uni
 export const costOf = (set) => setCost(set, pantry, buys, prices, today());
 // Put the item linked to a food on the list (from the meal card).
 export async function listFood(foodId) {
-  const p = pantry.find((x) => x.food === foodId);
+  const p = linkedItem(foodId);
   if (!p || onList(p.id)) return;
   await addRow({ name: p.name, item: p.id, qty: p.pack, unit: p.unit, from: "manual" });
 }
@@ -261,13 +268,13 @@ function itemPage(id) {
   const p = pantry.find((x) => x.id === id);
   if (!p) return `${nav("")}<section class="panel"><p>${pantry.length ? "This item isn't here any more." : "Opening…"}</p><a class="btn" href="#stocky">← Back</a></section>`;
   const e = ests[p.id], board = boards[p.id], { foods } = mealData();
-  const food = foods.find((f) => f.id === p.food);
+  const linked = [p.food, ...(p.also || []).map((a) => a.food)].map((id) => foods.find((f) => f.id === id)?.name).filter(Boolean);
   const hist = buys.filter((b) => b.item === p.id).sort((a, b) => b.date.localeCompare(a.date) || (b.at || 0) - (a.at || 0)).slice(0, 10);
   const key = "item-" + p.id;
   return `<div class="fdtop"><a class="btn" href="#stocky">← Back</a></div>
   <section class="panel sk-detail" aria-labelledby="skItemTitle" data-title="${esc(p.name)}">
     <div class="mhead"><h2 id="skItemTitle">${esc(p.name)}</h2>${pill(e.status)}</div>
-    <p class="note">${esc(kindName(p.kind))}${food ? ` · linked to <b class="ink">${esc(food.name)}</b> in Meals` : ""} · usually ${amount(p.pack, p.unit)} at a time</p>
+    <p class="note">${esc(kindName(p.kind))}${linked.length ? ` · used in <b class="ink">${esc(linked.join(", "))}</b>` : ""} · usually ${amount(p.pack, p.unit)} at a time</p>
     <div class="tiles"><div class="tile"><b>${e.left == null ? "–" : amount(e.left, p.unit)}</b>left</div><div class="tile"><b>${e.daysLeft ?? "–"}</b>days left</div><div class="tile"><b>${e.outOn ? esc(day(e.outOn)) : "–"}</b>runs out</div></div>
     <ul class="sk-why">${e.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>
     ${levelChips(p)}
@@ -307,6 +314,11 @@ function priceForm(p) {
     ${datalist()}
   </form>`;
 }
+// One "also goes into" row: a Meals food and how much of the item is in 100 g of it.
+const alsoRow = (foods, a = {}, unit = "g") => `<div class="srow" data-also-row>
+  <select name="alsoFood" aria-label="Meals food it goes into"><option value="">Pick a food</option>${foods.map((f) => `<option value="${esc(f.id)}"${f.id === a.food ? " selected" : ""}>${esc(f.name)}</option>`).join("")}</select>
+  <label class="inline"><input type="number" name="alsoPer" min="0" step="any" inputmode="decimal" value="${esc(a.per100 ?? "")}" placeholder="20" aria-label="How much in 100 g"> <span data-also-unit>${esc(unit)}</span></label>
+  <button type="button" class="mini" data-sk="also-drop" aria-label="Remove">✕</button></div>`;
 // Add or edit an item. Food can be linked to a Meals food, or a new Meals food made from it.
 function itemForm(p) {
   const { foods } = mealData(), v = (k, d = "") => esc(p?.[k] ?? d);
@@ -323,6 +335,11 @@ function itemForm(p) {
       <div data-sk-show="newfood" hidden><p class="note">Per 100 g, from the pack:</p><div class="four">
         <label>kcal<input type="number" name="kcal" inputmode="decimal" min="0" max="900"></label><label>Carbs g<input type="number" name="carb" inputmode="decimal" min="0" max="100" step="0.1"></label>
         <label>Protein g<input type="number" name="protein" inputmode="decimal" min="0" max="100" step="0.1"></label><label>Fat g<input type="number" name="fat" inputmode="decimal" min="0" max="100" step="0.1"></label></div></div>
+      <div class="sk-also" data-sk-also>
+        <p class="note">Also goes into other Meals foods? Say how much is in 100 g of each, so eating them uses it up too.</p>
+        ${(p?.also || []).map((a) => alsoRow(foods, a, p.unit)).join("")}
+        <button type="button" class="mini" data-sk="also-add">+ Another food it's in</button>
+      </div>
     </div>
     ${p ? "" : `<label class="sk-check"><input type="checkbox" name="bought" checked data-sk-toggle="bought"> I just bought it</label>
     <div data-sk-show="bought"><div class="two"><label>Price paid, RM<input type="number" name="price" inputmode="decimal" min="0" step="0.01" placeholder="optional"></label>
@@ -360,7 +377,7 @@ function planPage() {
   return `${nav("plan")}
   <section class="panel" aria-labelledby="skPlanTitle" data-title="Plan meals">
     <h2 id="skPlanTitle">What will you cook this week?</h2>
-    <p class="note">Pick your meal sets and how many times. Stocky works out the food for both of you from your usual portions, takes off what's at home, and adds the rest to the list.</p>
+    <p class="note">Pick your meal sets and how many times. Stocky works out the food for both of you from your usual portions (a cooked set is one pot each time; bought ones need nothing), takes off what's at home, and adds the rest to the list.</p>
     ${sets.length ? `<div class="mlist">${sets.map((s) => `<div class="mitem sk-plan"><div><b>${esc(s.name)}</b></div><span class="grams"><button type="button" class="mini" data-sk="plan" data-id="${esc(s.id)}" data-step="-1" aria-label="Once less">−</button><b>${plan[s.id] || 0}×</b><button type="button" class="mini" data-sk="plan" data-id="${esc(s.id)}" data-step="1" aria-label="Once more">+</button></span></div>`).join("")}</div>`
       : `<p class="note">No meal sets yet. Make some in <a href="#mealsets">Meal sets and foods</a>.</p>`}
     ${Object.values(plan).some((n) => n > 0) ? short.length ? `<h3>To buy</h3><ul class="sk-why">${short.map((r) => `<li><b>${esc(r.name)}</b> ${amount(r.qty, r.unit)}${r.item ? "" : " (new)"}</li>`).join("")}</ul>
@@ -381,6 +398,8 @@ function syncForms() {
       const linked = food && !!el.food.value;
       show("each", linked && el.unit.value === "pcs");
       show("ratio", linked && el.unit.value !== "pcs");
+      f.querySelectorAll("[data-also-unit]").forEach((x) => { x.textContent = el.unit.value; });
+      const add = f.querySelector('[data-sk="also-add"]'); if (add) add.hidden = f.querySelectorAll("[data-also-row]").length >= ALSO_MAX;
     }
     if (el.bought) show("bought", el.bought.checked);
     if (el.until) show("until", el.sale.checked);
@@ -449,7 +468,8 @@ async function saveItem(f) {
   const k = kindFrom(f);
   if (k.error) { setMsg(f, k.error); return; }
   let food = k.id === "food" ? el.food.value : "";
-  const fd = { name: el.name.value, kind: k.id, unit: el.unit.value, pack: el.pack.value, each: el.unit.value === "pcs" ? el.each.value : el.ratio.value, food: food === "new" ? "new" : food };
+  const also = [...f.querySelectorAll("[data-also-row]")].map((r) => ({ food: r.querySelector('[name="alsoFood"]').value, per100: r.querySelector('[name="alsoPer"]').value }));
+  const fd = { name: el.name.value, kind: k.id, unit: el.unit.value, pack: el.pack.value, each: el.unit.value === "pcs" ? el.each.value : el.ratio.value, food: food === "new" ? "new" : food, also };
   const { item, error } = readItem(fd, k.ids);
   if (error) { setMsg(f, error); return; }
   if (pantry.some((p) => p.id !== id && p.name.toLowerCase() === item.name.toLowerCase())) { setMsg(f, "That's already in Stocky."); return; }
@@ -547,6 +567,9 @@ function wire() {
     if (act === "unlist") await unlist(b.dataset.id);
     if (act === "kind-del") await removeKind(b.dataset.id);
     if (act === "kindmenu") { const f = b.closest("form"), menu = f.querySelector(".sk-menu"); if (menu.hidden || !menu.dataset.all) openMenu(f, true); else closeMenus(); } // suggestions open → show them all
+    // "Also goes into" rows are added and removed in place, so what's typed elsewhere in the form stays.
+    if (act === "also-add") { const f = b.closest("form"), unit = f.elements.unit?.value || "g"; b.insertAdjacentHTML("beforebegin", alsoRow(mealData().foods, {}, unit)); f.dataset.dirty = "1"; syncForms(); b.previousElementSibling?.querySelector("select")?.focus(); }
+    if (act === "also-drop") { const f = b.closest("form"); b.closest("[data-also-row]").remove(); f.dataset.dirty = "1"; syncForms(); }
     if (act === "kindpick") { const f = b.closest("form"); f.elements.kind.value = b.dataset.name; f.dataset.dirty = "1"; closeMenus(); syncForms(); }
     if (act === "list") { const p = pantry.find((x) => x.id === b.dataset.id); if (p) { msg = `${p.name} is on the list.`; await addRow({ name: p.name, item: p.id, qty: p.pack, unit: p.unit, from: "manual" }); } }
     if (act === "level") {
