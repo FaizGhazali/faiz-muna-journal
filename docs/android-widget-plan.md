@@ -1,8 +1,29 @@
-# Android widget: plan (not started)
+# Android widget
 
 Goal: a home-screen widget on Android that shows each person's "Your next move", with the reason line. Tapping it opens the journal at `/#next`. A Done button on the widget can come later.
 
-Status (2026-11-17): personalised suggestions are live (commit d0d0b9e). No widget code has been written yet. This file is the hand-over.
+Status (2026-11-22): built on the `android-widget` branch. The web app publishes `nextMove/{p1|p2}` (tested in the demo), and `android/` builds and starts on an emulator. Not yet tested against the live site or on a real phone, and the signing secrets aren't set yet.
+
+## Setup (once)
+
+1. **Make the release key** (on any PC with Java; keep the file and passwords somewhere safe, outside the repo):
+   ```
+   keytool -genkeypair -v -keystore next-move.jks -alias nextmove -keyalg RSA -keysize 2048 -validity 10000
+   ```
+2. **Add the repo secrets** (GitHub → Settings → Secrets and variables → Actions): `WIDGET_KEYSTORE` = the file as base64 (`[Convert]::ToBase64String([IO.File]::ReadAllBytes("next-move.jks"))` in PowerShell), `WIDGET_STORE_PASSWORD`, `WIDGET_KEY_ALIAS` (`nextmove`), `WIDGET_KEY_PASSWORD`. Losing the key means uninstalling the widget app before the next version installs.
+3. **Build:** any push that changes `android/**` runs `.github/workflows/android.yml` (or run it by hand from the Actions tab). Without the secrets it makes a debug APK.
+4. **Install:** on the phone, open the run on GitHub (signed in), download `next-move-apk`, unzip, open the APK and allow "install unknown apps" for the browser / Files app once.
+5. **Set up:** open "Next Move", type the family password, pick your name, then "Add to home screen".
+
+Build locally (needs the Android SDK; `ANDROID_HOME` set): `cd android; .\gradlew.bat assembleDebug`.
+
+## How it was built
+
+- `public/activities.js` → `publishMoves()` (called from `renderMove()`) writes both people's pick to `nextMove/{person}` when it differs from what Firestore has. `currentMove(p)` also keeps the published pick, so phones agree: for the "For" person this phone's own pick wins, for the other person the published one does.
+- `android/app/src/main/java/com/faizmuna/journal/widget/`: `Api.kt` (REST: init.json, sign-in, token refresh, Firestore reads), `Store.kt` (SharedPreferences: refresh token, person, last move), `MoveWidget.kt` (the `AppWidgetProvider`), `SetupActivity.kt` (password → pick name → add to home screen).
+- If App Check *enforcement* is ever switched on for Firestore, the widget's REST reads will be refused. It would need App Check (Play Integrity) first.
+
+## Original plan
 
 ## What we found
 

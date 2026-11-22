@@ -24,8 +24,8 @@ const store = {
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const TABS = { inbox: "Ideas", active: "Active", paused: "Paused", done: "Done" };
 
-let db, people, commit, exercisedToday, onChange, actsCol, daysCol, movesCol;
-let acts = [], dayDocs = [], moves = [], movesReady = false, unsubs = [];
+let db, people, commit, exercisedToday, onChange, actsCol, daysCol, movesCol, nextCol;
+let acts = [], dayDocs = [], moves = [], movesReady = false, nextReady = false, unsubs = [];
 let me = null, tab = "inbox", typeFilter = "", editing = null, draft = null, confirmDel = null;
 let moveMsg = "", undoFn = null, undoId = null, addTypeTouched = false, lastDay = today();
 
@@ -34,6 +34,7 @@ export function initActivities(opts) {
   actsCol = collection(db, "activities");
   daysCol = collection(db, "habitDays");
   movesCol = collection(db, "moves");
+  nextCol = collection(db, "nextMove");
   wire();
   // Open where you left off: the last page on this phone (the journal itself is kept by the wheel, "journal-type").
   const last = store.get("journal-page", "");
@@ -50,10 +51,12 @@ export function startActivities() {
   unsubs.push(onSnapshot(daysCol, (snap) => { dayDocs = snap.docs.map((d) => d.data()); refresh(); }));
   // Only the last 180 days are used for learning, so older history isn't downloaded.
   unsubs.push(onSnapshot(query(movesCol, where("date", ">=", addDays(today(), -180))), (snap) => { moves = snap.docs.map((d) => d.data()); movesReady = true; renderMove(); onChange?.(); }));
+  // What the widget shows (see publishMoves). Read so phones keep the same pick and don't rewrite an unchanged one.
+  unsubs.push(onSnapshot(nextCol, (snap) => { published = Object.fromEntries(snap.docs.map((d) => [d.id, d.data()])); nextReady = true; renderMove(); }));
 }
 // The journal calls this when entries change, so "already exercised today" stays current.
 export function refreshMove() { if (people().length && me) renderMove(); }
-export function stopActivities() { unsubs.forEach((u) => u()); unsubs = []; movesReady = false; }
+export function stopActivities() { unsubs.forEach((u) => u()); unsubs = []; movesReady = nextReady = false; published = {}; sent = {}; }
 
 // Called once the people are known, and again on every data change.
 export function refresh() {
@@ -105,8 +108,8 @@ function showView() {
 }
 
 // ---------- data ----------
-const mine = () => acts.filter((a) => a.owner === me);
-const logs = () => Object.fromEntries(dayDocs.filter((d) => d.owner === me).map((d) => [d.date, d]));
+const mine = (p = me) => acts.filter((a) => a.owner === p);
+const logs = (p = me) => Object.fromEntries(dayDocs.filter((d) => d.owner === p).map((d) => [d.date, d]));
 const strip = ({ id, ...rest }) => rest;
 const update = (id, patch) => commit(() => updateDoc(doc(actsCol, id), { ...patch, updated: Date.now() }));
 const replace = (id, body) => commit(() => setDoc(doc(actsCol, id), { ...body, updated: Date.now() }));
@@ -123,33 +126,59 @@ function markHabit(id, state, date = today()) {
 }
 
 // ---------- Your Next Move ----------
-const ctxNow = () => ({
-  today: today(), hour: new Date().getHours(), logs: logs(), recent: store.get(`journal-recent-${me}`, []),
-  profile: learn(moves.filter((m) => m.owner === me), today()), exercised: !!exercisedToday?.(me),
+const ctxNow = (p = me) => ({
+  today: today(), hour: new Date().getHours(), logs: logs(p), recent: store.get(`journal-recent-${p}`, []),
+  profile: learn(moves.filter((m) => m.owner === p), today()), exercised: !!exercisedToday?.(p),
 });
-const skipKey = () => `journal-skip-${me}`;
-const skipList = () => { const s = store.get(skipKey(), null); return s && s.date === today() ? s.ids : []; };
-const setSkip = (ids) => store.set(skipKey(), { date: today(), ids });
+const skipKey = (p = me) => `journal-skip-${p}`;
+const skipList = (p = me) => { const s = store.get(skipKey(p), null); return s && s.date === today() ? s.ids : []; };
+const setSkip = (ids, p = me) => store.set(skipKey(p), { date: today(), ids });
 
 // Keep showing the same suggestion until it's acted on, so it doesn't jump around while data syncs.
-function currentMove() {
-  const ctx = ctxNow(), all = mine(), keep = store.get(`journal-current-${me}`, null);
-  if (keep && keep.date === ctx.today) {
-    const a = all.find((x) => x.id === keep.id), s = a && scoreOf(a, { ...ctx, recent: [], all });
+// The pick published to nextMove is kept too, so phones agree: for the person picked with "For" this phone's own
+// pick comes first (they're using it), for the other person the published one does (their phone may have moved on).
+function currentMove(p = me) {
+  const ctx = ctxNow(p), all = mine(p), local = store.get(`journal-current-${p}`, null), shared = published[p];
+  const mineToday = local && local.date === ctx.today; // id null = acted on here today (Done / Not now / Suggest another)
+  const keeps = [mineToday && local.id, !(p === me && mineToday) && shared && shared.date === ctx.today && shared.item];
+  if (p !== me) keeps.reverse();
+  for (const id of keeps) {
+    const a = id && all.find((x) => x.id === id), s = a && scoreOf(a, { ...ctx, recent: [], all });
     if (s) return { a, ...s };
   }
-  let pick = pickNext(all, { ...ctx, skip: new Set(skipList()) });
-  if (!pick && skipList().length) { setSkip([]); pick = pickNext(all, ctx); } // everything was passed over: new round
-  if (pick && movesReady) remember(pick.a.id); // only settle on a pick once the history has loaded
+  let pick = pickNext(all, { ...ctx, skip: new Set(skipList(p)) });
+  if (!pick && skipList(p).length) { setSkip([], p); pick = pickNext(all, ctx); } // everything was passed over: new round
+  if (pick && movesReady) remember(pick.a.id, p); // only settle on a pick once the history has loaded
   return pick;
 }
-function remember(id) {
-  store.set(`journal-current-${me}`, { date: today(), id });
-  store.set(`journal-recent-${me}`, [id, ...store.get(`journal-recent-${me}`, []).filter((x) => x !== id)].slice(0, 5));
+function remember(id, p = me) {
+  store.set(`journal-current-${p}`, { date: today(), id });
+  store.set(`journal-recent-${p}`, [id, ...store.get(`journal-recent-${p}`, []).filter((x) => x !== id)].slice(0, 5));
 }
-const clearCurrent = () => store.set(`journal-current-${me}`, null);
+const clearCurrent = () => store.set(`journal-current-${me}`, { date: today(), id: null });
+
+// ---------- Home-screen widget feed ----------
+// nextMove/{person} holds each person's current pick, so the Android widget (android/) shows what the app shows
+// without copying the suggestion rules. Both people are published, so the widget stays fresh when only one phone
+// opens the app. Written only when it differs from what Firestore already has (and not twice while a write is on its way).
+let published = {}, sent = {}; // nextMove docs as last read, and the last body this page wrote, per person
+const sameAs = (body, d) => !!d && Object.keys(body).every((k) => (d[k] ?? null) === body[k]);
+function publishMoves() {
+  if (!movesReady || !nextReady) return;
+  for (const { id: p } of people()) {
+    const m = currentMove(p), ideas = mine(p).some((a) => a.status === "inbox");
+    const body = m
+      ? { person: p, item: m.a.id, title: m.a.title, type: m.a.type, why: m.why || "", date: today() }
+      : { person: p, item: null, title: null, type: null, why: ideas ? "Look through your ideas" : "Nothing planned. Go somewhere new.", date: today() };
+    const key = JSON.stringify(body);
+    if (sent[p] === key || sameAs(body, published[p])) { sent[p] = key; continue; }
+    sent[p] = key;
+    setDoc(doc(nextCol, p), { ...body, updated: Date.now() }).catch(() => { sent[p] = ""; }); // best effort: the widget keeps the last one
+  }
+}
 
 function renderMove() {
+  publishMoves();
   const m = currentMove(), el = $("next");
   const msg = moveMsg ? `<p class="msg" role="status">${esc(moveMsg)}${undoFn ? ` <button type="button" class="link" data-mv="undo">Undo</button>` : ""}</p>` : `<p class="msg" role="status"></p>`;
   if (!m) {
