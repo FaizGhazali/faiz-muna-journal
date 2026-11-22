@@ -1,5 +1,5 @@
 // Stocky, the groceries journal (#stocky view). One shared house stock and shopping list for both people.
-// Pages by hash: #stocky (list + at home), #stocky/item/<id>, #stocky/add, #stocky/prices, #stocky/plan.
+// Pages by hash: #stocky (list + at home), #stocky/item/<id>, #stocky/add, #stocky/prices ("Price book"), #stocky/plan.
 // Maths and the data model live in stocky.js. Meals are read, never written: what meals use is worked out.
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "../../core/fs.js";
 import { confirmDelete } from "../../core/confirm.js";
@@ -80,7 +80,7 @@ export function refreshStocky(force) {
   syncForms();
 }
 
-const nav = (on) => `<nav class="chips sk-nav" aria-label="Stocky pages">${[["", "🛒 List"], ["prices", "🏷️ Prices"], ["plan", "🍽️ Plan meals"]]
+const nav = (on) => `<nav class="chips sk-nav" aria-label="Stocky pages">${[["", "🛒 List"], ["prices", "🏷️ Price book"], ["plan", "🍽️ Plan meals"]]
   .map(([k, v]) => `<a class="chip" href="#stocky${k ? "/" + k : ""}" aria-pressed="${on === (k || "home")}">${v}</a>`).join("")}</nav>`;
 const say = () => `<p class="note sk-msg" role="status">${esc(msg)}</p>`;
 const PILL = { out: ["--obese", "Out"], low: ["--over", "Low"], soon: ["--under", "Buy soon"], ok: ["--good", "Fine"], unknown: ["--line", "Not sure"] };
