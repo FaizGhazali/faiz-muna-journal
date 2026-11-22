@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buyRate, mealUse, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money } from "../public/stocky.js";
+import { buyRate, mealUse, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind } from "../public/stocky.js";
 
 const T = "2026-11-22";
 const rice = { id: "rice", name: "Beras", kind: "food", unit: "g", pack: 5000, food: "f-nasi" };
@@ -161,4 +161,20 @@ test("cooked weight: meals of cooked rice use up less dry rice", () => {
   assert.equal(item("2.5").item.each, 2.5);
   assert.equal(item("1").item.each, undefined);
   assert.ok(item("50").error);
+});
+
+test("kinds: built-in Food and Home, the family's own, and removed kinds fall back to Home", () => {
+  const custom = [{ id: "k2", name: "Pets", created: 2 }, { id: "k1", name: "Baby", created: 1 }];
+  const kinds = allKinds(custom);
+  assert.deepEqual(kinds.map((k) => k.id), ["food", "home", "k1", "k2"]);
+  assert.equal(kindOf("k2", kinds).name, "Pets");
+  assert.equal(kindOf("gone", kinds).id, "home");
+  assert.deepEqual(readKind("  Baby   things ", kinds), { name: "Baby things" });
+  assert.ok(readKind("", kinds).error);
+  assert.ok(readKind("baby", kinds).error);
+  assert.ok(readKind("HOME", kinds).error);
+  const ids = kinds.map((k) => k.id);
+  assert.equal(readItem({ name: "Lampin", kind: "k1", unit: "pcs", pack: 40, food: "x" }, ids).item.kind, "k1");
+  assert.equal(readItem({ name: "Lampin", kind: "k1", unit: "pcs", pack: 40 }, ids).item.food, undefined);
+  assert.equal(readItem({ name: "Lampin", kind: "nope", unit: "pcs", pack: 40 }, ids).item.kind, "food");
 });

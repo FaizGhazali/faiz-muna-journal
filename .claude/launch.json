@@ -11,6 +11,12 @@
       "port": 5000
     },
     {
+      "name": "hosting",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["firebase", "serve", "--only", "hosting", "--port", "5058"],
+      "port": 5058
+    },
+    {
       "name": "static",
       "runtimeExecutable": "python",
       "runtimeArgs": [

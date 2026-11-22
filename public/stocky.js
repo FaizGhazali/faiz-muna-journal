@@ -1,11 +1,12 @@
 // Stocky (groceries) maths. Pure: no Firebase, no DOM (tests in tests/stocky.test.mjs).
-//   pantry/{auto id}   { name, kind: "food"|"home", unit: "g"|"ml"|"pcs", pack, each?, food?, check?: { date, at, level }, created }
+//   pantry/{auto id}   { name, kind: "food"|"home"|<kinds id>, unit: "g"|"ml"|"pcs", pack, each?, food?, check?: { date, at, level }, created }
 //                      one thing the house buys. pack = the usual amount bought at once (in unit);
 //                      food = a Meals food id; each = grams of that food one unit makes: grams in one piece (pcs),
 //                      or how much it weighs once cooked (rice about 2.5, missing = 1), so logged meals can use it up.
 //   buys/{auto id}     { item, date, qty, price?, shop?, sale?, by, at }  one purchase; price = what was paid for qty
 //   prices/{auto id}   { item, date, qty, price, shop, sale?, until? }     a price seen in a shop without buying
 //   shopList/{auto id} { name, item?, food?, qty?, unit?, from: "manual"|"plan", created }
+//   kinds/{auto id}    { name, created }  the family's own kinds beside the built-in Food and Home
 // What's left, when it runs out, and which shop is cheapest are worked out when drawing, never stored.
 import { dayNum, addDays } from "./suggest.js";
 import { plateOf } from "./meals.js";
@@ -213,14 +214,32 @@ export function shortfall(need, pantry, ests, foods) {
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// ---------- kinds ----------
+// Food (can link to a Meals food) and Home are built in and can't be removed. The family adds their own
+// in kinds/{auto id} → { name, created }; an item's `kind` is one of these ids. A removed kind's items
+// move to Home (FALLBACK_KIND), and an item whose kind is unknown is shown as Home too.
+export const BUILT_IN_KINDS = [{ id: "food", name: "Food", builtIn: true }, { id: "home", name: "Home", builtIn: true }];
+export const FALLBACK_KIND = "home";
+export const allKinds = (custom = []) => [...BUILT_IN_KINDS, ...[...custom].sort((a, b) => (a.created || 0) - (b.created || 0) || a.name.localeCompare(b.name))];
+export const kindOf = (id, kinds) => kinds.find((k) => k.id === id) || kinds.find((k) => k.id === FALLBACK_KIND);
+// A kind being typed. Returns { name } or { error }.
+export function readKind(name, kinds) {
+  const nm = String(name || "").trim().replace(/\s+/g, " ").slice(0, 30);
+  if (!nm) return { error: "Give the kind a name, like Baby or Pets." };
+  const same = kinds.find((k) => k.name.toLowerCase() === nm.toLowerCase());
+  if (same) return { error: `There's already a kind called ${same.name}.` };
+  return { name: nm };
+}
+
 // ---------- checking what's typed ----------
 // A pantry item. Returns { item } or { error }.
-export function readItem({ name, kind, unit, pack, each, food }) {
+// `kinds` = the kind ids that exist (built-in + the family's own); anything else is saved as food.
+export function readItem({ name, kind, unit, pack, each, food }, kinds = BUILT_IN_KINDS.map((k) => k.id)) {
   const nm = String(name || "").trim().slice(0, 60);
   if (!nm) return { error: "Give it a name." };
   const u = UNITS[unit] ? unit : "pcs", p = Number(pack);
   if (!(p > 0 && p <= 100000)) return { error: "How much do you usually buy at once? Type a number." };
-  const item = { name: nm, kind: kind === "home" ? "home" : "food", unit: u, pack: Math.round(p * 10) / 10 };
+  const item = { name: nm, kind: kind && kinds.includes(kind) ? kind : "food", unit: u, pack: Math.round(p * 10) / 10 };
   if (item.kind === "food" && food) item.food = String(food);
   if (u === "pcs" && item.food) {
     const e = Number(each);

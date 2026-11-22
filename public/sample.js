@@ -172,7 +172,7 @@ export function sampleData(now = new Date()) {
     "k-susu": { name: "Susu", kind: "food", unit: "ml", pack: 2000, created: stamp(80) },
     "k-oat": { name: "Oat", kind: "food", unit: "g", pack: 1000, food: "f-oat", created: stamp(80) },
     "k-tisu": { name: "Tisu", kind: "home", unit: "pcs", pack: 10, created: stamp(80) },
-    "k-sabun": { name: "Sabun basuh", kind: "home", unit: "g", pack: 3000, created: stamp(80) },
+    "k-sabun": { name: "Sabun basuh", kind: "d-kind-clean", unit: "g", pack: 3000, created: stamp(80) },
   };
   // [item, days ago, qty, price, shop, sale?]
   const bought = [
@@ -191,7 +191,8 @@ export function sampleData(now = new Date()) {
     ["k-ayam", 2, 1000, 9.5, "Pasar"], ["k-susu", 6, 1000, 7.2, "Giant"],
   ];
   const prices = Object.fromEntries(seen.map(([item, n, qty, price, shop, until], i) => [`d-price-${i}`, { item, date: ago(n), qty, price, shop, ...(until ? { sale: true, until: ago(-until) } : {}), at: stamp(n) }]));
+  const kinds = { "d-kind-clean": { name: "Cleaning", created: stamp(80) } };
   const shopList = { "d-list-0": { name: "Bawang merah", qty: 500, unit: "g", from: "manual", created: stamp(1) } };
 
-  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns, diary, pantry, buys, prices, shopList };
+  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns, diary, pantry, buys, prices, shopList, kinds };
 }

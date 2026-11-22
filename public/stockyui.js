@@ -2,7 +2,8 @@
 // Pages by hash: #stocky (list + at home), #stocky/item/<id>, #stocky/add, #stocky/prices, #stocky/plan.
 // Maths and the data model live in stocky.js. Meals are read, never written: what meals use is worked out.
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "./fs.js";
-import { UNITS, LEVELS, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice } from "./stocky.js";
+import { confirmDelete } from "./confirm.js";
+import { UNITS, LEVELS, allKinds, kindOf, readKind, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice } from "./stocky.js";
 import { readFood } from "./meals.js";
 import { iso, parse } from "./suggest.js";
 
@@ -12,9 +13,9 @@ const today = () => iso(new Date());
 const day = (d) => parse(d).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
 let commit, me, people, mealData, cols = {}, unsubs = [];
-let pantry = [], buys = [], prices = [], list = [], ests = {}, boards = {};
-// Page state: which row's "Bought" form is open, deletes waiting for a second tap, the meal plan, messages.
-let buying = null, pricing = false, editing = false, confirmDel = false, byShop = false, msg = "", plan = {}, pending = false;
+let pantry = [], buys = [], prices = [], list = [], kinds = allKinds(), ests = {}, boards = {};
+// Page state: which row's "Bought" form is open, the At home kind filter, the meal plan, messages.
+let buying = null, pricing = false, editing = false, byShop = false, kindShown = "", msg = "", plan = {}, pending = false;
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (_) { return d; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} },
@@ -22,9 +23,10 @@ const store = {
 
 export function initStocky(opts) {
   ({ commit, me, people, mealData } = opts);
-  for (const c of ["pantry", "buys", "prices", "shopList", "foods"]) cols[c] = collection(opts.db, c);
+  for (const c of ["pantry", "buys", "prices", "shopList", "foods", "kinds"]) cols[c] = collection(opts.db, c);
   byShop = store.get("journal-stocky-byshop", "") === "1";
-  addEventListener("hashchange", () => { buying = null; pricing = false; editing = false; confirmDel = false; msg = ""; refreshStocky(true); });
+  kindShown = store.get("journal-stocky-kind", "");
+  addEventListener("hashchange", () => { buying = null; pricing = false; editing = false; msg = ""; refreshStocky(true); });
   wire();
 }
 export function startStocky() {
@@ -33,6 +35,7 @@ export function startStocky() {
   on("buys", (v) => { buys = v; });
   on("prices", (v) => { prices = v; });
   on("shopList", (v) => { list = v.sort((a, b) => (a.created || 0) - (b.created || 0)); });
+  on("kinds", (v) => { kinds = allKinds(v); });
 }
 export function stopStocky() { unsubs.forEach((u) => u()); unsubs = []; }
 
@@ -113,12 +116,15 @@ function rowHtml(r) {
 }
 const shopList = () => shopNames(buys, prices);
 const datalist = () => `<datalist id="skShops">${shopList().map((s) => `<option value="${esc(s)}">`).join("")}</datalist>`;
+// Kind picker. Food first: only food can link to a Meals food.
+const kindOptions = (sel) => kinds.map((k) => `<option value="${esc(k.id)}"${k.id === sel ? " selected" : ""}>${esc(k.id === "home" ? "Home (soap, tissue)" : k.name)}</option>`).join("");
+const kindName = (id) => kindOf(id, kinds).name;
 // The "Bought" form: how much, and (optional) the price, shop and whether it was on sale.
 function buyForm(r, p) {
   const unit = p?.unit || r.unit || "pcs", qty = r.qty || p?.pack || "";
   const last = buys.filter((b) => b.item === p?.id && b.shop).sort((a, b) => b.date.localeCompare(a.date))[0];
   return `<form class="mform sk-buy" data-skform="buy" data-key="${esc(r.key)}" novalidate>
-    ${p ? "" : `<div class="two"><label>Kind<select name="kind"><option value="food"${r.food ? " selected" : ""}>Food</option><option value="home"${r.food ? "" : " selected"}>Home</option></select></label>
+    ${p ? "" : `<div class="two"><label>Kind<select name="kind">${kindOptions(r.food ? "food" : FALLBACK_KIND)}</select></label>
       <label>Counted in<select name="unit">${Object.keys(UNITS).map((u) => `<option${u === unit ? " selected" : ""}>${u}</option>`).join("")}</select></label></div>`}
     <div class="two"><label>How much${p ? ` (${unit})` : ""}<input type="number" name="qty" inputmode="decimal" min="0" value="${esc(qty)}"></label>
       <label>Price paid, ${"RM"}<input type="number" name="price" inputmode="decimal" min="0" step="0.01" placeholder="optional"></label></div>
@@ -143,7 +149,12 @@ function homePage() {
       ${[...groups].sort(([a], [b]) => (a === "No price yet") - (b === "No price yet") || a.localeCompare(b)).map(([s, rs]) => `<h3 class="sk-shop">${esc(s)}</h3>${rs.map(rowHtml).join("")}`).join("")}`;
   } else listHtml = rows.map(rowHtml).join("");
   const order = { out: 0, low: 1, soon: 2, unknown: 3, ok: 4 };
-  const home = [...pantry].sort((a, b) => order[ests[a.id].status] - order[ests[b.id].status] || (ests[a.id].daysLeft ?? 999) - (ests[b.id].daysLeft ?? 999) || a.name.localeCompare(b.name));
+  // Kind chips over At home, only once there's more than one kind to pick from.
+  const used = kinds.map((k) => ({ ...k, n: pantry.filter((p) => kindOf(p.kind, kinds).id === k.id).length })).filter((k) => k.n);
+  const pick = used.some((k) => k.id === kindShown) ? kindShown : "";
+  const chips = used.length > 1 ? `<div class="chips sk-kinds" role="group" aria-label="Show one kind">${[{ id: "", name: "All", n: pantry.length }, ...used]
+    .map((k) => `<button type="button" class="chip" data-sk="kindshow" data-kind="${esc(k.id)}" aria-pressed="${pick === k.id}">${esc(k.name)} <small>${k.n}</small></button>`).join("")}</div>` : "";
+  const home = pantry.filter((p) => !pick || kindOf(p.kind, kinds).id === pick).sort((a, b) => order[ests[a.id].status] - order[ests[b.id].status] || (ests[a.id].daysLeft ?? 999) - (ests[b.id].daysLeft ?? 999) || a.name.localeCompare(b.name));
   return `${nav("home")}
   <section class="panel sk-list" aria-labelledby="skListTitle" data-title="Shopping list">
     <div class="mhead"><h2 id="skListTitle">Shopping list</h2>${rows.length ? `<button type="button" class="chip" data-sk="byshop" aria-pressed="${byShop}">By cheapest shop</button>` : ""}</div>
@@ -154,12 +165,26 @@ function homePage() {
   </section>
   <section class="panel sk-home" aria-labelledby="skHomeTitle" data-title="At home">
     <div class="mhead"><h2 id="skHomeTitle">At home</h2><a class="btn mini" href="#stocky/add">+ Add item</a></div>
+    ${chips}
     ${home.length ? `<div class="sk-items">${home.map((p) => { const e = ests[p.id]; return `<a class="sk-item" href="#stocky/item/${esc(p.id)}">
       <span class="sk-name"><b>${esc(p.name)}</b><small>${esc(leftText(p, e))}</small></span>${pill(e.status)}
       <span class="sk-bar" aria-hidden="true"><i class="${e.status}" style="width:${Math.round((e.share ?? 0) * 100)}%"></i></span></a>`; }).join("")}</div>`
       : `<div class="mempty"><p><b>Add the things you buy often.</b></p><p class="note">Rice, eggs, milk, soap, tissue. Each time you buy one, Stocky learns how fast it goes and tells you before it runs out. Link food to your Meals foods and the meals you log count too.</p><a class="btn primary" href="#stocky/add">Add your first item</a></div>`}
   </section>
+  ${kindsPanel()}
   <p class="note">"Days left" is a guess from how often you buy each thing and the meals you log. Tap an item and say how much is left to put it right.</p>`;
+}
+
+// Kinds: Food and Home are built in; the family adds and removes their own.
+function kindsPanel() {
+  const count = (id) => pantry.filter((p) => kindOf(p.kind, kinds).id === id).length;
+  return `<section class="panel sk-kindlist" aria-labelledby="skKindTitle" data-title="Kinds">
+    <h2 id="skKindTitle">Kinds</h2>
+    <p class="note">Sort what you buy your own way, like Baby, Pets or Cleaning. Only Food can link to your Meals foods.</p>
+    <div class="mlist">${kinds.map((k) => { const n = count(k.id); return `<div class="mitem"><div><b>${esc(k.name)}</b><small>${n} item${n === 1 ? "" : "s"}${k.builtIn ? " · built in" : ""}</small></div>${k.builtIn ? "" : `<button type="button" class="mini" data-sk="kind-del" data-id="${esc(k.id)}" aria-label="Remove the kind ${esc(k.name)}">✕</button>`}</div>`; }).join("")}</div>
+    <form class="addrow1" data-skform="kind" novalidate><input type="text" name="name" maxlength="30" placeholder="New kind, like Baby" aria-label="New kind"><button type="submit">Add</button></form>
+    <p class="note sk-msg" role="status" data-sk-kindmsg></p>
+  </section>`;
 }
 
 function itemPage(id) {
@@ -172,7 +197,7 @@ function itemPage(id) {
   return `<div class="fdtop"><a class="btn" href="#stocky">← Back</a></div>
   <section class="panel sk-detail" aria-labelledby="skItemTitle" data-title="${esc(p.name)}">
     <div class="mhead"><h2 id="skItemTitle">${esc(p.name)}</h2>${pill(e.status)}</div>
-    <p class="note">${p.kind === "home" ? "Household" : "Food"}${food ? ` · linked to <b class="ink">${esc(food.name)}</b> in Meals` : ""} · usually ${amount(p.pack, p.unit)} at a time</p>
+    <p class="note">${esc(kindName(p.kind))}${food ? ` · linked to <b class="ink">${esc(food.name)}</b> in Meals` : ""} · usually ${amount(p.pack, p.unit)} at a time</p>
     <div class="tiles"><div class="tile"><b>${e.left == null ? "–" : amount(e.left, p.unit)}</b>left</div><div class="tile"><b>${e.daysLeft ?? "–"}</b>days left</div><div class="tile"><b>${e.outOn ? esc(day(e.outOn)) : "–"}</b>runs out</div></div>
     <ul class="sk-why">${e.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>
     <p class="mwhat">How much is left?</p>
@@ -198,7 +223,7 @@ function itemPage(id) {
   </section>
   <section class="panel" aria-labelledby="skEditTitle" data-title="Edit">
     <h2 id="skEditTitle">Edit</h2>
-    ${editing ? itemForm(p) : `<div class="actions"><button type="button" data-sk="edit">Edit ${esc(p.name)}</button>${confirmDel ? `<button type="button" class="danger" data-sk="del-yes">Delete it and its history</button><button type="button" data-sk="del-no">Keep</button>` : `<button type="button" data-sk="del">Delete</button>`}</div>`}
+    ${editing ? itemForm(p) : `<div class="actions"><button type="button" data-sk="edit">Edit ${esc(p.name)}</button><button type="button" class="danger" data-sk="del">Delete</button></div>`}
   </section>`;
 }
 function priceForm(p) {
@@ -218,7 +243,7 @@ function itemForm(p) {
   const { foods } = mealData(), v = (k, d = "") => esc(p?.[k] ?? d);
   return `<form class="mform" data-skform="item" novalidate>
     <label>Name<input type="text" name="name" maxlength="60" value="${v("name")}" placeholder="Beras, Telur, Tisu"></label>
-    <div class="two"><label>Kind<select name="kind" data-sk-toggle="food"><option value="food"${p?.kind === "home" ? "" : " selected"}>Food</option><option value="home"${p?.kind === "home" ? " selected" : ""}>Home (soap, tissue)</option></select></label>
+    <div class="two"><label>Kind<select name="kind" data-sk-toggle="food">${kindOptions(p ? kindOf(p.kind, kinds).id : "food")}</select></label>
       <label>Counted in<select name="unit">${Object.keys(UNITS).map((u) => `<option value="${u}"${(p?.unit || "g") === u ? " selected" : ""}>${{ g: "grams", ml: "ml", pcs: "pieces" }[u]}</option>`).join("")}</select></label></div>
     <label>Usually bought at once<input type="number" name="pack" inputmode="decimal" min="0" value="${v("pack")}" placeholder="5000 for a 5 kg bag, 30 for a tray"></label>
     <div data-sk-show="food">
@@ -312,7 +337,7 @@ async function saveBuy(f) {
     const known = pantry.find((p) => p.name.toLowerCase() === String(r.name).toLowerCase());
     if (known) itemId = known.id;
     else {
-      const { item, error: e2 } = readItem({ name: r.name, kind: el.kind?.value, unit: el.unit?.value, pack: rec.qty, food: r.food });
+      const { item, error: e2 } = readItem({ name: r.name, kind: el.kind?.value, unit: el.unit?.value, pack: rec.qty, food: r.food }, kinds.map((k) => k.id));
       if (e2) { setMsg(f, e2); return; }
       const ref = doc(cols.pantry); itemId = ref.id;
       await commit(() => setDoc(ref, { ...item, created: Date.now() }));
@@ -336,7 +361,7 @@ async function saveItem(f) {
   const el = f.elements, id = route().page === "item" ? route().id : null, { foods } = mealData();
   let food = el.kind.value === "food" ? el.food.value : "";
   const fd = { name: el.name.value, kind: el.kind.value, unit: el.unit.value, pack: el.pack.value, each: el.unit.value === "pcs" ? el.each.value : el.ratio.value, food: food === "new" ? "new" : food };
-  const { item, error } = readItem(fd);
+  const { item, error } = readItem(fd, kinds.map((k) => k.id));
   if (error) { setMsg(f, error); return; }
   if (pantry.some((p) => p.id !== id && p.name.toLowerCase() === item.name.toLowerCase())) { setMsg(f, "That's already in Stocky."); return; }
   // "+ New Meals food from this": the numbers per 100 g become a food in the Meals library.
@@ -372,6 +397,51 @@ async function addTyped(f) {
   refreshStocky(true);
   $("stocky").querySelector('[data-skform="row"] input')?.focus();
 }
+async function addKind(f) {
+  const { name, error } = readKind(f.elements.name.value, kinds);
+  const out = f.parentElement.querySelector("[data-sk-kindmsg]");
+  if (error) { if (out) out.textContent = error; return; }
+  const ref = doc(cols.kinds), body = { name, created: Date.now() };
+  kinds = allKinds([...kinds.filter((k) => !k.builtIn), { id: ref.id, ...body }]);
+  msg = ""; refreshStocky(true);
+  await commit(() => setDoc(ref, body));
+  const o2 = $("stocky").querySelector("[data-sk-kindmsg]"); if (o2) o2.textContent = `Added ${name}. Pick it when you add or edit an item.`;
+}
+// Every delete goes through confirmDelete() (see .claude/skills/safe-delete/SKILL.md).
+const names = (ps) => ps.length <= 3 ? ps.map((p) => `<b>${esc(p.name)}</b>`).join(", ") : `${ps.slice(0, 3).map((p) => `<b>${esc(p.name)}</b>`).join(", ")} and ${ps.length - 3} more`;
+async function removeKind(id) {
+  const k = kinds.find((x) => x.id === id && !x.builtIn); if (!k) return;
+  const inIt = pantry.filter((p) => p.kind === id), to = kindName(FALLBACK_KIND);
+  const ok = await confirmDelete({ title: `Remove the kind ${k.name}?`, yes: "Remove kind",
+    body: inIt.length ? `<p>${inIt.length} item${inIt.length === 1 ? "" : "s"} (${names(inIt)}) will move to <b>${esc(to)}</b>. The items, buys and prices stay.</p>` : `<p>No items use it.</p>` });
+  if (!ok) return;
+  if (kindShown === id) { kindShown = ""; store.set("journal-stocky-kind", ""); }
+  await commit(() => Promise.all([...inIt.map((p) => updateDoc(doc(cols.pantry, p.id), { kind: FALLBACK_KIND })), deleteDoc(doc(cols.kinds, id))]));
+}
+async function removeItem(id) {
+  const p = pantry.find((x) => x.id === id); if (!p) return;
+  const nb = buys.filter((x) => x.item === id), np = prices.filter((x) => x.item === id), nl = list.filter((x) => x.item === id);
+  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const what = [nb.length && plural(nb.length, "buy"), np.length && plural(np.length, "price"), nl.length && "its row on the shopping list"].filter(Boolean);
+  const ok = await confirmDelete({ title: `Delete ${p.name}?`, yes: "Delete it", body: what.length ? `<p>Its history goes too: ${esc(what.join(", "))}.</p>` : "" });
+  if (!ok) return;
+  const gone = [...nb.map((x) => doc(cols.buys, x.id)), ...np.map((x) => doc(cols.prices, x.id)), ...nl.map((x) => doc(cols.shopList, x.id))];
+  location.hash = "#stocky";
+  await commit(() => Promise.all([deleteDoc(doc(cols.pantry, id)), ...gone.map((d) => deleteDoc(d))]));
+}
+async function unlist(id) {
+  const r = list.find((x) => x.id === id); if (!r) return;
+  const ok = await confirmDelete({ title: `Take ${r.name} off the list?`, yes: "Take it off",
+    body: r.item ? `<p>If it's running low it comes back by itself.</p>` : "" });
+  if (ok) await commit(() => deleteDoc(doc(cols.shopList, id)));
+}
+async function unbuy(id) {
+  const b = buys.find((x) => x.id === id); if (!b) return;
+  const p = pantry.find((x) => x.id === b.item);
+  const ok = await confirmDelete({ title: "Remove this buy?", yes: "Remove buy",
+    body: `<p><b>${esc(day(b.date))} · ${amount(b.qty, p?.unit || "pcs")}</b>${b.price ? ` · ${money(b.price)}` : ""}${b.shop ? ` · ${esc(b.shop)}` : ""}</p><p>The days-left guess is worked out again without it.</p>` });
+  if (ok) await commit(() => deleteDoc(doc(cols.buys, id)));
+}
 function setMsg(f, t) { msg = t; const el = f.querySelector(".sk-msg") || f.querySelector("[data-sk-hint]") || $("stocky").querySelector(".sk-msg"); if (el) el.textContent = t; }
 
 // ---------- events ----------
@@ -383,7 +453,9 @@ function wire() {
     if (act === "buy") { buying = b.dataset.key; pricing = false; msg = ""; refreshStocky(true); host.querySelector(".sk-buy input[name=qty]")?.focus(); }
     if (act === "cancel") { buying = null; pricing = false; editing = false; msg = ""; refreshStocky(true); }
     if (act === "byshop") { byShop = !byShop; store.set("journal-stocky-byshop", byShop ? "1" : ""); refreshStocky(true); }
-    if (act === "unlist") await commit(() => deleteDoc(doc(cols.shopList, b.dataset.id)));
+    if (act === "unlist") await unlist(b.dataset.id);
+    if (act === "kindshow") { kindShown = b.dataset.kind; store.set("journal-stocky-kind", kindShown); refreshStocky(true); }
+    if (act === "kind-del") await removeKind(b.dataset.id);
     if (act === "list") { const p = pantry.find((x) => x.id === b.dataset.id); if (p) { msg = `${p.name} is on the list.`; await addRow({ name: p.name, item: p.id, qty: p.pack, unit: p.unit, from: "manual" }); } }
     if (act === "level") {
       const check = { date: today(), at: Date.now(), level: Number(b.dataset.level) };
@@ -391,15 +463,9 @@ function wire() {
       await commit(() => updateDoc(doc(cols.pantry, id), { check }));
     }
     if (act === "price") { pricing = true; buying = null; refreshStocky(true); host.querySelector('[data-skform="price"] input[name=price]')?.focus(); }
-    if (act === "unbuy") await commit(() => deleteDoc(doc(cols.buys, b.dataset.id)));
-    if (act === "edit") { editing = true; confirmDel = false; msg = ""; refreshStocky(true); }
-    if (act === "del") { confirmDel = true; refreshStocky(true); }
-    if (act === "del-no") { confirmDel = false; refreshStocky(true); }
-    if (act === "del-yes") {
-      const gone = [...buys.filter((x) => x.item === id).map((x) => doc(cols.buys, x.id)), ...prices.filter((x) => x.item === id).map((x) => doc(cols.prices, x.id)), ...list.filter((x) => x.item === id).map((x) => doc(cols.shopList, x.id))];
-      location.hash = "#stocky";
-      await commit(() => Promise.all([deleteDoc(doc(cols.pantry, id)), ...gone.map((d) => deleteDoc(d))]));
-    }
+    if (act === "unbuy") await unbuy(b.dataset.id);
+    if (act === "edit") { editing = true; msg = ""; refreshStocky(true); }
+    if (act === "del") await removeItem(id);
     if (act === "plan") { plan[b.dataset.id] = Math.max(0, Math.min(21, (plan[b.dataset.id] || 0) + Number(b.dataset.step))); refreshStocky(true); }
     if (act === "plan-add") {
       const { foods, sets, meals } = mealData();
@@ -416,6 +482,7 @@ function wire() {
     if (k === "price") savePrice(f);
     if (k === "item") saveItem(f);
     if (k === "row") addTyped(f);
+    if (k === "kind") addKind(f);
   });
   host.addEventListener("change", () => syncForms());
   host.addEventListener("input", (ev) => { const f = ev.target.closest("form"); if (f) hint(f); });
