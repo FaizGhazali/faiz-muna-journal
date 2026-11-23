@@ -3,7 +3,7 @@
 // with the instalments that end, and a small rebate tile per credit card. Bills are ticked by hand
 // ("Typed"); a statement import can later mark them checked. All maths is in logic/moneyplan.js.
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "../../core/fs.js";
-import { $, esc } from "../../core/util.js";
+import { $, esc, lastUsed } from "../../core/util.js";
 import { confirmDelete } from "../../core/confirm.js";
 import { rm, toSen, shortDate, cycleView } from "../../logic/ledger.js";
 import {
@@ -177,6 +177,8 @@ function manageList() {
 }
 function billForm(id) {
   const c = commitments.find((x) => x.id === id) ?? null, m = monthOf(ctx.today());
+  // A new bill starts in the last bill's bucket (great-ux: start from the last choice); none yet = pick one.
+  const last = lastUsed(commitments, "bucket"), bucketSel = c?.bucket ?? (bucketsOf(plan).some((b) => b.id === last) ? last : "");
   return `<div class="lpbform" data-form="bill">
     <h3>${c ? `Edit ${esc(c.name)}` : "Add a bill"}</h3>
     <div class="two">
@@ -184,7 +186,7 @@ function billForm(id) {
       <label>Monthly, RM<input type="text" id="lpbAmt" inputmode="decimal" autocomplete="off" placeholder="490" value="${c ? (c.amountSen / 100).toFixed(2) : ""}"></label>
     </div>
     <div class="two">
-      <label>Bucket<select id="lpbBucket">${bucketsOf(plan).map((b) => `<option value="${b.id}"${b.id === (c?.bucket ?? "essentials") ? " selected" : ""}>${esc(b.name)}</option>`).join("")}</select></label>
+      <label>Bucket<select id="lpbBucket">${bucketSel ? "" : `<option value="" selected disabled>Pick one</option>`}${bucketsOf(plan).map((b) => `<option value="${b.id}"${b.id === bucketSel ? " selected" : ""}>${esc(b.name)}</option>`).join("")}</select></label>
       <label>Due day<input type="number" id="lpbDue" min="1" max="31" inputmode="numeric" value="${c?.dueDay ?? 1}"></label>
     </div>
     <div class="two">
@@ -197,6 +199,7 @@ function billForm(id) {
 }
 async function saveBill(id) {
   const m = monthOf(ctx.today());
+  if (!$("lpbBucket").value) { $("lpbMsg").textContent = "Pick which bucket it comes out of."; return; }
   const r = checkCommitment({ name: $("lpbName").value, amountSen: toSen($("lpbAmt").value), bucket: $("lpbBucket").value, dueDay: $("lpbDue").value, endMonth: $("lpbEnd").value, startMonth: $("lpbStart").value }, plan, m);
   if (!r.ok) { $("lpbMsg").textContent = r.error; return; }
   const old = commitments.find((x) => x.id === id), now = Date.now(), db = ctx.db();

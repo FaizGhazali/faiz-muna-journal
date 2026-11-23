@@ -21,9 +21,9 @@ const RULES = [
   ["explore", /\b(visit|cafe|café|coffee|restaurant|eatery|eat at|explore|hike|trip|museum|beach|kedai|warung|mamak|food|try)\b/i],
   ["skill", /\b(learn|practi[cs]e|improve|study|course|master|get better|photograph\w*|programming|coding|language|english|editing|guitar|piano|drawing|programme)\b/i],
 ];
-export function guessType(title) {
+export function guessType(title, fallback = "task") {
   for (const [type, re] of RULES) if (re.test(title)) return type;
-  return "task";
+  return fallback;
 }
 
 // ---- habits ----

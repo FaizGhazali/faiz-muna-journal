@@ -6,7 +6,7 @@ import { SLOTS, LEARN_AFTER, slotAt, portion, total, dayTotal, plateOf, rowFor, 
 import { money, SERVES_MAX } from "../../logic/stocky.js";
 import { offerWidget } from "../../shell/widget.js";
 import { confirmDelete } from "../../core/confirm.js";
-import { $, esc, iso, parse, addDays, today } from "../../core/util.js";
+import { $, esc, iso, parse, addDays, today, lastUsed } from "../../core/util.js";
 import { currentJournal, setJournal } from "../../core/journal.js";
 
 const num = (n) => (Math.round(n * 10) / 10).toLocaleString();
@@ -369,7 +369,8 @@ function wire() {
     if (act === "new" || act === "edit") {
       editing = { kind, id: id || null }; libMsg = "";
       if (kind === "set") { const s = sets.find((x) => x.id === id); setRows = s ? (s.items || []).map((x) => ({ ...x })) : [{ food: "", g: 100 }]; setSlots = s ? [...(s.slots || [])] : []; setTitle = s?.name || "";
-        setMade = s?.made || ""; setIngr = (s?.ingredients || []).map((x) => ({ ...x })); setServes = s?.serves ?? ""; setPrice = s?.price ?? ""; }
+        setMade = s ? s.made || "" : lastUsed(sets, "made"); // a new set starts on the last set's (great-ux)
+        setIngr = (s?.ingredients || []).map((x) => ({ ...x })); if (!s && setMade === "cooked") setIngr.push({ item: "", qty: "" }); setServes = s?.serves ?? ""; setPrice = s?.price ?? ""; }
       renderLib(); lib.querySelector(".mform input")?.focus();
     }
     if (act === "cancel") { editing = null; setRows = []; setSlots = []; setMade = ""; setIngr = []; setTitle = ""; libMsg = ""; renderLib(); }

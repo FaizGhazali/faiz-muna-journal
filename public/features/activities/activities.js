@@ -12,7 +12,7 @@ import {
 } from "../../logic/suggest.js";
 import { journalView, DASH, DASH_LINE } from "../../core/journal.js";
 import { confirmDelete } from "../../core/confirm.js";
-import { $, esc, iso, parse, dayNum, addDays, today } from "../../core/util.js";
+import { $, esc, iso, parse, dayNum, addDays, today, lastUsed } from "../../core/util.js";
 
 const fmt = (s) => parse(s).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "";
@@ -64,6 +64,7 @@ export function refresh() {
   if (editing && $("editor")) readEditor(); // keep unsaved typing when new data arrives
   if (!ps.some((p) => p.id === me)) me = ps.some((p) => p.id === store.get("journal-me")) ? store.get("journal-me") : ps[0].id;
   $("me").innerHTML = ps.map((p) => `<input type="radio" name="me" id="me-${p.id}" value="${p.id}"${p.id === me ? " checked" : ""}><label for="me-${p.id}">${esc(p.name)}</label>`).join("");
+  if (!addTypeTouched && !$("addTitle").value.trim()) setAddType(lastType()); // an empty Add box starts on the last type
   showView();
   renderMove();
   renderHabits();
@@ -405,12 +406,20 @@ async function saveEditor() {
   renderList();
 }
 
+// The type a new activity starts on (great-ux: start from the last choice): the last one this person added.
+const lastType = () => lastUsed(acts.filter((a) => a.owner === me).map((a) => ({ type: a.type, date: a.created, at: a.updated })), "type");
+function setAddType(t) {
+  const sel = $("addType"), blank = sel.querySelector('option[value=""]');
+  if (!t && !blank) sel.insertAdjacentHTML("afterbegin", `<option value="" disabled>Pick one</option>`);
+  sel.value = t || "";
+}
 async function addActivity(ev) {
   ev.preventDefault();
   const title = $("addTitle").value.trim(), type = $("addType").value;
   if (!title) { $("addMsg").textContent = "Type what you'd like to add first."; return; }
+  if (!type) { $("addMsg").textContent = "Pick what kind it is: skill, task, explore, cooking or habit."; $("addType").focus(); return; }
   const ref = doc(actsCol);
-  $("addTitle").value = ""; addTypeTouched = false; $("addType").value = "task";
+  $("addTitle").value = ""; addTypeTouched = false; setAddType(lastType() || type);
   $("addMsg").textContent = `Saved "${title}" to Ideas. Start it when you're ready.`;
   tab = "inbox"; typeFilter = "";
   await commit(() => setDoc(ref, { owner: me, title, type, status: "inbox", created: today(), updated: Date.now() }), `Added "${title}" to Ideas.`);
@@ -456,7 +465,7 @@ function wire() {
     if (h && box.checked) logMove(h, "done"); // ticking a habit teaches when it usually gets done
   });
   $("me").addEventListener("change", (ev) => { me = ev.target.value; store.set("journal-me", me); editing = draft = null; moveMsg = ""; undoFn = null; refresh(); });
-  $("addTitle").addEventListener("input", () => { if (!addTypeTouched) $("addType").value = guessType($("addTitle").value); });
+  $("addTitle").addEventListener("input", () => { if (!addTypeTouched) setAddType(guessType($("addTitle").value, lastType())); });
   $("addType").addEventListener("change", () => { addTypeTouched = true; });
   $("addForm").addEventListener("submit", addActivity);
   $("tabs").addEventListener("click", (ev) => { const b = ev.target.closest("[data-tab]"); if (!b) return; tab = b.dataset.tab; editing = draft = null; renderList(); });
