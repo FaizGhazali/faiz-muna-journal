@@ -4,6 +4,7 @@
 import { runsWithWeight, linearRegression, runEntries, similarEffort, weightBands, bandWidth, ageOn, ageText, MAX_GAP_DAYS, MIN_TREND, CONFIDENT, SIMILAR_BPM } from "../../logic/runweight.js";
 import { clock } from "../../logic/fitness.js";
 import { zoomable, xWindow, isZoomed } from "../../core/zoom.js";
+import { canEdit } from "../../core/owner.js";
 import { $, esc, iso, parse, dayNum, fmt } from "../../core/util.js";
 
 const short = (s) => fmt(s, { day: "numeric", month: "short" });
@@ -83,6 +84,7 @@ export function initFitDetail(opts) {
   });
   $("fdAge").addEventListener("submit", async (ev) => {
     ev.preventDefault();
+    if (!canEdit(pid)) return;
     const born = $("fdBornIn").value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(born) || born > iso(new Date())) { $("fdBornMsg").textContent = "Pick a birth date in the past."; return; }
     editingBorn = false;
@@ -113,6 +115,8 @@ function drawPick() {
 function drawAge() {
   const p = people().find((x) => x.id === pid);
   if (!p) return;
+  // Only they set their own birth date; the other person just sees it.
+  if (!canEdit(pid)) { $("fdAge").innerHTML = p.born ? `<p class="note">Age on each run is from ${esc(p.name)}'s birth date, ${esc(long(p.born))}.</p>` : ""; return; }
   if (!editingBorn && p.born) {
     $("fdAge").innerHTML = `<p class="note">Age on each run is from ${esc(p.name)}'s birth date, ${esc(long(p.born))}. <button type="button" class="link" id="fdBornEdit">Change</button></p>`;
     return;

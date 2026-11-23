@@ -125,6 +125,9 @@ body:has(#app:not([hidden])) .theme.corner { display: none }
 .lbl.me { display: flex; align-items: center; gap: 8px; font-weight: 400; color: var(--muted) }
 .lbl.me .seg { min-width: 170px }
 .lbl.me .seg label { padding: 6px 12px; font-size: 14px }
+/* The other person's things: shown, but only they can change them (core/owner.js). */
+.rotag { font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap }
+.viewonly { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); font-size: 14px; line-height: 1.4 }
 .eyebrow { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
 .tag { justify-self: start; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--muted) }
 .tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c) }

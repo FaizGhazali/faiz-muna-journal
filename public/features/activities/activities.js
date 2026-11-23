@@ -12,6 +12,7 @@ import {
 } from "../../logic/suggest.js";
 import { journalView, DASH, DASH_LINE } from "../../core/journal.js";
 import { confirmDelete } from "../../core/confirm.js";
+import { canEdit, viewOnly } from "../../core/owner.js";
 import { $, esc, iso, parse, dayNum, addDays, today, lastUsed } from "../../core/util.js";
 
 const fmt = (s) => parse(s).toLocaleDateString(undefined, { day: "numeric", month: "short" });
@@ -64,6 +65,8 @@ export function refresh() {
   if (editing && $("editor")) readEditor(); // keep unsaved typing when new data arrives
   if (!ps.some((p) => p.id === me)) me = ps.some((p) => p.id === store.get("journal-me")) ? store.get("journal-me") : ps[0].id;
   $("me").innerHTML = ps.map((p) => `<input type="radio" name="me" id="me-${p.id}" value="${p.id}"${p.id === me ? " checked" : ""}><label for="me-${p.id}">${esc(p.name)}</label>`).join("");
+  $("meRo").hidden = !ro(); // looking at the other person's journal: theirs to change, not yours
+  $("addForm").hidden = ro();
   if (!addTypeTouched && !$("addTitle").value.trim()) setAddType(lastType()); // an empty Add box starts on the last type
   showView();
   renderMove();
@@ -74,6 +77,8 @@ export function refresh() {
 
 // The person picked with "For" at the top (the mood card and page follow it too).
 export const currentPerson = () => me;
+// True while "For" is the other person: their next move, habits and list show, but only they can change them.
+const ro = () => !canEdit(me);
 
 // Habits and Next Moves per day for one person, for the mood page: { date: { habitsDone, habitsDue, habits, move } }.
 // "habits" = at least half of that day's due habits were ticked.
@@ -119,11 +124,13 @@ const update = (id, patch) => commit(() => updateDoc(doc(actsCol, id), { ...patc
 const replace = (id, body) => commit(() => setDoc(doc(actsCol, id), { ...body, updated: Date.now() }));
 // Note what was done or passed over. Returns a function that takes the note back (for Undo).
 function logMove(a, act) {
+  if (ro()) return async () => {};
   const ref = doc(movesCol), now = new Date();
   commit(() => setDoc(ref, { owner: me, item: a.id, type: a.type, act, date: iso(now), hour: now.getHours(), at: now.getTime() }));
   return () => commit(() => deleteDoc(ref));
 }
 function markHabit(id, state, date = today()) {
+  if (ro()) return Promise.resolve();
   const ref = doc(daysCol, `${me}_${date}`);
   const body = { owner: me, date, done: state === "done" ? arrayUnion(id) : arrayRemove(id), skipped: state === "skipped" ? arrayUnion(id) : arrayRemove(id), updated: Date.now() };
   return commit(() => setDoc(ref, body, { merge: true }));
@@ -184,11 +191,13 @@ function publishMoves() {
 function renderMove() {
   publishMoves();
   const m = currentMove(), el = $("next");
-  const msg = moveMsg ? `<p class="msg" role="status">${esc(moveMsg)}${undoFn ? ` <button type="button" class="link" data-mv="undo">Undo</button>` : ""}</p>` : `<p class="msg" role="status"></p>`;
+  const eyebrow = ro() ? `${esc(people().find((p) => p.id === me)?.name || "Their")}'s next move` : "Your next move";
+  const msg = ro() ? viewOnly(me, "next move") : moveMsg ? `<p class="msg" role="status">${esc(moveMsg)}${undoFn ? ` <button type="button" class="link" data-mv="undo">Undo</button>` : ""}</p>` : `<p class="msg" role="status"></p>`;
   if (!m) {
     const ideas = mine().filter((a) => a.status === "inbox").length;
-    el.innerHTML = `<p class="eyebrow">Your next move</p>
-      ${ideas
+    el.innerHTML = `<p class="eyebrow">${eyebrow}</p>
+      ${ro() ? `<h2>Nothing picked right now</h2>${ideas ? `<div class="actions"><a class="btn" href="#activities" data-mv="ideas">See ideas</a></div>` : ""}`
+        : ideas
         ? `<h2>Look through your ideas</h2><p class="detail">You have ${ideas} idea${ideas > 1 ? "s" : ""} waiting. Start the one that feels right.</p>
            <div class="actions"><a class="btn primary" href="#activities" data-mv="ideas">See ideas</a></div>`
         : `<h2>Nothing planned. Go somewhere new.</h2><p class="detail">Take a short walk or visit a café you haven't tried. Or add something you'd like to do.</p>
@@ -198,20 +207,21 @@ function renderMove() {
   }
   const { a, why } = m, t = TYPES[a.type], { detail, minutes } = describe(a), url = safeUrl(a.url);
   const doneLabel = { skill: "Did it", habit: "Done", explore: "Been there", cook: "Cooked it", task: "Done" }[a.type];
-  el.innerHTML = `<p class="eyebrow">Your next move</p>
+  el.innerHTML = `<p class="eyebrow">${eyebrow}</p>
     <span class="tag" style="--c:var(${t.color})">${t.label}</span>
     <h2>${esc(a.title)}</h2>
     <p class="detail">${esc(detail)}${url ? ` <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Recipe</a>` : ""}</p>
     <p class="meta">${[minutes ? `About ${minutes} min` : "", why].filter(Boolean).map(esc).join(" · ")}</p>
-    <div class="actions">
+    ${ro() ? "" : `<div class="actions">
       <button type="button" class="primary" data-mv="done">${doneLabel}</button>
       <button type="button" data-mv="later">Not now</button>
       <button type="button" data-mv="another">Suggest another</button>
-    </div>
+    </div>`}
     ${msg}`;
 }
 
 async function moveAction(act) {
+  if (ro()) return;
   const m = currentMove();
   if (act === "undo") { const f = undoFn; undoFn = null; moveMsg = ""; if (f) await f(); if (undoId) remember(undoId); refresh(); return; }
   if (!m) return;
@@ -266,9 +276,9 @@ function renderHabits() {
   $("habits").innerHTML = `<div class="hhead"><p class="eyebrow">Daily habits</p>${live.length ? `<span class="count">${done}/${live.length} done</span>` : ""}</div>
     ${hs.length ? `<ul class="checks">${hs.map((h) => {
       const s = habitState(h, L, d);
-      return `<li${s === "skipped" ? ' class="skipped"' : ""}><label><input type="checkbox" data-habit="${esc(h.id)}"${s === "done" ? " checked" : ""}${s === "skipped" ? " disabled" : ""}><span>${esc(h.title)}${s === "skipped" ? " <small>skipped today</small>" : ""}</span></label></li>`;
-    }).join("")}</ul>`
-    : `<p class="note">No habits yet. <a href="#activities" data-mv="habits">Add one</a>, like "Drink 2.5L water".</p>`}`;
+      return `<li${s === "skipped" ? ' class="skipped"' : ""}><label><input type="checkbox" data-habit="${esc(h.id)}"${s === "done" ? " checked" : ""}${s === "skipped" || ro() ? " disabled" : ""}><span>${esc(h.title)}${s === "skipped" ? " <small>skipped today</small>" : ""}</span></label></li>`;
+    }).join("")}</ul>${ro() ? viewOnly(me, "habits") : ""}`
+    : ro() ? `<p class="note">No habits yet.</p>` : `<p class="note">No habits yet. <a href="#activities" data-mv="habits">Add one</a>, like "Drink 2.5L water".</p>`}`;
 }
 
 // ---------- Activities page ----------
@@ -286,7 +296,7 @@ function renderList() {
     inbox: "No ideas waiting. New things you add land here first, so nothing becomes a commitment until you start it.",
     active: "Nothing active. Start something from Ideas.", paused: "Nothing paused.", done: "Nothing finished yet.",
   }[tab];
-  $("list").innerHTML = rows.length ? rows.map((a) => a.id === editing ? editorHtml() : rowHtml(a)).join("") : `<p class="note">${typeFilter ? "Nothing of this type here." : empty}</p>`;
+  $("list").innerHTML = (ro() ? viewOnly(me, "activities") : "") + (rows.length ? rows.map((a) => a.id === editing ? editorHtml() : rowHtml(a)).join("") : `<p class="note">${typeFilter ? "Nothing of this type here." : empty}</p>`);
 }
 
 function metaOf(a) {
@@ -320,8 +330,9 @@ function metaOf(a) {
 
 function rowHtml(a) {
   const t = TYPES[a.type], id = esc(a.id), b = (act, label, cls = "") => `<button type="button" class="mini ${cls}" data-act="${act}" data-id="${id}">${label}</button>`;
-  let btns;
-  if (a.status === "inbox") btns = b("start", "Start", "go") + b("edit", "Edit") + b("archive", "Archive");
+  let btns = ""; // the other person's: nothing to press
+  if (!canEdit(a.owner)) btns = "";
+  else if (a.status === "inbox") btns = b("start", "Start", "go") + b("edit", "Edit") + b("archive", "Archive");
   else if (a.status === "active") btns = (a.type === "habit" && isScheduled(a, today()) ? (habitState(a, logs(), today()) === "skipped" ? b("unskip", "Unskip") : b("skip", "Skip today")) : "") + b("edit", "Edit") + b("pause", "Pause");
   else if (a.status === "paused") btns = b("resume", "Resume", "go") + b("edit", "Edit");
   else btns = b(a.status === "archived" ? "restore-idea" : "resume", a.status === "archived" ? "Back to ideas" : "Do again") + b("del", "Delete");
@@ -385,6 +396,7 @@ function readEditor() {
 }
 
 async function saveEditor() {
+  if (ro()) return;
   readEditor();
   const msg = $("edMsg");
   if (!draft.title) { msg.textContent = "Give it a title."; return; }
@@ -415,6 +427,7 @@ function setAddType(t) {
 }
 async function addActivity(ev) {
   ev.preventDefault();
+  if (ro()) return;
   const title = $("addTitle").value.trim(), type = $("addType").value;
   if (!title) { $("addMsg").textContent = "Type what you'd like to add first."; return; }
   if (!type) { $("addMsg").textContent = "Pick what kind it is: skill, task, explore, cooking or habit."; $("addType").focus(); return; }
@@ -426,6 +439,7 @@ async function addActivity(ev) {
 }
 
 async function listAction(act, id) {
+  if (ro()) return;
   const a = acts.find((x) => x.id === id);
   if (act === "edit") { editing = id; draft = structuredClone(a); draft.steps ||= []; renderList(); $("ed-title")?.focus(); return; }
   if (act === "ed-cancel") { editing = draft = null; renderList(); return; }

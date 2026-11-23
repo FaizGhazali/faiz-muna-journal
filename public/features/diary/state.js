@@ -1,6 +1,7 @@
 // Dearly's shared state: what the diary modules (dashboard, reading view, editor, writer, settings) all read.
 // ES module imports can't be reassigned, so anything a module changes lives on the one `S` object.
 import { PAGE } from "../../logic/diary.js";
+import { canEdit } from "../../core/owner.js";
 
 // Per-device settings, stored as JSON (journal-ai-*, journal-paper, drafts).
 export const store = {
@@ -26,6 +27,8 @@ export const S = {
 };
 
 export const pid = () => S.me();
+// Looking at the other person's diary: read it, but only they can write, change or delete (core/owner.js).
+export const ro = () => !canEdit(pid());
 export const person = () => S.people().find((p) => p.id === pid());
 export const mine = () => S.list.filter((e) => e.person === pid());
 export const find = (id) => S.list.find((e) => e.id === id);

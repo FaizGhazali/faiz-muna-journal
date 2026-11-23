@@ -3,6 +3,7 @@
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where, writeBatch } from "../../core/fs.js";
 import { $, esc, today, addDays } from "../../core/util.js";
 import { confirmDelete } from "../../core/confirm.js";
+import { canEdit, viewOnly } from "../../core/owner.js";
 import {
   SYSTEM_CATEGORIES, PRESETS, toSen, rm, shortDate, norm, categorise, cycleOf, lastStatement, cycleView, computeRebate,
   manualTxn, payWarning, warningText, tierLabel, spendByCat, spendTotal, ruleMatches,
@@ -42,7 +43,10 @@ let edit = null;
 const FLASH_MS = 1800;
 let flashed = null; // { id, at }
 
-const who = () => (people().some((p) => p.id === f.who) ? f.who : me());
+// Each person logs and fixes only their own spending (core/owner.js); older items with no spentBy are anyone's.
+const who = () => (people().some((p) => p.id === f.who) && canEdit(f.who) ? f.who : me());
+const own = (t) => !t.spentBy || canEdit(t.spentBy);
+const whoSeg = (name, sel, idp) => { const ps = people().filter((p) => canEdit(p.id)); return ps.length < 2 ? "" : `<div class="lbl mwho"><span>${name}</span><div class="seg">${ps.map((p) => `<input type="radio" name="${idp}Who" id="${idp}w-${p.id}" value="${p.id}"${p.id === sel ? " checked" : ""}><label for="${idp}w-${p.id}">${esc(p.name)}</label>`).join("")}</div></div>`; };
 const live = () => accounts.filter((a) => a.active !== false).sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
 const acct = () => live().find((a) => a.id === f.account) ?? live().find((a) => a.id === store.get(ACCT_KEY, "")) ?? live()[0] ?? null;
 const personName = (id) => people().find((p) => p.id === id)?.name ?? "";
@@ -104,7 +108,7 @@ function renderAdd() {
     host.innerHTML = `
       <div class="mhead"><h2 id="ledgerAddTitle">${pay ? "Log a card payment" : f.type === "refund" ? "Log a refund" : "Add spending"}</h2>
         <label class="mealdate">Day<input type="date" id="lgDate" value="${esc(f.date)}" max="${today()}"></label></div>
-      <div class="lbl mwho"><span>${pay ? "Paid by" : "Spent by"}</span><div class="seg">${people().map((p) => `<input type="radio" name="lgWho" id="lgw-${p.id}" value="${p.id}"${p.id === who() ? " checked" : ""}><label for="lgw-${p.id}">${esc(p.name)}</label>`).join("")}</div></div>
+      ${whoSeg(pay ? "Paid by" : "Spent by", who(), "lg")}
       <div class="chips" role="group" aria-label="Kind">${Object.entries(KINDS).map(([k, v]) => `<button type="button" class="chip" data-ltype="${k}" aria-pressed="${k === f.type}">${v}</button>`).join("")}</div>
       <div class="two">
         <label>Amount, RM<input type="text" id="lgAmt" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${esc(f.amount)}"></label>
@@ -317,7 +321,7 @@ function renderList() {
         <span class="lmain"><b>${esc(name)}${t.type !== "payment" && nicks[shopKey(t)] ? ` <span class="lsnick">🏷 ${esc(nicks[shopKey(t)])}</span>` : ""}</b><small>${shortDate(t.date)} · ${esc(personName(t.spentBy))} · ${esc(names[t.account] ?? "")}${t.type === "payment" ? "" : ` · ${esc(c.name)}`}${t.reconciled ? " · ✓ statement" : ""}</small></span>
         <span class="lamt${credit ? " cr" : ""}">${rm(Math.abs(t.amountSen))}${credit ? " CR" : ""}</span>
       </button>
-      ${open ? `<div class="ledit">
+      ${open && !own(t) ? `<div class="ledit">${t.raw && t.raw !== norm(name) ? `<p class="note">On the statement: ${esc(t.raw)}</p>` : ""}${viewOnly(t.spentBy, "spending")}</div>` : open ? `<div class="ledit">
         ${t.type === "payment" ? "" : `<label>Category<select data-lcat="${t.id}">${CATS.map((x) => `<option value="${x.id}"${x.id === t.cat ? " selected" : ""}>${x.icon} ${esc(x.name)}</option>`).join("")}</select></label>`}
         ${t.raw && t.raw !== norm(name) ? `<p class="note">On the statement: ${esc(t.raw)}</p>` : ""}
         <div class="actions"><button type="button" class="mini" data-ledit="${t.id}">✏️ Edit</button><button type="button" class="mini" data-ldel="${t.id}">Delete</button></div>
@@ -331,9 +335,9 @@ function renderList() {
 // ---------- fix an item in place ----------
 // "Edit" turns the row itself into a small form, so you never lose your place in the list.
 function startEdit(id) {
-  const t = txns.find((x) => x.id === id); if (!t) return;
+  const t = txns.find((x) => x.id === id); if (!t || !own(t)) return;
   const where = t.type === "payment" ? "" : t.merchant || t.raw || "";
-  edit = { id, where, who: t.spentBy, type: t.type, amount: (Math.abs(t.amountSen) / 100).toFixed(2), raw: where,
+  edit = { id, where, who: t.spentBy || who(), type: t.type, amount: (Math.abs(t.amountSen) / 100).toFixed(2), raw: where,
     cat: t.cat === "payment" ? "other" : t.cat || "other", account: t.account, date: t.date, msg: "" };
   openRow = id;
   renderList();
@@ -347,7 +351,7 @@ function editForm(t) {
   if (!cards.some((x) => x.id === e.account)) { const gone = accounts.find((x) => x.id === e.account); if (gone) cards.push(gone); }
   return `<form class="ledform" id="leForm" novalidate aria-label="Fix this item">
     <div class="ledtop"><b>Fix this item</b><span class="note">${esc(t.merchant || t.raw || cat(t.cat).name)} · ${rm(Math.abs(t.amountSen))}</span></div>
-    <div class="lbl mwho"><span>${pay ? "Paid by" : "Spent by"}</span><div class="seg">${people().map((p) => `<input type="radio" name="leWho" id="lew-${p.id}" value="${p.id}"${p.id === e.who ? " checked" : ""}><label for="lew-${p.id}">${esc(p.name)}</label>`).join("")}</div></div>
+    ${whoSeg(pay ? "Paid by" : "Spent by", e.who, "le")}
     ${e.type === "purchase" || e.type === "refund" ? `<div class="chips" role="group" aria-label="Kind">${["purchase", "refund"].map((k) => `<button type="button" class="chip" data-letype="${k}" aria-pressed="${k === e.type}">${KINDS[k]}</button>`).join("")}</div>` : ""}
     <div class="two">
       <label>Amount, RM<input type="text" id="leAmt" inputmode="decimal" autocomplete="off" value="${esc(e.amount)}"></label>
@@ -410,7 +414,7 @@ function editedTxn(old, t, sameWhere) {
 
 // Delete one item, after asking (safe-delete). A statement item comes back if that statement is imported again.
 async function removeTxn(id) {
-  const t = txns.find((x) => x.id === id); if (!t) return;
+  const t = txns.find((x) => x.id === id); if (!t || !own(t)) return;
   const name = t.merchant || t.raw || cat(t.cat).name;
   const ok = await confirmDelete({
     title: `Delete ${name}?`,
@@ -518,7 +522,7 @@ function wire() {
   list.addEventListener("change", async (ev) => {
     readEdit(ev.target);
     const id = ev.target.dataset.lcat; if (!id) return;
-    const t = txns.find((x) => x.id === id); if (!t) return;
+    const t = txns.find((x) => x.id === id); if (!t || !own(t)) return;
     await commit(() => setDoc(doc(db, "ledgerTxns", id), { cat: ev.target.value }, { merge: true }));
     makeOffer(t.raw || t.merchant, ev.target.value, "lgOffer");
   });

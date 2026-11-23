@@ -6,6 +6,7 @@ import { SLOTS, LEARN_AFTER, slotAt, portion, total, dayTotal, plateOf, rowFor, 
 import { money, SERVES_MAX } from "../../logic/stocky.js";
 import { offerWidget } from "../../shell/widget.js";
 import { confirmDelete } from "../../core/confirm.js";
+import { canEdit, viewOnly } from "../../core/owner.js";
 import { $, esc, iso, parse, addDays, today, lastUsed } from "../../core/util.js";
 import { currentJournal, setJournal } from "../../core/journal.js";
 
@@ -16,6 +17,8 @@ let foods = [], sets = [], meals = [], burns = {};
 // Who the meals are for: picked on the card, starting from the "For" switch at the top.
 let whoId = null;
 const who = () => (people().some((p) => p.id === whoId) ? whoId : me());
+// The other person's meals show, but only they log or delete them (core/owner.js).
+const ro = () => !canEdit(who());
 const CAL_DAYS = 14;
 let burnEdit = null; // the person whose watch burn is being typed
 // The plate being put together on the card.
@@ -63,12 +66,12 @@ export function refreshMeals() {
 // ---------- the card ----------
 function renderCard() {
   $("mealCard").innerHTML = `
-    <div class="mhead"><h2 id="mealTitle">Add a meal</h2>
+    <div class="mhead"><h2 id="mealTitle">${ro() ? `${esc(people().find((p) => p.id === who())?.name || "")}'s meals` : "Add a meal"}</h2>
       <label class="mealdate">Day<input type="date" id="mealDate" value="${esc(date)}" max="${today()}"></label></div>
     <div class="lbl mwho"><span>Who</span><div class="seg">${people().map((p) => `<input type="radio" name="mealWho" id="mw-${p.id}" value="${p.id}"${p.id === who() ? " checked" : ""}><label for="mw-${p.id}">${esc(p.name)}</label>`).join("")}</div></div>
-    <div class="chips" role="group" aria-label="Which meal">${Object.entries(SLOTS).map(([k, v]) => `<button type="button" class="chip" data-slot="${k}" aria-pressed="${k === slot}">${v}</button>`).join("")}</div>
+    ${ro() ? viewOnly(who(), "meals") : `<div class="chips" role="group" aria-label="Which meal">${Object.entries(SLOTS).map(([k, v]) => `<button type="button" class="chip" data-slot="${k}" aria-pressed="${k === slot}">${v}</button>`).join("")}</div>
     <div id="mealPicker"></div>
-    <div id="mealPlate"></div>
+    <div id="mealPlate"></div>`}
     <p class="note" id="mealMsg" role="status">${esc(cardMsg)}</p>
     <a class="btn more" href="#mealsets">Meal sets and foods →</a>`;
   renderPicker();
@@ -76,7 +79,7 @@ function renderCard() {
 }
 
 function renderPicker() {
-  const host = $("mealPicker"); if (!host) return;
+  const host = $("mealPicker"); if (!host || ro()) return;
   if (!foods.length) {
     host.innerHTML = `<div class="mempty"><p><b>Start with the foods you usually eat.</b></p><p class="note">Add each food once with its calories, carbs, protein and fat per 100 g. Then put them together into meal sets, like "Nasi + patin + sayur".</p><a class="btn primary" href="#mealsets" data-act="go-lib">Add your foods</a></div>`;
     return;
@@ -167,6 +170,7 @@ function pick(id) {
 function setMsg(t) { cardMsg = t; const el = $("mealMsg"); if (el) el.textContent = t; }
 
 async function logMeal() {
+  if (ro()) return;
   const items = logItems(rows);
   if (!items.length) { setMsg("Put the grams in for at least one food."); return; }
   if (rows.some((r) => !(r.g >= 0 && r.g <= 3000))) { setMsg("Grams go from 0 to 3000."); return; }
@@ -206,7 +210,7 @@ function renderDay() {
       return `<div class="mslot"><h3>${SLOTS[k]}</h3>${ms.map((m) => `<div class="mlog">
         <div><b>${esc(m.name)}</b><small>${esc((m.items || []).map((x) => `${x.name} ${x.g} g`).join(" · "))}</small></div>
         <span>${total(m.items || []).kcal} kcal</span>
-        <button type="button" class="mini" data-ask-meal="${esc(m.id)}">Delete</button>
+        ${canEdit(m.person) ? `<button type="button" class="mini" data-ask-meal="${esc(m.id)}">Delete</button>` : ""}
       </div>`).join("")}</div>`;
     }).join("") : `<p class="note">Nothing logged for this day yet.</p>`}`;
 }
@@ -355,7 +359,7 @@ function wire() {
   $("mealDay").addEventListener("click", async (ev) => {
     const b = ev.target.closest("button"); if (!b) return;
     if (b.dataset.askMeal) {
-      const id = b.dataset.askMeal, m = meals.find((x) => x.id === id); if (!m) return;
+      const id = b.dataset.askMeal, m = meals.find((x) => x.id === id); if (!m || !canEdit(m.person)) return;
       const ok = await confirmDelete({ title: `Delete ${m.name} from ${SLOTS[m.slot]?.toLowerCase() || "this meal"}?`, yes: "Delete meal",
         body: `<p>${total(m.items || []).kcal} kcal${(m.items || []).length ? ` (${esc(m.items.map((x) => x.name).join(", "))})` : ""} comes off ${esc(parse(m.date).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" }))}.</p>` });
       if (ok) await commit(() => deleteDoc(doc(mealsCol, id)));
@@ -492,7 +496,7 @@ function calHtml(p) {
         ? `<div class="addrow1"><input type="number" id="burnIn" inputmode="numeric" min="800" max="8000" placeholder="${now.burn.kcal}" value="${measured ? now.burn.kcal : ""}" aria-label="${esc(p.name)}, calories burned ${esc(label)}"><button type="button" class="primary" data-cal="save">Save</button><button type="button" data-cal="cancel">Cancel</button></div>
            <p class="note" id="burnMsg">The day's total burn from a watch or machine, active plus resting.</p>`
         : `<p class="note">Burn ${esc(label)}: <b class="ink">${now.burn.kcal.toLocaleString()} kcal</b> ${measured ? "from the watch" : "estimated from weight, height, age and runs"}. The range aims ${goalWord}.</p>
-           <div class="actions"><button type="button" class="mini" data-cal="edit">${measured ? "Change burn" : "Enter burn from watch"}</button>${measured ? `<button type="button" class="mini" data-cal="clear">Use the estimate</button>` : ""}</div>`}
+           ${canEdit(p.id) ? `<div class="actions"><button type="button" class="mini" data-cal="edit">${measured ? "Change burn" : "Enter burn from watch"}</button>${measured ? `<button type="button" class="mini" data-cal="clear">Use the estimate</button>` : ""}</div>` : ""}`}
     </div>
   `;
 }
@@ -528,7 +532,7 @@ function wireCalories() {
     }
     const v = ev.target.closest("[data-calview]");
     if (v) { calView = v.dataset.calview; try { localStorage.setItem("journal-calview", calView); } catch (_) {} refreshCalories(); return; }
-    const b = ev.target.closest("[data-cal]"); if (!b) return;
+    const b = ev.target.closest("[data-cal]"); if (!b || !canEdit(pid)) return;
     const act = b.dataset.cal, id = `${pid}_${date}`;
     if (act === "edit") { burnEdit = pid; refreshCalories(); $("burnIn")?.focus(); }
     if (act === "cancel") { burnEdit = null; refreshCalories(); }

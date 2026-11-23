@@ -4,6 +4,7 @@ import { fitnessSeries, perBeat, clock } from "../../logic/fitness.js";
 import { MOODS, isMood } from "../../logic/mood.js";
 import { PACE, WEEKLY_MINUTES, r1, bmiOf, range, statusOf } from "../../logic/bmi.js";
 import { drawWeight, drawFit } from "./weightcharts.js";
+import { canEdit } from "../../core/owner.js";
 import { $, esc, iso, today, fmt } from "../../core/util.js";
 
 let people = () => [], entries = () => [];
@@ -100,7 +101,7 @@ export function drawCharts() {
   });
 }
 
-// Every entry, newest day first, with Edit / Delete (handled by entryform.js).
+// Every entry, newest day first, with Edit / Delete on your own (handled by entryform.js).
 export function renderFeed() {
   const feed = $("feed"), list = entries();
   if (!list.length) { feed.innerHTML = `<p class="note">No entries yet. Save your first entry with the form.</p>`; return; }
@@ -114,7 +115,7 @@ function entryHtml(e) {
   if (e.run) facts.push(`${e.run.km} km run in ${clock(e.run.secs)}${e.run.hr ? `, ${e.run.hr} bpm` : ""}`);
   else if (typeof e.minutes === "number") facts.push(`${e.minutes} min exercise`);
   if (isMood(e.mood)) facts.push(`${facts.length ? "felt" : "Felt"} ${MOODS[e.mood].word.toLowerCase()}`);
-  const btns = `<button class="mini" data-act="edit" data-id="${esc(e.id)}">Edit</button><button class="mini" data-act="del" data-id="${esc(e.id)}">Delete</button>`;
+  const btns = canEdit(e.person) ? `<button class="mini" data-act="edit" data-id="${esc(e.id)}">Edit</button><button class="mini" data-act="del" data-id="${esc(e.id)}">Delete</button>` : "";
   return `<div class="entry"><div class="name">${esc(p.name)}</div>
     <div><div class="facts">${esc(facts.join(" · ") || "Note")}</div>${e.note ? `<p class="text">${esc(e.note)}</p>` : ""}</div>
     <div class="btns">${btns}</div></div>`;

@@ -7,6 +7,7 @@ import { doc, setDoc } from "../../core/fs.js";
 import { MOODS, isMood, quoteFor, moodMap, dayMoods, lastSeven, periods, boosters, yearGrid, moodMix, VIEWS, MIN_DAYS } from "../../logic/mood.js";
 import { reflections, pickReflection } from "../../logic/reflect.js";
 import { face } from "../../core/face.js";
+import { canEdit, viewOnly } from "../../core/owner.js";
 import { titleOf, bodyText, prettyDate, words } from "../../logic/diary.js";
 import { $, esc, iso, parse, addDays, today, fmt } from "../../core/util.js";
 
@@ -90,7 +91,7 @@ export function openDay(date) {
 
 function rate(date, v) {
   const pid = me();
-  if (!pid || !isMood(v) || date > today()) return;
+  if (!pid || !canEdit(pid) || !isMood(v) || date > today()) return; // each person rates only their own days
   commit(() => setDoc(doc(db, "entries", `${pid}_${date}`), { person: pid, date, mood: v, moodAt: Date.now() }, { merge: true }));
 }
 
@@ -150,8 +151,8 @@ function renderCard() {
   const week = lastSeven(map, y);
   $("moodCard").innerHTML = `<div class="hhead"><p class="eyebrow">Yesterday</p><span class="mdate">${esc(fmt(y, { weekday: "short", day: "numeric", month: "short" }))}</span></div>
     <div class="mnow">${face(v, 46)}<div><strong${v ? "" : ' class="unrated"'}>${v ? MOODS[v].label : "Not rated yet"}</strong><small>${esc(bits.join(" · ") || "Nothing logged")}</small></div></div>
-    <p class="mquote">“${esc(quoteFor(v, today(), pid))}”</p>
-    <div class="mpick"><p class="mask">${m?.rating ? "Change your answer" : v ? "Add your own rating" : "How was yesterday?"}</p>${faces(m?.rating ?? null, "data-mood")}</div>
+    ${v || canEdit(pid) ? `<p class="mquote">“${esc(quoteFor(v, today(), pid))}”</p>` : ""}
+    ${canEdit(pid) ? `<div class="mpick"><p class="mask">${m?.rating ? "Change your answer" : v ? "Add your own rating" : "How was yesterday?"}</p>${faces(m?.rating ?? null, "data-mood")}</div>` : viewOnly(pid, "mood")}
     <div class="mfoot"><span>${week == null ? "" : `7-day average ${one(week)}`}</span><a href="#mood">Mood history →</a></div>`;
 }
 
@@ -241,7 +242,7 @@ function renderDay(pid, map, t) {
       </div>` : ""}
       ${did.length ? `<ul class="fdid">${did.map(([i, s]) => `<li><span aria-hidden="true">${i}</span>${esc(s)}</li>`).join("")}</ul>` : ""}
       ${!pages.length && !did.length ? `<p class="note">Nothing written or logged this day.</p>` : ""}
-      <p class="mask">${m?.rating ? "Your rating for the day" : "Rate this day"}</p>${faces(m?.rating ?? null, "data-rate")}
+      ${canEdit(pid) ? `<p class="mask">${m?.rating ? "Your rating for the day" : "Rate this day"}</p>${faces(m?.rating ?? null, "data-rate")}` : viewOnly(pid, "mood")}
     </div>`;
   if (shownDay !== d && shownDay !== null && !calm()) box.firstElementChild.animate([{ opacity: 0, transform: "perspective(700px) rotateX(-70deg)" }, { opacity: 1, transform: "none" }], { duration: 380, easing: "cubic-bezier(.2,.8,.2,1)" });
   shownDay = d;

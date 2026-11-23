@@ -30,6 +30,7 @@ import { initGuides } from "./shell/tour.js";
 import { initWidget } from "./shell/widget.js";
 import { initDiary, startDiary, stopDiary, refreshDiary, diaryList } from "./features/diary/diaryui.js";
 import { initLedger, startLedger, stopLedger, refreshLedger, refreshLedgerParts } from "./features/ledger/ledgerui.js";
+import { setSelf, selfId } from "./core/owner.js";
 import { $, today } from "./core/util.js";
 import { toast } from "./core/toast.js";
 
@@ -66,6 +67,7 @@ if (DEMO) {
 // The two people (config/people) and every entry (entries/{person}_{date}), kept live while signed in.
 let PEOPLE = [], entries = [], unsubs = [];
 const people = () => PEOPLE, allEntries = () => entries;
+const nameOf = (pid) => PEOPLE.find((p) => p.id === pid)?.name || "";
 const entriesCol = collection(db, "entries");
 
 // Every save goes through here. Offline, Firestore keeps a write and sends it later, so its promise waits:
@@ -89,8 +91,10 @@ initSetup({ db, entriesCol });
 initActivities({ db, people, commit, exercisedToday, onChange: () => refreshMood() });
 initBackup({ db });
 initMeals({ db, people, me: currentPerson, entries: allEntries, commit, stock: { of: stockOf, list: listFood, items: priceItems, cost: costOf, changed: () => refreshStocky() } });
-initStocky({ db, people, me: currentPerson, commit, mealData, pricesChanged: refreshMealCost });
-initLedger({ db, people, me: currentPerson, commit });
+// Shared journals stamp who did it (a buy, a bill ticked, new spending): the one signed in, not who "For" shows.
+const doer = () => selfId() ?? currentPerson();
+initStocky({ db, people, me: doer, commit, mealData, pricesChanged: refreshMealCost });
+initLedger({ db, people, me: doer, commit });
 initWheel();
 initCollapse();
 initZoom();
@@ -113,6 +117,7 @@ function startApp() {
       buildSetup(); show("setup"); return;
     }
     PEOPLE = snap.data().people;
+    if (DEMO) setSelf(PEOPLE[0]?.id, nameOf); // the demo plays the first person, so the other one shows view-only
     $("heading").textContent = `${PEOPLE.map((p) => p.name).join(" & ")}'s Journal`;
     document.title = DEMO ? "Demo – Our Journal" : $("heading").textContent;
     setPeople(PEOPLE);
@@ -151,6 +156,7 @@ if (DEMO) {
     const pid = personOf(user.email);
     if (!pid) { await signOut(auth); $("loginMsg").textContent = "You each have your own password now. Enter yours."; return; }
     try { localStorage.setItem("journal-me", JSON.stringify(pid)); } catch (_) {}
+    setSelf(pid, nameOf); // they change only their own things (core/owner.js)
     show("loading");
     if (await mustChoosePassword(db, pid)) {
       let name = "";

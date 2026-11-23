@@ -8,7 +8,7 @@
 // Data: diary/{id} (see diary.js), diaryPhotos/{id} -> { entry, person, data, w, h }, diaryStyle/{person} -> { on, since? }.
 import { collection, onSnapshot } from "../../core/fs.js";
 import { $ } from "../../core/util.js";
-import { S, pid, parseRoute } from "./state.js";
+import { S, pid, ro, parseRoute } from "./state.js";
 import { purge } from "./data.js";
 import * as dashboard from "./dashboard.js";
 import * as read from "./read.js";
@@ -51,7 +51,10 @@ export const refreshDiary = () => render(true);
 export function render(data = false) {
   const view = $("diary");
   if (!view || view.hidden || !S.people().length) return;
-  const r = parseRoute(), key = `${r.page}/${r.id || ""}/${pid()}`;
+  let r = parseRoute();
+  // The other person's diary is read-only: writing, editing and their AI settings go back to the memories.
+  if (ro() && ["write", "edit", "ai"].includes(r.page)) { history.replaceState(null, "", "#diary"); r = parseRoute(); }
+  const key = `${r.page}/${r.id || ""}/${pid()}`;
   // The editor is drawn once per opening, so new data never wipes what is being typed.
   if (data && (r.page === "write" || r.page === "edit") && S.painted === key && S.ed) return;
   if (S.painted !== key) { S.aboutMsg = ""; S.modelUi = ""; if (S.flash && S.flash.id !== r.id) S.flash = null; if (r.page !== "dash") scrollTo({ top: 0 }); }

@@ -7,6 +7,7 @@ import { readCoros, parseCoros } from "./coros.js";
 import { isMood } from "../../logic/mood.js";
 import { r1 } from "../../logic/bmi.js";
 import { confirmDelete } from "../../core/confirm.js";
+import { canEdit } from "../../core/owner.js";
 import { $, esc, parse, today, fmt } from "../../core/util.js";
 
 let entriesCol, people = () => [], entries = () => [], commit;
@@ -23,8 +24,11 @@ export function initEntryForm(opts) {
   $("feed").addEventListener("click", feedClick);
 }
 
-// The person radio buttons, once the people are known.
-export function setPeople(list) {
+// The person radio buttons, once the people are known. Each person writes only their own entries, so once
+// someone is signed in it's just them and the Who row hides.
+export function setPeople(all) {
+  const list = all.filter((p) => canEdit(p.id));
+  $("who").closest(".lbl").hidden = list.length < 2;
   $("who").innerHTML = list.map((p, i) => `<input type="radio" name="person" id="person-${p.id}" value="${p.id}"${i ? "" : " checked"}><label for="person-${p.id}">${esc(p.name)}</label>`).join("");
   resetForm();
 }
@@ -93,7 +97,7 @@ export function resetForm() {
   $("cancelEdit").hidden = true;
 }
 function startEdit(id) {
-  const e = entries().find((x) => x.id === id); if (!e) return;
+  const e = entries().find((x) => x.id === id); if (!e || !canEdit(e.person)) return;
   editingId = id;
   $("person-" + e.person).checked = true;
   $("date").value = e.date;
@@ -114,6 +118,7 @@ async function save(ev) {
   const ws = $("weight").value.trim(), note = $("note").value.trim();
   const weight = ws === "" ? null : r1(Number(ws));
   const typed = $("runFields").hidden ? {} : readRun();
+  if (!person || !canEdit(person)) { msg.textContent = "You can only write your own entries."; return; }
   if (!date) { msg.textContent = "Pick a date for this entry."; return; }
   if (weight !== null && !(weight >= 30 && weight <= 250)) { msg.textContent = "Enter a weight between 30 and 250 kg."; return; }
   if (typed.error) { msg.textContent = typed.error; return; }
@@ -152,7 +157,7 @@ async function feedClick(ev) {
   const act = b.dataset.act, id = b.dataset.id;
   if (act === "edit") startEdit(id);
   if (act === "del") {
-    const e = entries().find((x) => x.id === id); if (!e) return;
+    const e = entries().find((x) => x.id === id); if (!e || !canEdit(e.person)) return;
     const p = people().find((x) => x.id === e.person);
     const what = [typeof e.weight === "number" && "weight", (e.run || typeof e.minutes === "number") && "exercise", e.mood && "mood", e.note && "note"].filter(Boolean);
     const ok = await confirmDelete({ title: `Delete ${p ? `${p.name}'s` : "this"} entry for ${parse(e.date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}?`, yes: "Delete entry",
