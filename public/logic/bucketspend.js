@@ -2,19 +2,25 @@
 // items by month, by shop and by category, a search, and one shop's whole history.
 // Pure: no Firebase, no DOM. Tests: tests/bucketspend.test.mjs.
 import { norm, catName } from "./ledger.js";
-import { txnBucket, monthOf, addMonths, monthsBetween } from "./moneyplan.js";
+import { txnBucket, monthOf, addMonths, monthsBetween, shopName, shopKey } from "./moneyplan.js";
+
+export { shopName, shopKey };
 
 export const ALL = "all"; // the page for every bucket at once
 export const TRACK_MONTHS = 12; // months in a shop's bar chart
 
-// A shop's name as shown, and the key that joins its spellings ("Setel", "SETEL ").
-export const shopName = (t) => String(t.merchant || t.raw || catName(t.cat)).trim();
-export const shopKey = (t) => norm(shopName(t));
 
 // Does an item match the search? Shop name, statement text or category name, ignoring case and spaces.
 export function matches(t, q) {
   const k = norm(q);
   return !k || [shopName(t), t.raw, catName(t.cat)].some((s) => norm(s).includes(k));
+}
+
+// The category most of a shop's items have (ties: the newest item's), for its Edit popup.
+export function usualCat(items) {
+  const n = {};
+  for (const t of items) n[t.cat] = (n[t.cat] ?? 0) + 1;
+  return Object.keys(n).sort((a, b) => n[b] - n[a] || (a === items[0]?.cat ? -1 : b === items[0]?.cat ? 1 : 0))[0] ?? "other";
 }
 
 // The bucket's items, newest first. month null = every month; person null = both.

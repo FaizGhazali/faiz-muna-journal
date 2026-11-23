@@ -51,7 +51,7 @@ export function initLedger(opts) {
   initTrends(shared);
   initRules(shared);
   initPlan({ ...shared, me });
-  initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), offer: makeOffer, paintOffer });
+  initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases });
   $("me").addEventListener("change", () => { f.who = null; formKey = ""; refreshLedger(); });
   addEventListener("journalchange", () => refreshLedgerParts());
 }

@@ -2,10 +2,11 @@
 // what's been paid this month, what's left to spend, and the next 12 months.
 // Pure: no Firebase, no DOM. Tests: tests/moneyplan.test.mjs.
 import { pad, dayNum } from "../core/util.js";
-import { isSpend } from "./ledger.js";
+import { isSpend, norm, catName } from "./ledger.js";
 //
 // Firestore (money in whole sen, months "YYYY-MM"):
-//   ledgerPlan/main           { incomeSen, buckets: [{ id, name, pct, about? }], created, updated }   shared by both
+//   ledgerPlan/main           { incomeSen, buckets: [{ id, name, pct, about? }], shopBuckets?: { <shop key>: bucket id }, created, updated }   shared by both
+//     shopBuckets: a shop moved to another bucket by hand (the spending page's Edit); it covers new purchases too.
 //   ledgerCommitments/{id}    { name, bucket, amountSen, dueDay (1-31), startMonth, endMonth? (final payment), notes?, created, updated }
 //   ledgerPaid/{commit}_{YYYY-MM} { commitment, month, date, amountSen, by, source: typed|statement, at }
 //     "typed" = ticked by hand. A statement import may later set source "statement" (checked).
@@ -91,9 +92,23 @@ export function spentByBucket(txns, plan, m) {
 export const catBucket = (cat, plan) => bucketFor(plan, CAT_BUCKET[cat] ?? "essentials");
 // Can this item be counted in a bucket at all? Not card payments, rebate credits or PayLater instalments (bills here).
 export const inBuckets = (t) => isSpend(t) && !COMMITTED_CATS.includes(t.cat);
-// The bucket a Ledger item counts in, or null when it isn't day-to-day spending. An item's own
-// `bucket` (picked by hand on the spending page) wins while that bucket is still in the plan.
-export const txnBucket = (t, plan) => (!inBuckets(t) ? null : t.bucket && bucketIds(plan).includes(t.bucket) ? t.bucket : catBucket(t.cat, plan));
+// A shop's name as shown, and the key that joins its spellings ("Setel", "SETEL ").
+export const shopName = (t) => String(t.merchant || t.raw || catName(t.cat)).trim();
+export const shopKey = (t) => norm(shopName(t));
+// The bucket a Ledger item counts in, or null when it isn't day-to-day spending. First the item's own
+// `bucket` (older hand fixes), then the plan's rule for its shop, then its category; a picked bucket
+// counts only while it's still in the plan.
+export function txnBucket(t, plan) {
+  if (!inBuckets(t)) return null;
+  const ids = bucketIds(plan), shop = plan?.shopBuckets?.[shopKey(t)];
+  return t.bucket && ids.includes(t.bucket) ? t.bucket : shop && ids.includes(shop) ? shop : catBucket(t.cat, plan);
+}
+// The plan's shop rules after putting shop `key` in `bucket`. No rule is kept when that's where its category puts it anyway.
+export function shopBucketsWith(plan, key, bucket, cat) {
+  const out = { ...(plan?.shopBuckets ?? {}) };
+  if (bucket === catBucket(cat, plan)) delete out[key]; else out[key] = bucket;
+  return out;
+}
 
 // Everything the plan dashboard shows for the month of `day`.
 export function planView({ plan, commitments = [], paid = {}, txns = [], day }) {

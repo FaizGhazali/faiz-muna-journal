@@ -1341,10 +1341,12 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 .lsbar i { align-self: end; display: block; background: var(--accent); border-radius: 4px 4px 0 0; opacity: .55 }
 .lsbar.now i { opacity: 1 }
 .lsbar small { font-size: 11px; color: var(--muted) }
-.lsfix { display: grid; gap: 10px; padding: 4px 0 12px }
-.lsfix .lbl { display: grid; gap: 6px }
-.lsmsg { display: grid; gap: 8px; justify-items: start; padding: 10px 12px; border-radius: 10px; background: var(--good-soft) }
-.lsmsg p { margin: 0 }
+.lsnamerow { display: flex; align-items: center; justify-content: space-between; gap: 10px }
+.lsnamerow .mini { flex: none }
+.lsmsg { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--good-soft) }
+#lsSheet .mhead { align-items: center }
+#lsSheet .lsx { margin-left: auto }
+#lsSheet .lbl { display: grid; gap: 6px }
 .lpleft { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 20px; border-top: 1px solid var(--line); padding-top: 12px }
 .lpleft div { display: grid }
 .lpleft div:last-child { text-align: right }

@@ -1,8 +1,8 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_BUCKETS, txnBucket, spentByBucket, catBucket } from "../public/logic/moneyplan.js";
-import { ALL, bucketItems, byMonth, byShop, byCat, totals, shopTrack, monthsWith, matches, shopKey } from "../public/logic/bucketspend.js";
+import { DEFAULT_BUCKETS, txnBucket, spentByBucket, catBucket, shopBucketsWith } from "../public/logic/moneyplan.js";
+import { ALL, bucketItems, byMonth, byShop, byCat, totals, shopTrack, monthsWith, matches, shopKey, usualCat } from "../public/logic/bucketspend.js";
 
 const PLAN = { incomeSen: 400000, buckets: DEFAULT_BUCKETS };
 const T = (date, cat, sen, merchant, extra = {}) => ({ date, cat, amountSen: sen, merchant, type: sen < 0 ? "refund" : "purchase", spentBy: "p1", ...extra });
@@ -81,4 +81,25 @@ test("an item's own bucket wins over its category, until that bucket leaves the 
   assert.deepEqual(spentByBucket([t], PLAN, "2026-11"), { fun: 8000 });
   assert.equal(bucketItems([t], PLAN, "essentials").length, 0);
   assert.equal(catBucket("dining", PLAN), "fun");
+});
+
+test("a shop rule on the plan moves every item from that shop, new ones too; the item's own pick still wins", () => {
+  const plan = { ...PLAN, shopBuckets: { ECONSAVE: "fun" } };
+  assert.equal(txnBucket(TX[0], plan), "fun");
+  assert.equal(txnBucket(TX[1], plan), "fun"); // "ECONSAVE " spelling
+  assert.equal(txnBucket(T("2027-01-02", "groceries", 100, "Econsave"), plan), "fun");
+  assert.equal(txnBucket({ ...TX[0], bucket: "essentials" }, plan), "essentials");
+  assert.equal(txnBucket(TX[0], { ...plan, shopBuckets: { ECONSAVE: "gone" } }), "essentials");
+  assert.equal(bucketItems(TX, plan, "essentials").length, 1); // only Setel is left
+});
+
+test("shopBucketsWith keeps a rule only when it differs from what the category gives", () => {
+  assert.deepEqual(shopBucketsWith(PLAN, "AG ARTISAN", "fun", "groceries"), { "AG ARTISAN": "fun" });
+  assert.deepEqual(shopBucketsWith({ ...PLAN, shopBuckets: { "AG ARTISAN": "fun", X: "fun" } }, "AG ARTISAN", "fun", "dining"), { X: "fun" });
+});
+
+test("usualCat picks the category most of a shop's items have", () => {
+  assert.equal(usualCat([T("2026-11-02", "dining", 1, "A"), T("2026-11-01", "groceries", 1, "A"), T("2026-10-01", "groceries", 1, "A")]), "groceries");
+  assert.equal(usualCat([T("2026-11-02", "dining", 1, "A"), T("2026-11-01", "groceries", 1, "A")]), "dining");
+  assert.equal(usualCat([]), "other");
 });

@@ -332,7 +332,7 @@ try {
   <section class="info" aria-labelledby="l-new">
     <h2 id="l-new">What's new</h2>
     <ol class="changes">
-      <li><time datetime="2026-11-23">23 Nov 2026</time> Tap a bucket on the money plan (Essentials, Fun…) to see what it went on: shops and categories for one month or all months, for either of you or both, and a search. Tap a shop to see all you've ever spent there, a usual month and visit, and the last 12 months. Something in the wrong bucket? Tap it and pick the right one, and move the rest from that shop in one tap.</li>
+      <li><time datetime="2026-11-23">23 Nov 2026</time> Tap a bucket on the money plan (Essentials, Fun…) to see what it went on: shops and categories for one month or all months, for either of you or both, and a search. Tap a shop to see all you've ever spent there, a usual month and visit, and the last 12 months. Shop in the wrong bucket? Open it, tap Edit, and pick the right bucket or category: it fixes every purchase there, and new ones too.</li>
       <li><time datetime="2026-11-23">23 Nov 2026</time> Ledger money plan: split your income into buckets (55 · 5 · 10 · 15 · 15 to start, yours to change), add your monthly bills and instalments, and see what you can still spend this month and per day. Tick bills as they're paid, watch instalments count down, and see the next 12 months. Your card rebate is one small tile at the top.</li>
       <li><time datetime="2026-11-23">23 Nov 2026</time> Ledger can bring in your past spending from a spreadsheet: copy your tracker tab and paste it. It finds the Date, Merchant and Amount columns, skips anything already there, and adds the rest.</li>
       <li><time datetime="2026-11-23">23 Nov 2026</time> Ledger trends and rules: see each month's spending by category, this statement against the last one and your top shops, for either of you or both, on one card or all. Edit any card's rebate rules (tiers, rates, shared caps, what never earns) and see what this statement would earn before you save.</li>
@@ -480,6 +480,7 @@ try {
   <div class="view diary" id="diary" hidden aria-label="Dearly, your diary"></div>
   <div class="view stocky" id="stocky" hidden aria-label="Stocky, your groceries"></div>
   <dialog class="gsheet sk-sheet" id="skSheet" aria-labelledby="skSheetTitle"></dialog>
+  <dialog class="gsheet" id="lsSheet" aria-labelledby="lsSheetTitle"></dialog>
   <div class="view" id="mealsets" hidden>
     <div class="fdtop"><button type="button" id="setsBack">← Back</button></div>
     <section class="panel mlib" id="mealLib" aria-label="Meal sets and foods"></section>
