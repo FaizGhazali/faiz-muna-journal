@@ -33,11 +33,14 @@ let accounts = [], programs = [], aliases = [], cycles = {}, txns = [], rebates 
 // "Always categorise" offer after a category is changed by hand: { raw, cat, pattern, host, msg }.
 let offer = null, openRow = null;
 // The add form. catAuto: the category came from a merchant rule (it follows the shop until picked by hand).
-const blank = (keep = {}) => ({ who: keep.who ?? null, type: "purchase", amount: "", raw: "", cat: "other", catAuto: true, account: keep.account ?? null, date: today() });
-const f = blank();
+const f = { who: null, type: "purchase", amount: "", raw: "", cat: "other", catAuto: true, account: null, date: today() };
 let msg = "", cardForm = false, cardMsg = "", formKey = "", shown = RECENT;
-// While fixing an item from Recent, the same form edits it: { id, where } (where = the Where text it opened with).
-let editing = null;
+// The Recent item being fixed in place (its own row turns into the form): { id, where, who, type, amount, raw,
+// cat, account, date, msg }. where = the Where text it opened with. While it's open the list isn't redrawn.
+let edit = null;
+// The row just saved glows for FLASH_MS; kept here so a live redraw carries the glow on instead of cutting it.
+const FLASH_MS = 1800;
+let flashed = null; // { id, at }
 
 const who = () => (people().some((p) => p.id === f.who) ? f.who : me());
 const live = () => accounts.filter((a) => a.active !== false).sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
@@ -56,7 +59,7 @@ export function initLedger(opts) {
   initRules(shared);
   initPlan({ ...shared, me });
   initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases, shops: () => shopNames });
-  $("me").addEventListener("change", () => { if (!editing) f.who = null; formKey = ""; refreshLedger(); });
+  $("me").addEventListener("change", () => { f.who = null; formKey = ""; refreshLedger(); });
   addEventListener("journalchange", () => refreshLedgerParts());
 }
 export function startLedger() {
@@ -94,14 +97,12 @@ function renderAdd() {
   const host = $("ledgerAdd"), a = acct();
   if (cardForm || !live().length) return renderCardForm(host);
   // Drawn once per shape, so new data from the other phone never wipes what's being typed.
-  const key = [editing?.id, who(), f.type, live().map((x) => x.id + x.name).join(","), people().map((p) => p.id + p.name).join(",")].join("|");
+  const key = [who(), f.type, live().map((x) => x.id + x.name).join(","), people().map((p) => p.id + p.name).join(",")].join("|");
   if (key !== formKey || !$("lgAmt")) {
     formKey = key;
     const pay = f.type === "payment";
-    const title = editing ? (pay ? "Edit card payment" : f.type === "refund" ? "Edit refund" : "Edit spending") : pay ? "Log a card payment" : f.type === "refund" ? "Log a refund" : "Add spending";
-    host.classList.toggle("is-editing", !!editing);
     host.innerHTML = `
-      <div class="mhead"><h2 id="ledgerAddTitle">${title}</h2>
+      <div class="mhead"><h2 id="ledgerAddTitle">${pay ? "Log a card payment" : f.type === "refund" ? "Log a refund" : "Add spending"}</h2>
         <label class="mealdate">Day<input type="date" id="lgDate" value="${esc(f.date)}" max="${today()}"></label></div>
       <div class="lbl mwho"><span>${pay ? "Paid by" : "Spent by"}</span><div class="seg">${people().map((p) => `<input type="radio" name="lgWho" id="lgw-${p.id}" value="${p.id}"${p.id === who() ? " checked" : ""}><label for="lgw-${p.id}">${esc(p.name)}</label>`).join("")}</div></div>
       <div class="chips" role="group" aria-label="Kind">${Object.entries(KINDS).map(([k, v]) => `<button type="button" class="chip" data-ltype="${k}" aria-pressed="${k === f.type}">${v}</button>`).join("")}</div>
@@ -113,10 +114,7 @@ function renderAdd() {
       <datalist id="lgShops"></datalist>
       <label>Category <small id="lgWhy"></small><select id="lgCat">${CATS.map((c) => `<option value="${c.id}"${c.id === f.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>`}
       <div class="lwarn" id="lgWarn" role="status" hidden></div>
-      ${editing ? `<p class="note ledhint">Fixing an item from Recent. Change what's wrong, then save.</p>` : ""}
-      <div class="actions"><button type="button" class="primary" id="lgSave">${saveLabel()}</button>${editing
-        ? `<button type="button" id="lgCancel">Cancel</button>`
-        : `<button type="button" class="mini" id="lgCard">＋ Card or wallet</button>`}</div>
+      <div class="actions"><button type="button" class="primary" id="lgSave">Save</button><button type="button" class="mini" id="lgCard">＋ Card or wallet</button></div>
       <p class="msg" id="lgMsg" aria-live="polite"></p>`;
   }
   if ($("lgShops")) $("lgShops").innerHTML = shopOptions(); // refreshed every time: it never disturbs typing
@@ -159,26 +157,7 @@ function paintWarn() {
   el.hidden = !w;
   el.classList.toggle("calm", !!w?.calm);
   el.innerHTML = w ? (w.calm ? esc(w.text) : `<b>Wait — don't pay yet?</b> ${esc(w.text)}`) : "";
-  save.textContent = w && !w.calm ? "Save anyway" : saveLabel();
-}
-const saveLabel = () => (editing ? "Save changes" : "Save");
-
-// "Edit" on a Recent item: load it into the form at the top, which then saves over it.
-function startEdit(id) {
-  const t = txns.find((x) => x.id === id); if (!t) return;
-  const where = t.type === "payment" ? "" : t.merchant || t.raw || "";
-  Object.assign(f, { who: t.spentBy, type: t.type, amount: (Math.abs(t.amountSen) / 100).toFixed(2), raw: where,
-    cat: t.cat === "payment" ? "other" : t.cat || "other", catAuto: false, account: t.account, date: t.date });
-  editing = { id, where };
-  cardForm = false; msg = ""; openRow = null; formKey = "";
-  refreshLedger();
-  $("ledgerAdd").scrollIntoView({ behavior: "smooth", block: "start" });
-  $("lgAmt")?.focus({ preventScroll: true });
-}
-function stopEdit() {
-  editing = null;
-  Object.assign(f, blank({ account: store.get(ACCT_KEY, null) }));
-  msg = ""; formKey = "";
+  save.textContent = w && !w.calm ? "Save anyway" : "Save";
 }
 function warning() {
   const a = acct(), sen = toSen(f.amount);
@@ -200,36 +179,22 @@ async function save() {
   if (f.type === "payment" && a.type !== "credit_card") return say("Card payments are for credit cards.");
   const raw = whereRaw(), r = categorise(raw, aliases);
   // `at` (ms) is required: Firestore refuses a field that is undefined, and the save used to fail silently.
-  const old = editing ? txns.find((x) => x.id === editing.id) : null;
-  if (editing && !old) { stopEdit(); refreshLedger(); return say("That item was deleted on the other phone."); }
-  const t = manualTxn(a, { spentBy: who(), date: f.date, amount: f.amount, type: f.type, raw: f.type === "payment" ? "Card payment" : raw, cat: f.cat, merchant: r.merchant || raw.trim() }, old?.at ?? Date.now());
-  const body = old ? editedTxn(old, t) : t;
+  const t = manualTxn(a, { spentBy: who(), date: f.date, amount: f.amount, type: f.type, raw: f.type === "payment" ? "Card payment" : raw, cat: f.cat, merchant: r.merchant || raw.trim() }, Date.now());
   store.set(ACCT_KEY, a.id);
-  const cyc = cycleOf(a, body.posted);
+  const cyc = cycleOf(a, t.posted);
   const what = f.type === "payment" ? `${rm(sen)} paid to ${a.name}` : `${f.type === "refund" ? "Refund of " : ""}${rm(sen)} at ${f.raw.trim()}`;
-  const ref = old ? doc(db, "ledgerTxns", old.id) : doc(collection(db, "ledgerTxns"));
   const save = $("lgSave"); if (save) save.disabled = true;
   try {
-    await commit(() => Promise.all([setDoc(ref, body), a.type === "credit_card" ? saveCycle(db, cyc) : Promise.resolve()]),
-      old ? `Updated: ${what} for ${personName(who())}.` : `Saved ${what} for ${personName(who())}.`);
+    await commit(() => Promise.all([setDoc(doc(collection(db, "ledgerTxns")), t), a.type === "credit_card" ? saveCycle(db, cyc) : Promise.resolve()]),
+      `Saved ${what} for ${personName(who())}.`);
   } catch (_) {
     if (save) save.disabled = false;
     return say("Not saved yet. Your numbers are still here: try again.");
   }
-  if (old) stopEdit();
-  else { msg = ""; Object.assign(f, { amount: "", raw: "", cat: "other", catAuto: true, type: "purchase" }); formKey = ""; }
+  msg = "";
+  Object.assign(f, { amount: "", raw: "", cat: "other", catAuto: true, type: "purchase" });
+  formKey = "";
   refreshLedger();
-}
-// The saved item after an edit: the form's fields over the old item, keeping what the form doesn't show
-// (where it came from, statement check, notes, created time). A statement item keeps its statement name and
-// posting date unless Where, the day or the card was changed.
-function editedTxn(old, t) {
-  const { id: _id, ...keep } = old;
-  const out = { ...keep, ...t, source: old.source ?? "manual", reconciled: old.reconciled ?? false, at: old.at ?? t.at, updated: Date.now() };
-  if (old.source !== "manual" && f.raw.trim() === editing.where) Object.assign(out, { raw: old.raw, merchant: old.merchant ?? t.merchant });
-  if (old.date === t.date && old.account === t.account) Object.assign(out, { posted: old.posted ?? t.posted, postedGuess: old.postedGuess ?? t.postedGuess, cycle: old.cycle ?? t.cycle });
-  for (const k of Object.keys(out)) if (out[k] === undefined) delete out[k];
-  return out;
 }
 function say(text) { msg = text; const el = $("lgMsg"); if (el) el.textContent = text; }
 
@@ -338,11 +303,15 @@ function withEligible(r) {
 // Tap an item to open it: change its category (which offers "always categorise") or delete it.
 function renderList() {
   const host = $("ledgerList");
+  // A row being fixed keeps what's typed: no redraw until it's saved or cancelled (unless it was deleted elsewhere).
+  if (edit && $("leForm")) { if (txns.some((x) => x.id === edit.id)) return; edit = null; }
   const list = [...txns].sort((a, b) => b.date.localeCompare(a.date) || (b.at ?? 0) - (a.at ?? 0));
   const names = Object.fromEntries(accounts.map((a) => [a.id, a.name])), nicks = nickMap(shopNames);
   host.innerHTML = `<h2>Recent</h2><div id="lgOffer"></div>${list.length ? `<div class="llist">${list.slice(0, shown).map((t) => {
     const c = cat(t.cat), credit = t.amountSen < 0, open = openRow === t.id, name = t.merchant || t.raw || c.name;
-    return `<div class="lrow${open ? " open" : ""}">
+    if (open && edit?.id === t.id) return `<div class="lrow open editing" data-row="${t.id}">${editForm(t)}</div>`;
+    const glow = flashed?.id === t.id && Date.now() - flashed.at < FLASH_MS;
+    return `<div class="lrow${open ? " open" : ""}${glow ? " lflash" : ""}" data-row="${t.id}"${glow ? ` style="animation-delay:-${Date.now() - flashed.at}ms"` : ""}>
       <button type="button" class="lopen" data-lopen="${t.id}" aria-expanded="${open}">
         <span class="lic" aria-hidden="true">${c.icon}</span>
         <span class="lmain"><b>${esc(name)}${t.type !== "payment" && nicks[shopKey(t)] ? ` <span class="lsnick">🏷 ${esc(nicks[shopKey(t)])}</span>` : ""}</b><small>${shortDate(t.date)} · ${esc(personName(t.spentBy))} · ${esc(names[t.account] ?? "")}${t.type === "payment" ? "" : ` · ${esc(c.name)}`}${t.reconciled ? " · ✓ statement" : ""}</small></span>
@@ -359,6 +328,86 @@ function renderList() {
   paintOffer("lgOffer");
 }
 
+// ---------- fix an item in place ----------
+// "Edit" turns the row itself into a small form, so you never lose your place in the list.
+function startEdit(id) {
+  const t = txns.find((x) => x.id === id); if (!t) return;
+  const where = t.type === "payment" ? "" : t.merchant || t.raw || "";
+  edit = { id, where, who: t.spentBy, type: t.type, amount: (Math.abs(t.amountSen) / 100).toFixed(2), raw: where,
+    cat: t.cat === "payment" ? "other" : t.cat || "other", account: t.account, date: t.date, msg: "" };
+  openRow = id;
+  renderList();
+  rowEl(id)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  $("leAmt")?.focus({ preventScroll: true });
+}
+const rowEl = (id) => (id ? document.querySelector(`#ledgerList [data-row="${id}"]`) : null);
+function editForm(t) {
+  const e = edit, pay = e.type === "payment";
+  const cards = live().filter((x) => !pay || x.type === "credit_card");
+  if (!cards.some((x) => x.id === e.account)) { const gone = accounts.find((x) => x.id === e.account); if (gone) cards.push(gone); }
+  return `<form class="ledform" id="leForm" novalidate aria-label="Fix this item">
+    <div class="ledtop"><b>Fix this item</b><span class="note">${esc(t.merchant || t.raw || cat(t.cat).name)} · ${rm(Math.abs(t.amountSen))}</span></div>
+    <div class="lbl mwho"><span>${pay ? "Paid by" : "Spent by"}</span><div class="seg">${people().map((p) => `<input type="radio" name="leWho" id="lew-${p.id}" value="${p.id}"${p.id === e.who ? " checked" : ""}><label for="lew-${p.id}">${esc(p.name)}</label>`).join("")}</div></div>
+    ${e.type === "purchase" || e.type === "refund" ? `<div class="chips" role="group" aria-label="Kind">${["purchase", "refund"].map((k) => `<button type="button" class="chip" data-letype="${k}" aria-pressed="${k === e.type}">${KINDS[k]}</button>`).join("")}</div>` : ""}
+    <div class="two">
+      <label>Amount, RM<input type="text" id="leAmt" inputmode="decimal" autocomplete="off" value="${esc(e.amount)}"></label>
+      <label>Day<input type="date" id="leDate" value="${esc(e.date)}" max="${today()}"></label>
+    </div>
+    <label>${pay ? "Card" : "Paid with"}<select id="leAcct">${cards.map((x) => `<option value="${x.id}"${x.id === e.account ? " selected" : ""}>${esc(x.name)}${x.last4 ? ` ··${esc(x.last4)}` : ""}</option>`).join("")}</select></label>
+    ${pay ? "" : `<label>Where<input type="text" id="leRaw" list="lgShops" autocomplete="off" value="${esc(e.raw)}"></label>
+    <label>Category<select id="leCat">${CATS.map((c) => `<option value="${c.id}"${c.id === e.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>`}
+    <p class="msg" id="leMsg" aria-live="polite">${esc(e.msg)}</p>
+    <div class="actions"><button type="submit" class="primary" id="leSave">Save changes</button><button type="button" id="leCancel">Cancel</button></div>
+  </form>`;
+}
+function cancelEdit() {
+  const id = edit?.id; edit = null; openRow = null;
+  renderList(); flashRow(id, false);
+}
+// After saving or cancelling: keep the row on screen (it may have moved if the day changed) and, after a save, light it up.
+function flashRow(id, lit = true) {
+  const row = rowEl(id); if (!row) return;
+  row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  if (!lit) return;
+  flashed = { id, at: Date.now() };
+  row.style.animationDelay = "0ms"; row.classList.remove("lflash"); void row.offsetWidth; row.classList.add("lflash");
+}
+async function saveEdit() {
+  const e = edit, old = txns.find((x) => x.id === e?.id); if (!old) return cancelEdit();
+  const tell = (text) => { e.msg = text; const el = $("leMsg"); if (el) el.textContent = text; };
+  const a = accounts.find((x) => x.id === e.account), sen = toSen(e.amount), pay = e.type === "payment";
+  if (!a) return tell("Pick the card or wallet.");
+  if (!(sen > 0)) return tell("Type the amount, like 12.50.");
+  if (!pay && !e.raw.trim()) return tell("Type where, like Setel or Econsave.");
+  if (!e.date || e.date > today()) return tell("Pick a day up to today.");
+  const raw = byNick(e.raw, shopNames)?.name ?? e.raw, r = categorise(raw, aliases);
+  const t = manualTxn(a, { spentBy: e.who, date: e.date, amount: e.amount, type: e.type, raw: pay ? "Card payment" : raw, cat: e.cat, merchant: r.merchant || raw.trim() }, old.at ?? Date.now());
+  const body = editedTxn(old, t, e.raw.trim() === e.where);
+  const what = pay ? `${rm(sen)} paid to ${a.name}` : `${rm(sen)} at ${e.raw.trim()}`;
+  const btn = $("leSave"); if (btn) btn.disabled = true;
+  try {
+    await commit(() => Promise.all([setDoc(doc(db, "ledgerTxns", old.id), body), a.type === "credit_card" ? saveCycle(db, cycleOf(a, body.posted)) : Promise.resolve()]), `Updated: ${what}.`);
+  } catch (_) {
+    if (btn) btn.disabled = false;
+    return tell("Not saved yet. Your changes are still here: try again.");
+  }
+  // Show the change at once (the live update follows), then close the form right where it is.
+  Object.assign(old, body);
+  edit = null; openRow = null;
+  renderList(); refreshLedgerParts(); flashRow(old.id);
+}
+// The saved item after a fix: the form's fields over the old item, keeping what the form doesn't show (where it
+// came from, statement check, notes, created time). A statement item keeps its statement name unless Where changed,
+// and its posting date unless the day or card changed.
+function editedTxn(old, t, sameWhere) {
+  const { id: _id, ...keep } = old;
+  const out = { ...keep, ...t, source: old.source ?? "manual", reconciled: old.reconciled ?? false, at: old.at ?? t.at, updated: Date.now() };
+  if (old.source !== "manual" && sameWhere) Object.assign(out, { raw: old.raw, merchant: old.merchant ?? t.merchant });
+  if (old.date === t.date && old.account === t.account) Object.assign(out, { posted: old.posted ?? t.posted, postedGuess: old.postedGuess ?? t.postedGuess, cycle: old.cycle ?? t.cycle });
+  for (const k of Object.keys(out)) if (out[k] === undefined) delete out[k];
+  return out;
+}
+
 // Delete one item, after asking (safe-delete). A statement item comes back if that statement is imported again.
 async function removeTxn(id) {
   const t = txns.find((x) => x.id === id); if (!t) return;
@@ -369,8 +418,7 @@ async function removeTxn(id) {
     yes: "Delete it",
   });
   if (!ok) return;
-  openRow = null;
-  if (editing?.id === id) { stopEdit(); renderAdd(); }
+  openRow = null; if (edit?.id === id) edit = null;
   await commit(() => deleteDoc(doc(db, "ledgerTxns", id)), `Deleted ${name}.`);
 }
 
@@ -451,10 +499,24 @@ function wire() {
     if (b.id === "lgSave") save();
     if (b.id === "lgCard") { cardForm = true; msg = ""; renderAdd(); $("lcName")?.focus(); }
     if (b.id === "lcSave") saveCard();
-    if (b.id === "lgCancel") { stopEdit(); refreshLedger(); }
     if (b.id === "lcCancel") { cardForm = false; add.innerHTML = ""; renderAdd(); }
   });
-  $("ledgerList").addEventListener("change", async (ev) => {
+  // The in-row fix form: every field goes straight into `edit`.
+  const list = $("ledgerList");
+  const readEdit = (el) => {
+    if (!edit) return;
+    if (el.id === "leAmt") edit.amount = el.value;
+    if (el.id === "leDate") edit.date = el.value;
+    if (el.id === "leAcct") edit.account = el.value;
+    if (el.id === "leRaw") edit.raw = el.value;
+    if (el.id === "leCat") edit.cat = el.value;
+    if (el.name === "leWho") edit.who = el.value;
+  };
+  list.addEventListener("input", (ev) => readEdit(ev.target));
+  list.addEventListener("submit", (ev) => { ev.preventDefault(); saveEdit(); });
+  list.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && edit) cancelEdit(); });
+  list.addEventListener("change", async (ev) => {
+    readEdit(ev.target);
     const id = ev.target.dataset.lcat; if (!id) return;
     const t = txns.find((x) => x.id === id); if (!t) return;
     await commit(() => setDoc(doc(db, "ledgerTxns", id), { cat: ev.target.value }, { merge: true }));
@@ -469,9 +531,11 @@ function wire() {
   });
   $("ledgerList").addEventListener("click", async (ev) => {
     const b = ev.target.closest("button"); if (!b) return;
-    if (b.dataset.lopen) { openRow = openRow === b.dataset.lopen ? null : b.dataset.lopen; renderList(); }
+    if (b.dataset.lopen) { edit = null; openRow = openRow === b.dataset.lopen ? null : b.dataset.lopen; renderList(); }
     if (b.id === "lgMore") { shown += RECENT; renderList(); }
-    if (b.dataset.ledit) startEdit(b.dataset.ledit);
     if (b.dataset.ldel) removeTxn(b.dataset.ldel);
+    if (b.dataset.ledit) startEdit(b.dataset.ledit);
+    if (b.dataset.letype && edit) { edit.type = b.dataset.letype; b.parentElement.querySelectorAll("[data-letype]").forEach((c) => c.setAttribute("aria-pressed", String(c === b))); }
+    if (b.id === "leCancel") cancelEdit();
   });
 }
