@@ -148,15 +148,17 @@ function openMenu(f, all) {
   menu.innerHTML = menuHtml(f.elements.kind.value, all); menu.hidden = false; menu.dataset.all = all ? "1" : "";
   box.querySelectorAll("[aria-expanded]").forEach((x) => x.setAttribute("aria-expanded", "true"));
 }
+// Kind fields on the page and in the quick sheet.
+const kindBoxes = () => [...($("stocky")?.querySelectorAll(".sk-kindf") || []), ...($("skSheet")?.querySelectorAll(".sk-kindf") || [])];
 function closeMenus(except) {
-  for (const box of $("stocky").querySelectorAll(".sk-kindf")) {
+  for (const box of kindBoxes()) {
     if (box === except) continue;
     box.querySelector(".sk-menu").hidden = true;
     box.querySelectorAll("[aria-expanded]").forEach((x) => x.setAttribute("aria-expanded", "false"));
   }
 }
 function repaintMenus() {
-  for (const box of $("stocky")?.querySelectorAll(".sk-kindf") || []) {
+  for (const box of kindBoxes()) {
     const menu = box.querySelector(".sk-menu"); if (!menu.hidden) openMenu(box.closest("form"), !!menu.dataset.all);
   }
 }
@@ -240,8 +242,14 @@ function sheetHtml(id) {
   const p = pantry.find((x) => x.id === id);
   if (!p) return `<div class="gsin"><p>This item isn't here any more.</p><div class="actions"><button type="button" data-sk="unpeek">Close</button></div></div>`;
   const e = ests[p.id], key = "item-" + p.id;
+  // "✎ Edit" swaps the sheet for the item form, right here; saving comes back to the sheet.
+  if (editing) return `<div class="gsin sk-peek">
+    <div class="mhead"><h3 id="skSheetTitle">Edit ${esc(p.name)}</h3><button type="button" class="mini" data-sk="unpeek" aria-label="Close">✕</button></div>
+    ${itemForm(p)}
+    <div class="actions"><button type="button" class="danger mini" data-sk="del" data-id="${esc(p.id)}">Delete ${esc(p.name)}</button></div>
+  </div>`;
   return `<div class="gsin sk-peek">
-    <div class="mhead"><h3 id="skSheetTitle">${esc(p.name)}</h3>${pill(e.status)}<button type="button" class="mini" data-sk="unpeek" aria-label="Close">✕</button></div>
+    <div class="mhead"><h3 id="skSheetTitle">${esc(p.name)}</h3>${pill(e.status)}<button type="button" class="mini" data-sk="edit" aria-label="Edit ${esc(p.name)}">✎ Edit</button><button type="button" class="mini" data-sk="unpeek" aria-label="Close">✕</button></div>
     ${bar(e)}
     <p class="note">${esc(leftText(p, e))}${e.outOn && e.status !== "out" ? ` · runs out ${esc(day(e.outOn))}` : ""}</p>
     ${levelChips(p)}
@@ -255,11 +263,12 @@ function sheetHtml(id) {
 const levelChips = (p) => `<p class="mwhat">How much is left?</p>
   <div class="chips sk-levels" role="group" aria-label="How much is left">${LEVELS.map(([l, t]) => `<button type="button" class="chip" data-sk="level" data-id="${esc(p.id)}" data-level="${l}" aria-pressed="${p.check?.date === today() && p.check.level === l}">${t}</button>`).join("")}</div>`;
 function openPeek(id) {
-  peek = id; buying = null; msg = "";
+  peek = id; buying = null; editing = false; msg = "";
   const s = $("skSheet"); s.innerHTML = sheetHtml(id);
   if (!s.open) s.showModal();
 }
 function closePeek() {
+  if (peek) editing = false;
   peek = null; buying = null; msg = "";
   const s = $("skSheet"); if (s?.open) s.close();
 }
@@ -462,7 +471,7 @@ async function savePrice(f) {
   refreshStocky(true);
 }
 async function saveItem(f) {
-  const el = f.elements, id = route().page === "item" ? route().id : null, { foods } = mealData();
+  const el = f.elements, id = $("skSheet").contains(f) ? peek : route().page === "item" ? route().id : null, { foods } = mealData();
   const k = kindFrom(f);
   if (k.error) { setMsg(f, k.error); return; }
   const links = k.id === "food" ? [...f.querySelectorAll("[data-link-row]")].map((r) => ({ food: r.querySelector('[name="linkFood"]').value, per100: r.querySelector('[name="linkPer"]').value })) : [];
@@ -515,7 +524,7 @@ async function removeKind(id) {
     body: inIt.length ? `<p>${inIt.length} item${inIt.length === 1 ? "" : "s"} (${names(inIt)}) will move to <b>${esc(to)}</b>. The items, buys and prices stay.</p>` : `<p>No items use it.</p>` });
   if (!ok) return;
   // A form showing this kind switches to Home.
-  for (const input of $("stocky").querySelectorAll(".sk-kindf input")) if (input.value.trim().toLowerCase() === k.name.toLowerCase()) input.value = to;
+  for (const input of kindBoxes().map((b) => b.querySelector("input"))) if (input.value.trim().toLowerCase() === k.name.toLowerCase()) input.value = to;
   kinds = kinds.filter((x) => x.id !== id); repaintMenus(); syncForms();
   await commit(() => Promise.all([...inIt.map((p) => updateDoc(doc(cols.pantry, p.id), { kind: FALLBACK_KIND })), deleteDoc(doc(cols.kinds, id))]));
 }
@@ -526,6 +535,7 @@ async function removeItem(id) {
   const what = [nb.length && plural(nb.length, "buy"), np.length && plural(np.length, "price"), nl.length && "its row on the shopping list"].filter(Boolean);
   const ok = await confirmDelete({ title: `Delete ${p.name}?`, yes: "Delete it", body: what.length ? `<p>Its history goes too: ${esc(what.join(", "))}.</p>` : "" });
   if (!ok) return;
+  closePeek();
   const gone = [...nb.map((x) => doc(cols.buys, x.id)), ...np.map((x) => doc(cols.prices, x.id)), ...nl.map((x) => doc(cols.shopList, x.id))];
   location.hash = "#stocky";
   await commit(() => Promise.all([deleteDoc(doc(cols.pantry, id)), ...gone.map((d) => deleteDoc(d))]));
@@ -550,7 +560,7 @@ function setMsg(f, t) { msg = t; const el = f.querySelector(".sk-msg") || f.quer
 // the same handlers: a button means the same thing in either.
 function wire() {
   const host = $("stocky"), sheet = $("skSheet"), both = (type, fn) => { host.addEventListener(type, fn); sheet.addEventListener(type, fn); };
-  sheet.addEventListener("click", (ev) => { if (ev.target === sheet) sheet.close(); }); // tap outside closes
+  sheet.addEventListener("click", (ev) => { if (ev.target === sheet && !sheet.querySelector("form[data-dirty]")) sheet.close(); }); // tap outside closes, unless it would lose typing
   sheet.addEventListener("close", () => { if (peek) { closePeek(); refreshStocky(true); } });
   both("click", async (ev) => {
     closeMenus(ev.target.closest(".sk-kindf"));
@@ -578,8 +588,8 @@ function wire() {
     }
     if (act === "price") { pricing = true; buying = null; refreshStocky(true); host.querySelector('[data-skform="price"] input[name=price]')?.focus(); }
     if (act === "unbuy") await unbuy(b.dataset.id);
-    if (act === "edit") { editing = true; msg = ""; refreshStocky(true); }
-    if (act === "del") await removeItem(route().id);
+    if (act === "edit") { editing = true; buying = null; msg = ""; refreshStocky(true); here.querySelector('[data-skform="item"] input[name=name]')?.focus(); }
+    if (act === "del") await removeItem(b.dataset.id || route().id);
     if (act === "plan") { plan[b.dataset.id] = Math.max(0, Math.min(21, (plan[b.dataset.id] || 0) + Number(b.dataset.step))); refreshStocky(true); }
     if (act === "plan-add") {
       const { foods, sets, meals } = mealData();
@@ -606,11 +616,11 @@ function wire() {
     if (ev.target.name === "kind" && ev.target.closest(".sk-kindf")) { openMenu(f, false); syncForms(); return; }
     hint(f);
   });
-  host.addEventListener("keydown", (ev) => {
+  both("keydown", (ev) => {
     if (ev.target.name !== "kind" || !ev.target.closest(".sk-kindf")) return;
     if (ev.key === "Enter") { ev.preventDefault(); closeMenus(); ev.target.blur(); }
     if (ev.key === "Escape") closeMenus();
   });
-  document.addEventListener("click", (ev) => { if (!$("stocky").contains(ev.target)) closeMenus(); });
+  document.addEventListener("click", (ev) => { if (!$("stocky").contains(ev.target) && !sheet.contains(ev.target)) closeMenus(); });
   both("focusout", () => setTimeout(() => { if (pending && !host.contains(document.activeElement) && !sheet.contains(document.activeElement)) refreshStocky(); }, 0));
 }
