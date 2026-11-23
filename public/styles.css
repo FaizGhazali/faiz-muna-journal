@@ -1296,13 +1296,21 @@ label.inline { display: flex; align-items: center; gap: 8px; font-weight: 400 }
 .lplan:empty { display: none }
 .lpsum, .lpbills, .lpahead { display: grid; gap: 12px; align-content: start }
 #ledgerPlan .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; display: inline-block }
-#ledgerPlan .dot.free, .lpsplit .free { background: var(--bg); box-shadow: inset 0 0 0 1px var(--line) }
+#ledgerPlan .dot.free { background: var(--bg); box-shadow: inset 0 0 0 1px var(--line) }
 #ledgerPlan .over { color: var(--obese) }
 #ledgerPlan .ok { color: var(--good) }
-.lpsplit { display: flex; gap: 2px; height: 26px; border-radius: 8px; overflow: hidden }
-.lpsplit i { display: block; background: var(--c); min-width: 3px }
-.lpleg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums }
-.lpleg li { display: inline-flex; align-items: center; gap: 6px }
+.lpring { display: grid; grid-template-columns: minmax(110px, 150px) minmax(0, 1fr); gap: 16px; align-items: center }
+.lpdonut { width: 100%; height: auto; display: block }
+.lpdonut circle { fill: none; stroke-width: 5.2 }
+.lpdonut .track { stroke: var(--bg); stroke-width: 5.2 }
+.lpdonut .arc { stroke: var(--c); transition: stroke-dasharray .5s ease, stroke-dashoffset .5s ease }
+.lpdonut text { text-anchor: middle; fill: var(--ink); font-family: var(--display); font-variant-numeric: tabular-nums }
+.lpdonut .big { font-size: 5.6px; font-weight: 700 }
+.lpdonut .big.over { fill: var(--obese) }
+.lpdonut .small { font-size: 3.4px; fill: var(--muted); font-family: var(--body) }
+.lpleg { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 14px; font-variant-numeric: tabular-nums; min-width: 0 }
+.lpleg li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px }
+.lpleg li span:not(.dot) { color: var(--muted); overflow-wrap: anywhere }
 .lpleft { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 20px; border-top: 1px solid var(--line); padding-top: 12px }
 .lpleft div { display: grid }
 .lpleft div:last-child { text-align: right }

@@ -60,10 +60,10 @@ function summary(v) {
   const over = v.freeSen < 0, end = shortDate(dueDate({ dueDay: 31 }, v.month));
   return `<div class="lhead"><h2 id="lpTitle">Where ${rm(v.incomeSen, { whole: true })} goes</h2><span class="note">${esc(monthName(v.month))}</span>
       <span class="lbtnrow"><button type="button" class="mini" data-lp="edit-plan">Edit plan</button></span></div>
-    <div class="lpsplit" role="img" aria-label="${used.map((b) => `${esc(b.name)} ${rm(b.usedSen, { whole: true })}`).join(", ")}${over ? "" : `, free ${rm(v.freeSen, { whole: true })}`}">
-      ${used.map((b) => `<i style="--c:${col[b.id]};flex:${b.usedSen}"></i>`).join("")}${over ? "" : `<i class="free" style="flex:${Math.max(v.freeSen, 0) || (used.length ? 0 : 1)}"></i>`}
+    <div class="lpring">
+      ${ring(v, used, col, over)}
+      <ul class="lpleg">${used.map((b) => `<li><span class="dot" style="--c:${col[b.id]}"></span><span>${esc(b.name)}</span><b>${rm(b.usedSen, { whole: true })}</b></li>`).join("")}${over ? "" : `<li><span class="dot free"></span><span>Free</span><b>${rm(v.freeSen, { whole: true })}</b></li>`}</ul>
     </div>
-    <ul class="lpleg">${used.map((b) => `<li><span class="dot" style="--c:${col[b.id]}"></span>${esc(b.name)} ${rm(b.usedSen, { whole: true })}</li>`).join("")}${over ? "" : `<li><span class="dot free"></span>Free ${rm(v.freeSen, { whole: true })}</li>`}</ul>
     <div class="lpleft">
       <div><small>${over ? "Over your income by" : "Can still spend"}</small><b class="${over ? "over" : ""}">${rm(Math.abs(v.freeSen), { whole: true })}</b></div>
       ${over ? "" : `<div><small>a day, to ${end}</small><b class="sm">${rm(v.perDaySen, { whole: true })}</b></div>`}
@@ -77,6 +77,26 @@ function summary(v) {
       <div class="lbarbg thin"><i style="width:${b.planSen ? Math.min(100, Math.round((b.usedSen / b.planSen) * 100)) : b.usedSen ? 100 : 0}%;--c:${b.overSen ? "var(--obese)" : col[b.id]}"></i></div>
     </div>`).join("")}</div>
     <p class="note">Day-to-day spending from Ledger counts too: dining and shopping as ${esc(v.buckets.find((b) => b.id === "fun")?.name ?? "Fun")}, the rest as ${esc(v.buckets.find((b) => b.id === "essentials")?.name ?? v.buckets[0].name)}. PayLater on a card is left out, since it's a bill here.</p>`;
+}
+
+// The income ring: one arc per bucket's use this month, starting at the top and going clockwise; the
+// grey track left over is what's free. Over the income, the arcs share the whole ring.
+// The circle's radius makes its length 100, so each arc's dash is simply its percentage.
+const R = 15.915, GAP = 0.8;
+function ring(v, used, col, over) {
+  const total = Math.max(v.incomeSen, v.committedSen + v.spentSen, 1);
+  let at = 0;
+  const arcs = used.map((b) => {
+    const len = (b.usedSen / total) * 100, dash = Math.max(len - (used.length > 1 || !over ? GAP : 0), 0.3);
+    const arc = `<circle cx="21" cy="21" r="${R}" class="arc" style="--c:${col[b.id]}" stroke-dasharray="${dash.toFixed(2)} ${(100 - dash).toFixed(2)}" stroke-dashoffset="${(25 - at).toFixed(2)}"></circle>`;
+    at += len;
+    return arc;
+  }).join("");
+  return `<svg class="lpdonut" viewBox="0 0 42 42" role="img" aria-label="${used.map((b) => `${esc(b.name)} ${rm(b.usedSen, { whole: true })}`).join(", ")}${over ? `, ${rm(-v.freeSen, { whole: true })} over income` : `, free ${rm(v.freeSen, { whole: true })}`}">
+    <circle cx="21" cy="21" r="${R}" class="track"></circle>${arcs}
+    <text x="21" y="20.5" class="big${over ? " over" : ""}">${rm(Math.abs(v.freeSen), { whole: true })}</text>
+    <text x="21" y="26" class="small">${over ? "over" : "left"}</text>
+  </svg>`;
 }
 
 // The plan form: first run (defaults from the family's sheet) or "Edit plan".
