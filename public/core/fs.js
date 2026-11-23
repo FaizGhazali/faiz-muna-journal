@@ -11,6 +11,7 @@ export const doc = (...a) => impl.doc(...a);
 export const setDoc = (...a) => impl.setDoc(...a);
 export const updateDoc = (...a) => impl.updateDoc(...a);
 export const deleteDoc = (...a) => impl.deleteDoc(...a);
+export const getDoc = (...a) => impl.getDoc(...a);
 export const getDocs = (...a) => impl.getDocs(...a);
 export const onSnapshot = (...a) => impl.onSnapshot(...a);
 export const writeBatch = (...a) => impl.writeBatch(...a);

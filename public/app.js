@@ -3,11 +3,12 @@
 // weightui.js (person cards, feed), entryform.js (the entry form), setup.js (first run), the journals
 // (mealsui, diaryui, stockyui, activities, moodui, fitdetail), plus visitors.js, theme.js, install.js, demo.js.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import { getAuth, connectAuthEmulator, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getAuth, connectAuthEmulator, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, terminate, clearIndexedDbPersistence,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { collection, doc, setDoc, onSnapshot, useMemory } from "./core/fs.js";
+import { collection, doc, setDoc, getDoc, onSnapshot, useMemory } from "./core/fs.js";
+import { initAccount, signIn, personOf, mustChoosePassword, choosePassword } from "./shell/account.js";
 import { openMemory } from "./core/memdb.js";
 import { sampleData } from "./shell/sample.js";
 import { DEMO, initDemo } from "./shell/demo.js";
@@ -32,9 +33,8 @@ import { initLedger, startLedger, stopLedger, refreshLedger, refreshLedgerParts 
 import { $, today } from "./core/util.js";
 import { toast } from "./core/toast.js";
 
-const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-const show = (id) => ["loading", "login", "setup", "app"].forEach((v) => { $(v).hidden = v !== id; });
+const show = (id) => ["loading", "login", "newpass", "setup", "app"].forEach((v) => { $(v).hidden = v !== id; });
 
 // reCAPTCHA Enterprise site key for Firebase App Check (public, safe to commit). Empty = App Check off.
 // With it set and enforcement on in the Firebase console, only this site can reach Firestore and sign-in; scripts and bots can't.
@@ -142,10 +142,24 @@ if (DEMO) {
   show("loading");
   startApp();
 } else {
-  onAuthStateChanged(auth, (user) => {
+  initAccount({ auth });
+  // Each person has their own login (shell/account.js); whoever signed in becomes "For" on this device. The
+  // old shared login, or any other, is signed out. The first time, they choose their own password first.
+  onAuthStateChanged(auth, async (user) => {
     stop();
-    if (user) { show("loading"); startApp(); }
-    else { show("login"); visitors(db); }
+    if (!user) { show("login"); visitors(db); return; }
+    const pid = personOf(user.email);
+    if (!pid) { await signOut(auth); $("loginMsg").textContent = "You each have your own password now. Enter yours."; return; }
+    try { localStorage.setItem("journal-me", JSON.stringify(pid)); } catch (_) {}
+    show("loading");
+    if (await mustChoosePassword(db, pid)) {
+      let name = "";
+      try { name = (await getDoc(doc(db, "config", "people"))).data()?.people?.find((p) => p.id === pid)?.name || ""; } catch (_) {}
+      await choosePassword({ auth, db, pid, name, show });
+      if (auth.currentUser?.uid !== user.uid) return; // they signed out instead
+      show("loading");
+    }
+    startApp();
   });
 }
 
@@ -156,7 +170,7 @@ $("loginForm").addEventListener("submit", async (ev) => {
   msg.textContent = "";
   $("signIn").disabled = true;
   try {
-    await signInWithEmailAndPassword(auth, FAMILY_EMAIL, $("password").value);
+    await signIn(auth, $("password").value);
     $("password").value = "";
   } catch (e) {
     msg.textContent = e.code === "auth/too-many-requests" ? "Too many tries. Wait a few minutes, then try again."

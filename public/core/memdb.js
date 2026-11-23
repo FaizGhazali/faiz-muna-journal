@@ -85,6 +85,7 @@ export function updateDoc(ref, patch) {
   return Promise.resolve(write(ref, patch, true));
 }
 export async function deleteDoc(ref) { if (data[ref.col]) delete data[ref.col][ref.id]; touch(ref.col); }
+export const getDoc = async (ref) => docSnap(ref);
 export const getDocs = async (q) => colSnap(q);
 export function writeBatch() {
   const ops = [];

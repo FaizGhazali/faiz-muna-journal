@@ -37,7 +37,11 @@ GGUF_FILE = "Sailor2-8B-Chat-Q4_K_M.gguf"
 CPU_CORES = 8  # physical cores on CPU mode; more = faster writing, a little more credit per write
 CPU_MEMORY = 10240  # MB; an 8B model needs about 6 GB plus room for the prompt
 FIREBASE_PROJECT = "faiz-muna-journal-c43ab"
-FAMILY_UID = "wYR0YCfeWmVz6CvPeoqTViI8NRc2"  # the same single account firestore.rules allows
+FAMILY_UIDS = {  # the same accounts firestore.rules allows
+    "anhTfDbP4NS3efUYf1VnBTuXVTy2",  # p1
+    "EeSDAXmlrtYRKL2uN3ANhXp9W6s1",  # p2
+    "wYR0YCfeWmVz6CvPeoqTViI8NRc2",  # old shared family login
+}
 ORIGINS = [
     "https://faiz-muna-journal-c43ab.web.app",
     "https://faiz-muna-journal-c43ab.firebaseapp.com",
@@ -243,7 +247,7 @@ def web():
             info = id_token.verify_firebase_token(auth[7:], google_req, audience=FIREBASE_PROJECT)
         except Exception:
             raise HTTPException(401, "sign-in not valid")
-        if (info or {}).get("sub") != FAMILY_UID:
+        if (info or {}).get("sub") not in FAMILY_UIDS:
             raise HTTPException(403, "not this family")
 
     def check_rate():

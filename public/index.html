@@ -60,7 +60,7 @@ try {
   <form class="panel" id="loginForm">
     <h1>Our Journal</h1>
     <p class="tagline">Weight, BMI, runs and habits for two.</p>
-    <p class="note">Enter the family password.</p>
+    <p class="note">Enter your password.</p>
     <label for="password">Password<input type="password" id="password" autocomplete="current-password" required></label>
     <button type="submit" class="primary" id="signIn">Sign in</button>
     <p id="loginMsg" role="status"></p>
@@ -69,6 +69,20 @@ try {
     <p class="note center">Explore every feature with sample data. Nothing you do is saved.</p>
   </form>
   <button type="button" class="scrollhint" id="tourGo">See what it does <span aria-hidden="true">↓</span></button>
+</div>
+
+<!-- First sign-in: each person chooses their own password before the journal opens (shell/account.js). -->
+<div class="gate" id="newpass" hidden>
+  <form class="panel" id="newPassForm">
+    <h1 id="npHello">Welcome</h1>
+    <p class="note">First time here. Choose your own password so only you know it. You'll use it to sign in from now on.</p>
+    <label for="np1">New password<input type="password" id="np1" autocomplete="new-password" minlength="8" required></label>
+    <label for="np2">Type it again<input type="password" id="np2" autocomplete="new-password" required></label>
+    <label class="inline"><input type="checkbox" id="npShow"> Show passwords</label>
+    <button type="submit" class="primary" id="npSave">Save my password</button>
+    <p id="npMsg" role="status"></p>
+    <p class="note center"><button type="button" class="link" id="npOut">Sign out</button></p>
+  </form>
 </div>
 
 <!--

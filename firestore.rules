@@ -1,9 +1,14 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Only the one family login can read or write. Any other account is refused.
+    // Only the family's logins can read or write: p1@journal.invalid, p2@journal.invalid, and the old shared
+    // family login (still used by the Android widget and the Dearly cloud writer). Any other account is refused.
     match /{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == "wYR0YCfeWmVz6CvPeoqTViI8NRc2";
+      allow read, write: if request.auth != null && request.auth.uid in [
+        "anhTfDbP4NS3efUYf1VnBTuXVTy2",  // p1
+        "EeSDAXmlrtYRKL2uN3ANhXp9W6s1",  // p2
+        "wYR0YCfeWmVz6CvPeoqTViI8NRc2"   // old shared family login
+      ];
     }
 
     // Visitor counts for the landing page: visits/{country code} -> { n }. Anyone may read them,
