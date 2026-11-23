@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Commit the working tree changes and make them live on the family's site (push main, which deploys Firebase Hosting), then confirm the deploy passed. This is the default end of every finished change in this project: run it once a requested change is done and tested, without asking, and also when the user asks to ship, release, "commit and make it live", or types /ship.
+description: Commit the working tree changes and make them live on the family's site (push main, which deploys Firebase Hosting). It stops at the push and doesn't check the deploy. This is the default end of every finished change in this project: run it once a requested change is done and tested, without asking, and also when the user asks to ship, release, "commit and make it live", or types /ship.
 ---
 
 # Ship: commit and make it live
@@ -37,21 +37,12 @@ Optional argument: a commit message or a short note of what changed. Without one
 2. `git push origin main`. Never force push.
 3. Confirm it landed: `git status -sb` shows `main...origin/main` with nothing ahead.
 
-## 4. Confirm the deploy
+## 4. Don't check the deploy
 
-Run this in the background (it takes about 30 s to a minute) and wait for its notification. Don't poll:
-
-```bash
-sha=$(git rev-parse --short HEAD); sleep 8
-id=$(gh run list --workflow deploy.yml --limit 5 --json databaseId,headSha -q ".[] | select(.headSha|startswith(\"$sha\")) | .databaseId" | head -1)
-echo "run $id"; gh run watch "$id" --exit-status >/dev/null 2>&1
-gh run view "$id" --json conclusion,displayTitle,url -q '"\(.conclusion): \(.displayTitle) \(.url)"'
-```
-
-If a change under `android/` was pushed, the `Android widget` workflow also runs. Report it too if it's there.
+Stop once the push has landed. Don't watch the GitHub Actions run, poll the live site or compare versions there: it costs tokens, and GitHub emails the user if the deploy fails. Only look into a deploy if the user asks or says something didn't go live.
 
 ## 5. Tell the user
 
-- The commit (short hash and summary) and that it's live, or that the deploy failed, with `gh run view <id> --log-failed` output and what to do.
+- The commit (short hash and summary), and that it's pushed to `main`, so the site deploys in about a minute.
 - The live site: https://faiz-muna-journal-c43ab.web.app/
 - Phones may keep the old version until the app is closed and reopened once (the service worker updates on the next open).
