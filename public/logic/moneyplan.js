@@ -87,9 +87,13 @@ export function spentByBucket(txns, plan, m) {
   }
   return out;
 }
-// The bucket a Ledger item counts in, or null when it isn't day-to-day spending (card payments,
-// rebate credits, PayLater instalments, which are bills here).
-export const txnBucket = (t, plan) => (!isSpend(t) || COMMITTED_CATS.includes(t.cat) ? null : bucketFor(plan, CAT_BUCKET[t.cat] ?? "essentials"));
+// The bucket a category's spending counts in when nobody picked one for the item.
+export const catBucket = (cat, plan) => bucketFor(plan, CAT_BUCKET[cat] ?? "essentials");
+// Can this item be counted in a bucket at all? Not card payments, rebate credits or PayLater instalments (bills here).
+export const inBuckets = (t) => isSpend(t) && !COMMITTED_CATS.includes(t.cat);
+// The bucket a Ledger item counts in, or null when it isn't day-to-day spending. An item's own
+// `bucket` (picked by hand on the spending page) wins while that bucket is still in the plan.
+export const txnBucket = (t, plan) => (!inBuckets(t) ? null : t.bucket && bucketIds(plan).includes(t.bucket) ? t.bucket : catBucket(t.cat, plan));
 
 // Everything the plan dashboard shows for the month of `day`.
 export function planView({ plan, commitments = [], paid = {}, txns = [], day }) {

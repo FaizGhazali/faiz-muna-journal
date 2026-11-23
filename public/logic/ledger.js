@@ -11,7 +11,7 @@ import { pad, addDays, dayNum } from "../core/util.js";
 //   ledgerMerchants/{id}  { name, cat }
 //   ledgerAliases/{id}    { pattern, match, merchant?, cat, priority, from: seed|user, created }
 //   ledgerCycles/{account}_{statement} { account, start, statement, due, balanceSen?, minPaySen?, prevSen?, status: open|closed, importedAt?, updated }
-//   ledgerTxns/{id}       { account, spentBy, date, posted, postedGuess?, cycle, merchant? (display name), cat, raw, amountSen, type, source, batch?, reconciled, notes?, tags?: [{type, value}], at }
+//   ledgerTxns/{id}       { account, spentBy, date, posted, postedGuess?, cycle, merchant? (display name), cat, raw, amountSen, type, source, batch?, reconciled, notes?, tags?: [{type, value}], bucket? (money plan bucket picked by hand; null = by category), updated?, at }
 //   ledgerPrograms/{id}   { account, name, qualifier, rounding, credited, needsMinPay, from, to?, tiers: [{ minSen, maxSen?, rates: [{ cat, bps, capSen?, capGroup? }] }], exclusions: [{ cat } | { pattern, match }], created, updated }
 //   ledgerRebates/{cycle} { cycle, account, program, tier, qualifierSen, totalSen, groups, cats, projection, at }   snapshot written when a cycle closes
 

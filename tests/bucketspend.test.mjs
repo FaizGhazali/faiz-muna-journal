@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_BUCKETS, txnBucket } from "../public/logic/moneyplan.js";
+import { DEFAULT_BUCKETS, txnBucket, spentByBucket, catBucket } from "../public/logic/moneyplan.js";
 import { ALL, bucketItems, byMonth, byShop, byCat, totals, shopTrack, monthsWith, matches, shopKey } from "../public/logic/bucketspend.js";
 
 const PLAN = { incomeSen: 400000, buckets: DEFAULT_BUCKETS };
@@ -70,4 +70,15 @@ test("shopTrack gives a shop's whole history with 12 months of bars and the medi
 
 test("monthsWith lists months with spending plus the current one, newest first", () => {
   assert.deepEqual(monthsWith(TX, PLAN, "fun", "2026-12"), ["2026-12", "2026-11"]);
+});
+
+test("an item's own bucket wins over its category, until that bucket leaves the plan", () => {
+  const t = T("2026-11-20", "groceries", 8000, "Econsave", { bucket: "fun" });
+  assert.equal(txnBucket(t, PLAN), "fun");
+  assert.equal(txnBucket({ ...t, bucket: null }, PLAN), "essentials");
+  assert.equal(txnBucket(t, { ...PLAN, buckets: DEFAULT_BUCKETS.filter((b) => b.id !== "fun") }), "essentials");
+  assert.equal(txnBucket({ ...TX[5], bucket: "fun" }, PLAN), null); // PayLater stays a bill
+  assert.deepEqual(spentByBucket([t], PLAN, "2026-11"), { fun: 8000 });
+  assert.equal(bucketItems([t], PLAN, "essentials").length, 0);
+  assert.equal(catBucket("dining", PLAN), "fun");
 });
