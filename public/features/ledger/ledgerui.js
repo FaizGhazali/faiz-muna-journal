@@ -33,8 +33,11 @@ let accounts = [], programs = [], aliases = [], cycles = {}, txns = [], rebates 
 // "Always categorise" offer after a category is changed by hand: { raw, cat, pattern, host, msg }.
 let offer = null, openRow = null;
 // The add form. catAuto: the category came from a merchant rule (it follows the shop until picked by hand).
-const f = { who: null, type: "purchase", amount: "", raw: "", cat: "other", catAuto: true, account: null, date: today() };
+const blank = (keep = {}) => ({ who: keep.who ?? null, type: "purchase", amount: "", raw: "", cat: "other", catAuto: true, account: keep.account ?? null, date: today() });
+const f = blank();
 let msg = "", cardForm = false, cardMsg = "", formKey = "", shown = RECENT;
+// While fixing an item from Recent, the same form edits it: { id, where } (where = the Where text it opened with).
+let editing = null;
 
 const who = () => (people().some((p) => p.id === f.who) ? f.who : me());
 const live = () => accounts.filter((a) => a.active !== false).sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
@@ -53,7 +56,7 @@ export function initLedger(opts) {
   initRules(shared);
   initPlan({ ...shared, me });
   initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases, shops: () => shopNames });
-  $("me").addEventListener("change", () => { f.who = null; formKey = ""; refreshLedger(); });
+  $("me").addEventListener("change", () => { if (!editing) f.who = null; formKey = ""; refreshLedger(); });
   addEventListener("journalchange", () => refreshLedgerParts());
 }
 export function startLedger() {
@@ -91,12 +94,14 @@ function renderAdd() {
   const host = $("ledgerAdd"), a = acct();
   if (cardForm || !live().length) return renderCardForm(host);
   // Drawn once per shape, so new data from the other phone never wipes what's being typed.
-  const key = [who(), f.type, live().map((x) => x.id + x.name).join(","), people().map((p) => p.id + p.name).join(",")].join("|");
+  const key = [editing?.id, who(), f.type, live().map((x) => x.id + x.name).join(","), people().map((p) => p.id + p.name).join(",")].join("|");
   if (key !== formKey || !$("lgAmt")) {
     formKey = key;
     const pay = f.type === "payment";
+    const title = editing ? (pay ? "Edit card payment" : f.type === "refund" ? "Edit refund" : "Edit spending") : pay ? "Log a card payment" : f.type === "refund" ? "Log a refund" : "Add spending";
+    host.classList.toggle("is-editing", !!editing);
     host.innerHTML = `
-      <div class="mhead"><h2 id="ledgerAddTitle">${pay ? "Log a card payment" : f.type === "refund" ? "Log a refund" : "Add spending"}</h2>
+      <div class="mhead"><h2 id="ledgerAddTitle">${title}</h2>
         <label class="mealdate">Day<input type="date" id="lgDate" value="${esc(f.date)}" max="${today()}"></label></div>
       <div class="lbl mwho"><span>${pay ? "Paid by" : "Spent by"}</span><div class="seg">${people().map((p) => `<input type="radio" name="lgWho" id="lgw-${p.id}" value="${p.id}"${p.id === who() ? " checked" : ""}><label for="lgw-${p.id}">${esc(p.name)}</label>`).join("")}</div></div>
       <div class="chips" role="group" aria-label="Kind">${Object.entries(KINDS).map(([k, v]) => `<button type="button" class="chip" data-ltype="${k}" aria-pressed="${k === f.type}">${v}</button>`).join("")}</div>
@@ -108,7 +113,10 @@ function renderAdd() {
       <datalist id="lgShops"></datalist>
       <label>Category <small id="lgWhy"></small><select id="lgCat">${CATS.map((c) => `<option value="${c.id}"${c.id === f.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>`}
       <div class="lwarn" id="lgWarn" role="status" hidden></div>
-      <div class="actions"><button type="button" class="primary" id="lgSave">Save</button><button type="button" class="mini" id="lgCard">＋ Card or wallet</button></div>
+      ${editing ? `<p class="note ledhint">Fixing an item from Recent. Change what's wrong, then save.</p>` : ""}
+      <div class="actions"><button type="button" class="primary" id="lgSave">${saveLabel()}</button>${editing
+        ? `<button type="button" id="lgCancel">Cancel</button>`
+        : `<button type="button" class="mini" id="lgCard">＋ Card or wallet</button>`}</div>
       <p class="msg" id="lgMsg" aria-live="polite"></p>`;
   }
   if ($("lgShops")) $("lgShops").innerHTML = shopOptions(); // refreshed every time: it never disturbs typing
@@ -151,7 +159,26 @@ function paintWarn() {
   el.hidden = !w;
   el.classList.toggle("calm", !!w?.calm);
   el.innerHTML = w ? (w.calm ? esc(w.text) : `<b>Wait — don't pay yet?</b> ${esc(w.text)}`) : "";
-  save.textContent = w && !w.calm ? "Save anyway" : "Save";
+  save.textContent = w && !w.calm ? "Save anyway" : saveLabel();
+}
+const saveLabel = () => (editing ? "Save changes" : "Save");
+
+// "Edit" on a Recent item: load it into the form at the top, which then saves over it.
+function startEdit(id) {
+  const t = txns.find((x) => x.id === id); if (!t) return;
+  const where = t.type === "payment" ? "" : t.merchant || t.raw || "";
+  Object.assign(f, { who: t.spentBy, type: t.type, amount: (Math.abs(t.amountSen) / 100).toFixed(2), raw: where,
+    cat: t.cat === "payment" ? "other" : t.cat || "other", catAuto: false, account: t.account, date: t.date });
+  editing = { id, where };
+  cardForm = false; msg = ""; openRow = null; formKey = "";
+  refreshLedger();
+  $("ledgerAdd").scrollIntoView({ behavior: "smooth", block: "start" });
+  $("lgAmt")?.focus({ preventScroll: true });
+}
+function stopEdit() {
+  editing = null;
+  Object.assign(f, blank({ account: store.get(ACCT_KEY, null) }));
+  msg = ""; formKey = "";
 }
 function warning() {
   const a = acct(), sen = toSen(f.amount);
@@ -173,22 +200,36 @@ async function save() {
   if (f.type === "payment" && a.type !== "credit_card") return say("Card payments are for credit cards.");
   const raw = whereRaw(), r = categorise(raw, aliases);
   // `at` (ms) is required: Firestore refuses a field that is undefined, and the save used to fail silently.
-  const t = manualTxn(a, { spentBy: who(), date: f.date, amount: f.amount, type: f.type, raw: f.type === "payment" ? "Card payment" : raw, cat: f.cat, merchant: r.merchant || raw.trim() }, Date.now());
+  const old = editing ? txns.find((x) => x.id === editing.id) : null;
+  if (editing && !old) { stopEdit(); refreshLedger(); return say("That item was deleted on the other phone."); }
+  const t = manualTxn(a, { spentBy: who(), date: f.date, amount: f.amount, type: f.type, raw: f.type === "payment" ? "Card payment" : raw, cat: f.cat, merchant: r.merchant || raw.trim() }, old?.at ?? Date.now());
+  const body = old ? editedTxn(old, t) : t;
   store.set(ACCT_KEY, a.id);
-  const cyc = cycleOf(a, t.posted);
+  const cyc = cycleOf(a, body.posted);
   const what = f.type === "payment" ? `${rm(sen)} paid to ${a.name}` : `${f.type === "refund" ? "Refund of " : ""}${rm(sen)} at ${f.raw.trim()}`;
+  const ref = old ? doc(db, "ledgerTxns", old.id) : doc(collection(db, "ledgerTxns"));
   const save = $("lgSave"); if (save) save.disabled = true;
   try {
-    await commit(() => Promise.all([setDoc(doc(collection(db, "ledgerTxns")), t), a.type === "credit_card" ? saveCycle(db, cyc) : Promise.resolve()]),
-      `Saved ${what} for ${personName(who())}.`);
+    await commit(() => Promise.all([setDoc(ref, body), a.type === "credit_card" ? saveCycle(db, cyc) : Promise.resolve()]),
+      old ? `Updated: ${what} for ${personName(who())}.` : `Saved ${what} for ${personName(who())}.`);
   } catch (_) {
     if (save) save.disabled = false;
     return say("Not saved yet. Your numbers are still here: try again.");
   }
-  msg = "";
-  Object.assign(f, { amount: "", raw: "", cat: "other", catAuto: true, type: "purchase" });
-  formKey = "";
+  if (old) stopEdit();
+  else { msg = ""; Object.assign(f, { amount: "", raw: "", cat: "other", catAuto: true, type: "purchase" }); formKey = ""; }
   refreshLedger();
+}
+// The saved item after an edit: the form's fields over the old item, keeping what the form doesn't show
+// (where it came from, statement check, notes, created time). A statement item keeps its statement name and
+// posting date unless Where, the day or the card was changed.
+function editedTxn(old, t) {
+  const { id: _id, ...keep } = old;
+  const out = { ...keep, ...t, source: old.source ?? "manual", reconciled: old.reconciled ?? false, at: old.at ?? t.at, updated: Date.now() };
+  if (old.source !== "manual" && f.raw.trim() === editing.where) Object.assign(out, { raw: old.raw, merchant: old.merchant ?? t.merchant });
+  if (old.date === t.date && old.account === t.account) Object.assign(out, { posted: old.posted ?? t.posted, postedGuess: old.postedGuess ?? t.postedGuess, cycle: old.cycle ?? t.cycle });
+  for (const k of Object.keys(out)) if (out[k] === undefined) delete out[k];
+  return out;
 }
 function say(text) { msg = text; const el = $("lgMsg"); if (el) el.textContent = text; }
 
@@ -310,7 +351,7 @@ function renderList() {
       ${open ? `<div class="ledit">
         ${t.type === "payment" ? "" : `<label>Category<select data-lcat="${t.id}">${CATS.map((x) => `<option value="${x.id}"${x.id === t.cat ? " selected" : ""}>${x.icon} ${esc(x.name)}</option>`).join("")}</select></label>`}
         ${t.raw && t.raw !== norm(name) ? `<p class="note">On the statement: ${esc(t.raw)}</p>` : ""}
-        <div class="actions"><button type="button" class="mini" data-ldel="${t.id}">Delete</button></div>
+        <div class="actions"><button type="button" class="mini" data-ledit="${t.id}">✏️ Edit</button><button type="button" class="mini" data-ldel="${t.id}">Delete</button></div>
       </div>` : ""}
     </div>`;
   }).join("")}</div>${list.length > shown ? `<button type="button" class="mini" id="lgMore">Show more</button>` : ""}`
@@ -329,7 +370,8 @@ async function removeTxn(id) {
   });
   if (!ok) return;
   openRow = null;
-  await commit(() => deleteDoc(doc(db, "ledgerTxns", id)));
+  if (editing?.id === id) { stopEdit(); renderAdd(); }
+  await commit(() => deleteDoc(doc(db, "ledgerTxns", id)), `Deleted ${name}.`);
 }
 
 // ---------- "always categorise" ----------
@@ -409,6 +451,7 @@ function wire() {
     if (b.id === "lgSave") save();
     if (b.id === "lgCard") { cardForm = true; msg = ""; renderAdd(); $("lcName")?.focus(); }
     if (b.id === "lcSave") saveCard();
+    if (b.id === "lgCancel") { stopEdit(); refreshLedger(); }
     if (b.id === "lcCancel") { cardForm = false; add.innerHTML = ""; renderAdd(); }
   });
   $("ledgerList").addEventListener("change", async (ev) => {
@@ -428,6 +471,7 @@ function wire() {
     const b = ev.target.closest("button"); if (!b) return;
     if (b.dataset.lopen) { openRow = openRow === b.dataset.lopen ? null : b.dataset.lopen; renderList(); }
     if (b.id === "lgMore") { shown += RECENT; renderList(); }
+    if (b.dataset.ledit) startEdit(b.dataset.ledit);
     if (b.dataset.ldel) removeTxn(b.dataset.ldel);
   });
 }
