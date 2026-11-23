@@ -13,6 +13,7 @@ import { initTrends, renderTrends } from "./trends.js";
 import { initRules, startRules, renderRules } from "./rules.js";
 import { ensureSeeds, addAccount, saveCycle } from "./seeds.js";
 import { initPlan, planSubs, renderPlan } from "./plan.js";
+import { initSpend, renderSpend } from "./spend.js";
 
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (_) { return d; } },
@@ -50,6 +51,7 @@ export function initLedger(opts) {
   initTrends(shared);
   initRules(shared);
   initPlan({ ...shared, me });
+  initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS) });
   $("me").addEventListener("change", () => { f.who = null; formKey = ""; refreshLedger(); });
   addEventListener("journalchange", () => refreshLedgerParts());
 }
@@ -72,6 +74,7 @@ export function stopLedger() { unsubs.forEach((u) => u()); unsubs = []; }
 export function refreshLedger() {
   if (!$("ledgerAdd") || !people().length) return;
   renderPlan();
+  renderSpend();
   renderAdd();
   renderImport();
   renderRules();

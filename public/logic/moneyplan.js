@@ -82,12 +82,14 @@ export function monthBills(commitments, paid, m) {
 export function spentByBucket(txns, plan, m) {
   const out = {};
   for (const t of txns) {
-    if (!isSpend(t) || monthOf(t.date) !== m || COMMITTED_CATS.includes(t.cat)) continue;
-    const b = bucketFor(plan, CAT_BUCKET[t.cat] ?? "essentials");
-    out[b] = (out[b] ?? 0) + t.amountSen;
+    const b = monthOf(t.date) === m ? txnBucket(t, plan) : null;
+    if (b) out[b] = (out[b] ?? 0) + t.amountSen;
   }
   return out;
 }
+// The bucket a Ledger item counts in, or null when it isn't day-to-day spending (card payments,
+// rebate credits, PayLater instalments, which are bills here).
+export const txnBucket = (t, plan) => (!isSpend(t) || COMMITTED_CATS.includes(t.cat) ? null : bucketFor(plan, CAT_BUCKET[t.cat] ?? "essentials"));
 
 // Everything the plan dashboard shows for the month of `day`.
 export function planView({ plan, commitments = [], paid = {}, txns = [], day }) {

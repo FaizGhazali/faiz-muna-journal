@@ -26,6 +26,10 @@ const colourOf = (buckets) => {
   return out;
 };
 
+// For the bucket spending page (spend.js): the live plan, bills and ticks, and each bucket's colour.
+export const planState = () => ({ plan, commitments, paid });
+export const bucketColours = () => colourOf(bucketsOf(plan));
+
 export function initPlan(c) {
   ctx = c;
   const host = $("ledgerPlan");
@@ -62,20 +66,20 @@ function summary(v) {
       <span class="lbtnrow"><button type="button" class="mini" data-lp="edit-plan">Edit plan</button></span></div>
     <div class="lpring">
       ${ring(v, used, col, over)}
-      <ul class="lpleg">${used.map((b) => `<li><span class="dot" style="--c:${col[b.id]}"></span><span>${esc(b.name)}</span><b>${rm(b.usedSen, { whole: true })}</b></li>`).join("")}${over ? "" : `<li><span class="dot free"></span><span>Free</span><b>${rm(v.freeSen, { whole: true })}</b></li>`}</ul>
+      <ul class="lpleg">${used.map((b) => `<li><a href="#ledger/spend/${b.id}"><span class="dot" style="--c:${col[b.id]}"></span><span>${esc(b.name)}</span><b>${rm(b.usedSen, { whole: true })}</b></a></li>`).join("")}${over ? "" : `<li><span class="dot free"></span><span>Free</span><b>${rm(v.freeSen, { whole: true })}</b></li>`}</ul>
     </div>
     <div class="lpleft">
       <div><small>${over ? "Over your income by" : "Can still spend"}</small><b class="${over ? "over" : ""}">${rm(Math.abs(v.freeSen), { whole: true })}</b></div>
       ${over ? "" : `<div><small>a day, to ${end}</small><b class="sm">${rm(v.perDaySen, { whole: true })}</b></div>`}
     </div>
     <p class="note">Bills ${rm(v.committedSen, { whole: true })} (${v.sharePct}% of income) · spent day to day ${rm(v.spentSen, { whole: true })}</p>
-    <h3 class="lph">Your plan <span class="note">${v.buckets.map((b) => b.pct).join(" · ")}</span></h3>
-    <div class="lprows">${v.buckets.map((b) => `<div class="lprow">
+    <h3 class="lph">Your plan <span class="note">tap one to see what it went on</span></h3>
+    <div class="lprows">${v.buckets.map((b) => `<a class="lprow" href="#ledger/spend/${b.id}" aria-label="${esc(b.name)}: see what it went on">
       <span class="dot" style="--c:${col[b.id]}"></span>
       <span class="lpname">${esc(b.name)} <small>${b.pct}%</small>${b.overSen ? ` <span class="lpover">+${rm(b.overSen, { whole: true })} over</span>` : ""}</span>
       <span class="lpamt${b.overSen ? " over" : ""}">${rm(b.usedSen, { whole: true })} <small>/ ${rm(b.planSen, { whole: true })}</small></span>
-      <div class="lbarbg thin"><i style="width:${b.planSen ? Math.min(100, Math.round((b.usedSen / b.planSen) * 100)) : b.usedSen ? 100 : 0}%;--c:${b.overSen ? "var(--obese)" : col[b.id]}"></i></div>
-    </div>`).join("")}</div>
+      <span class="lbarbg thin"><i style="width:${b.planSen ? Math.min(100, Math.round((b.usedSen / b.planSen) * 100)) : b.usedSen ? 100 : 0}%;--c:${b.overSen ? "var(--obese)" : col[b.id]}"></i></span>
+    </a>`).join("")}<a class="lpall" href="#ledger/spend/all">Search all spending →</a></div>
     <p class="note">Day-to-day spending from Ledger counts too: dining and shopping as ${esc(v.buckets.find((b) => b.id === "fun")?.name ?? "Fun")}, the rest as ${esc(v.buckets.find((b) => b.id === "essentials")?.name ?? v.buckets[0].name)}. PayLater on a card is left out, since it's a bill here.</p>`;
 }
 

@@ -1311,6 +1311,36 @@ label.inline { display: flex; align-items: center; gap: 8px; font-weight: 400 }
 .lpleg { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 14px; font-variant-numeric: tabular-nums; min-width: 0 }
 .lpleg li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px }
 .lpleg li span:not(.dot) { color: var(--muted); overflow-wrap: anywhere }
+.lpleg a, a.lprow { color: inherit; text-decoration: none; border-radius: 8px }
+.lpleg a { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 2px 0 }
+.lpleg li { display: block }
+a.lprow { padding: 4px 6px; margin: -4px -6px }
+.lpleg a:hover, a.lprow:hover, .lpleg a:focus-visible, a.lprow:focus-visible { background: color-mix(in srgb, var(--accent-soft) 55%, transparent) }
+.lpall { justify-self: start; font-size: 14px; font-weight: 700 }
+/* Spending by bucket (#ledger/spend/<bucket>): the page shows on its own */
+#ledger.spendpage > :not(#ledgerSpend) { display: none }
+#ledger:not(.spendpage) #ledgerSpend { display: none }
+.lspend, .lsbody { display: grid; gap: 12px; align-content: start }
+.lspend h2 { display: flex; align-items: center; gap: 10px }
+.lspend .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex: none }
+.lspend .stat b.sm { font-size: 24px }
+.lspend .lhead a { text-decoration: none }
+.lsbody > .mini { justify-self: start }
+.lsshops { display: grid }
+.lsshop { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; text-align: left; font: inherit; font-weight: 400; color: inherit }
+.lsshop:first-child { border-top: 0 }
+.lsshop .lbarbg, a.lprow .lbarbg { grid-column: 1 / -1; display: block }
+.lspend .lth .note { font-weight: 400 }
+.lsmonth h4 { display: flex; justify-content: space-between; gap: 8px; margin: 8px 0 0; padding-bottom: 4px; border-bottom: 1px solid var(--line); font-size: 15px }
+.lsmonth h4 span { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums }
+.lsmonth .lrow:first-child { border-top: 0 }
+.lpb.lsrow { grid-template-columns: minmax(0, 1fr) auto }
+.lsname { font: 700 22px/1.2 var(--display); margin: 0 }
+.lsbars { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; height: 120px; align-items: end }
+.lsbar { display: grid; grid-template-rows: 1fr auto; height: 100%; gap: 4px; text-align: center }
+.lsbar i { align-self: end; display: block; background: var(--accent); border-radius: 4px 4px 0 0; opacity: .55 }
+.lsbar.now i { opacity: 1 }
+.lsbar small { font-size: 11px; color: var(--muted) }
 .lpleft { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 20px; border-top: 1px solid var(--line); padding-top: 12px }
 .lpleft div { display: grid }
 .lpleft div:last-child { text-align: right }

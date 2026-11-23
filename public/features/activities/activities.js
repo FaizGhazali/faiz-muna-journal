@@ -88,7 +88,7 @@ export function habitFacts(pid) {
   return out;
 }
 
-const RESUME = /^#(activities|mood|mealsets|fitness\/[\w-]+|diary(?:\/(?:write|ai|(?:edit|read)\/[\w-]+))?|stocky(?:\/(?:add|prices|plan|item\/[\w-]+))?|ledger)$/;
+const RESUME = /^#(activities|mood|mealsets|fitness\/[\w-]+|diary(?:\/(?:write|ai|(?:edit|read)\/[\w-]+))?|stocky(?:\/(?:add|prices|plan|item\/[\w-]+))?|ledger(?:\/spend\/[\w-]+)?)$/;
 function showView() {
   const h = location.hash;
   store.set("journal-page", RESUME.test(h) ? h : "");
@@ -98,7 +98,7 @@ function showView() {
   ["home", "meals", "mealsets", "soon", "guide", "diary", "stocky", "ledger", "activities", "fitness", "mood"].forEach((v) => { $(v).hidden = v !== view; });
   // Weight, Your Next Move, habits and Yesterday sit on top of Meals, Weight and Ledger (the person cards show each one's part);
   // the diary keeps its page calm and Stocky is shared by the house.
-  $("shared").hidden = !["home", "meals", "ledger", "soon"].includes(view);
+  $("shared").hidden = !["home", "meals", "ledger", "soon"].includes(view) || h.startsWith("#ledger/"); // a Ledger page (spending by bucket) keeps to itself
   // The person cards show the part for this journal (see JOURNAL_PARTS in app.js).
   const journal = view === "home" ? "weight" : view === "meals" || view === "ledger" ? view : "";
   if ($("people").dataset.journal !== journal) { $("people").dataset.journal = journal; dispatchEvent(new Event("journalchange")); }
