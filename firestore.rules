@@ -1,14 +1,61 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Only the family's logins can read or write: p1@journal.invalid, p2@journal.invalid, and the old shared
-    // family login (still used by the Android widget and the Dearly cloud writer). Any other account is refused.
-    match /{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid in [
+    // Only the family's logins can read: p1@journal.invalid, p2@journal.invalid, and the old shared family login
+    // (still used, read-only, by the Android widget). Any other account is refused.
+    function family() {
+      return request.auth != null && request.auth.uid in [
         "anhTfDbP4NS3efUYf1VnBTuXVTy2",  // p1
         "EeSDAXmlrtYRKL2uN3ANhXp9W6s1",  // p2
-        "wYR0YCfeWmVz6CvPeoqTViI8NRc2"   // old shared family login
+        "wYR0YCfeWmVz6CvPeoqTViI8NRc2"   // old shared family login: read only
       ];
+    }
+    // Which person is signed in ("p1" / "p2"), or null for the old shared login. Only a person may write.
+    function me() {
+      return request.auth == null ? null
+        : {"anhTfDbP4NS3efUYf1VnBTuXVTy2": "p1", "EeSDAXmlrtYRKL2uN3ANhXp9W6s1": "p2"}.get(request.auth.uid, null);
+    }
+    function person() { return me() != null; }
+    // Each person changes only their own things (public/core/owner.js, OWNED: keep the two lists in step).
+    // `f` is the field naming the owner; it must be theirs before and after, so nothing is taken or given away.
+    function own(f) {
+      return person()
+        && (resource == null || resource.data.get(f, null) == me())
+        && (request.resource == null || request.resource.data.get(f, null) == me());
+    }
+    // Docs keyed {person}_{date}: the id must start with their own id too.
+    function ownDay(f, id) { return own(f) && id.matches('^' + me() + '_.*'); }
+
+    // Everything shared (Stocky, foods, meal sets, the Ledger plan, bills, cards, rules, config): both people.
+    match /{coll}/{rest=**} {
+      allow read: if family();
+      allow write: if person() && !(coll in ['entries', 'activities', 'habitDays', 'moves', 'meals', 'burns', 'diary',
+        'diaryPhotos', 'diaryStyle', 'nextMove', 'accounts', 'ledgerTxns']);
+    }
+
+    // ---------- one person's own ----------
+    match /entries/{id}     { allow write: if ownDay('person', id); }
+    match /habitDays/{id}   { allow write: if ownDay('owner', id); }
+    match /activities/{id}  { allow write: if own('owner'); }
+    match /moves/{id}       { allow write: if own('owner'); }
+    match /meals/{id}       { allow write: if own('person'); }
+    match /burns/{id}       { allow write: if ownDay('person', id); }
+    match /diary/{id}       { allow write: if own('person'); }
+    match /diaryPhotos/{id} { allow write: if own('person'); }
+    // Keyed by person id.
+    match /diaryStyle/{pid} { allow write: if person() && pid == me(); }
+    match /nextMove/{pid}   { allow write: if person() && pid == me(); }
+    match /accounts/{pid}   { allow write: if person() && pid == me(); }
+
+    // Ledger spending: yours to add, change or delete (items with no spentBy are anyone's). Two household jobs
+    // touch the other person's items too, so either may: a statement or spreadsheet import adds rows for whoever
+    // the card or sheet belongs to, and categorising a shop or checking a statement changes only these fields.
+    match /ledgerTxns/{id} {
+      function mine(d) { return d.get('spentBy', null) == null || d.get('spentBy', null) == me(); }
+      allow create: if person() && (mine(request.resource.data) || request.resource.data.get('source', '') in ['statement_import', 'sheet_import']);
+      allow update: if person() && ((mine(resource.data) && mine(request.resource.data))
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cat', 'bucket', 'updated', 'posted', 'postedGuess', 'raw', 'reconciled', 'stmt', 'batch', 'cycle', 'amountSen']));
+      allow delete: if person() && mine(resource.data);
     }
 
     // Visitor counts for the landing page: visits/{country code} -> { n }. Anyone may read them,

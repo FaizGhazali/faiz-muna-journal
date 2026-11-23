@@ -170,13 +170,14 @@ const clearCurrent = () => store.set(`journal-current-${me}`, { date: today(), i
 
 // ---------- Home-screen widget feed ----------
 // nextMove/{person} holds each person's current pick, so the Android widget (android/) shows what the app shows
-// without copying the suggestion rules. Both people are published, so the widget stays fresh when only one phone
-// opens the app. Written only when it differs from what Firestore already has (and not twice while a write is on its way).
+// without copying the suggestion rules. Each phone publishes only the signed-in person's (firestore.rules lets
+// nobody write the other's), so a widget refreshes when its owner opens the app. Written only when it differs from what Firestore already has (and not twice while a write is on its way).
 let published = {}, sent = {}; // nextMove docs as last read, and the last body this page wrote, per person
 const sameAs = (body, d) => !!d && Object.keys(body).every((k) => (d[k] ?? null) === body[k]);
 function publishMoves() {
   if (!movesReady || !nextReady) return;
   for (const { id: p } of people()) {
+    if (!canEdit(p)) continue;
     const m = currentMove(p), ideas = mine(p).some((a) => a.status === "inbox");
     const body = m
       ? { person: p, item: m.a.id, title: m.a.title, type: m.a.type, why: m.why || "", date: today() }

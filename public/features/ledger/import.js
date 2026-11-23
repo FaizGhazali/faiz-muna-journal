@@ -4,6 +4,7 @@
 import { collection, doc, writeBatch } from "../../core/fs.js";
 import { $, esc } from "../../core/util.js";
 import { confirmDelete } from "../../core/confirm.js";
+import { canEdit, viewOnly } from "../../core/owner.js";
 import { toast } from "../../core/toast.js";
 import { SYSTEM_CATEGORIES, rm, shortDate, cycleOf, cycleForTxn, lastStatement, toSen, computeRebate, rebateSnapshot, programFor } from "../../logic/ledger.js";
 import { pageLines, parseStatement, parsePasted, checkTotals, reconcile, tally, candidates, suggestPattern, parseSheet, sheetDupes } from "../../logic/ledgerimport.js";
@@ -201,10 +202,12 @@ function rowHtml(x, i) {
     : "";
   const choose = (x.kind === "new" || x.kind === "category") && r?.type !== "payment"
     ? `<select class="licat" data-i="${i}" aria-label="Category for ${esc(name)}">${CATS.map((c) => `<option value="${c.id}"${c.id === pk.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select>` : "";
-  const tick = x.kind === "matched" ? "" : `<input type="checkbox" class="lion" data-i="${i}"${pk.on ? " checked" : ""} aria-label="${x.kind === "missing" ? "Remove from log" : "Accept"}: ${esc(name)}">`;
+  // Only its owner can remove a logged item (firestore.rules), so the other person's missing ones just show.
+  const theirs = x.kind === "missing" && t.spentBy && !canEdit(t.spentBy);
+  const tick = x.kind === "matched" ? "" : theirs ? `<span aria-hidden="true">👀</span>` : `<input type="checkbox" class="lion" data-i="${i}"${pk.on ? " checked" : ""} aria-label="${x.kind === "missing" ? "Remove from log" : "Accept"}: ${esc(name)}">`;
   return `<div class="lrrow k-${x.kind}">
     ${tick || `<span aria-hidden="true">✓</span>`}
-    <div class="lmain"><b>${esc(name)}</b><small>${line}</small>${extra}${choose}</div>
+    <div class="lmain"><b>${esc(name)}</b><small>${line}</small>${extra}${choose}${theirs ? viewOnly(t.spentBy, "spending") : ""}</div>
     <span class="lamt${amt < 0 ? " cr" : ""}">${rm(Math.abs(amt))}${amt < 0 ? " CR" : ""}</span>
   </div>`;
 }
@@ -226,7 +229,7 @@ function paintSummary() {
 // ---------- saving ----------
 async function save() {
   const { parsed: p, res, pick, cycle } = imp, a = account(), at = Date.now(), batchId = `imp-${at}`;
-  const gone = res.filter((x, i) => x.kind === "missing" && pick[i].on);
+  const gone = res.filter((x, i) => x.kind === "missing" && pick[i].on && (!x.txn.spentBy || canEdit(x.txn.spentBy)));
   if (gone.length) {
     const ok = await confirmDelete({
       title: `Remove ${gone.length} ${gone.length === 1 ? "item" : "items"} from your log?`,
@@ -241,7 +244,7 @@ async function save() {
   let added = 0, fixed = 0, removed = 0;
   res.forEach((x, i) => {
     const pk = pick[i];
-    if (x.kind === "missing") { if (pk.on) { ops.push([doc(col, x.txn.id), null]); removed++; } return; }
+    if (x.kind === "missing") { if (pk.on && (!x.txn.spentBy || canEdit(x.txn.spentBy))) { ops.push([doc(col, x.txn.id), null]); removed++; } return; }
     const r = x.row, base = { posted: r.posted, postedGuess: false, raw: r.raw, reconciled: true, stmt: cycle.id, batch: batchId };
     base.cycle = cycleForTxn(a, { ...r }).id;
     if (x.kind === "new") {

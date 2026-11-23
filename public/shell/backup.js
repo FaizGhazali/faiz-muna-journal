@@ -1,6 +1,7 @@
 // Save the whole journal to a file, and load such a file back in.
 // Loading adds or replaces items with the same id. It never deletes anything.
 import { collection, doc, getDocs, writeBatch } from "../core/fs.js";
+import { mayWrite } from "../core/owner.js";
 import { $, today } from "../core/util.js";
 
 const APP = "our-journal";
@@ -75,16 +76,18 @@ async function readFile(file) {
   if (parsed.version > VERSION) { say("That backup is from a newer version of the app. Reload the app and try again."); return; }
 
   const writes = [];
+  let theirs = 0;
   for (const name of COLS) {
     const docs = parsed.data[name];
     if (!isObj(docs)) continue;
     for (const [id, body] of Object.entries(docs)) {
       if (!okId(id) || !isObj(body)) continue;
       if (name === "config" && (id !== "people" || !Array.isArray(body.people))) continue;
+      if (!mayWrite(name, id, body)) { theirs++; continue; } // only its owner can load the other person's (firestore.rules)
       writes.push({ name, id, body });
     }
   }
-  if (!writes.length) { say("That backup is empty."); return; }
+  if (!writes.length) { say(theirs ? "Everything in that backup is the other person's. They can load it themselves." : "That backup is empty."); return; }
 
   const counts = {};
   writes.forEach((w) => { counts[w.name] = (counts[w.name] || 0) + 1; });
@@ -94,7 +97,7 @@ async function readFile(file) {
     ? new Date(parsed.exported).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "an unknown date";
 
   pending = writes;
-  $("importText").textContent = `This backup from ${when} has ${parts.join(", ")}. Items already in the journal with the same date or id will be replaced by the backup copy. Nothing is deleted.`;
+  $("importText").textContent = `This backup from ${when} has ${parts.join(", ")}. Items already in the journal with the same date or id will be replaced by the backup copy. Nothing is deleted.${theirs ? ` ${theirs} of the other person's items are left for them to load with the same file.` : ""}`;
   say("");
   showConfirm(true);
 }

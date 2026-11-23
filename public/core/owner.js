@@ -11,6 +11,17 @@ export const selfId = () => self;
 // Nobody known yet (still starting up) = nothing is locked.
 export const canEdit = (pid) => !self || pid === self;
 
+// The field that says whose a doc is, per collection. firestore.rules enforces the same list: keep them in step.
+// Docs keyed by person id (diaryStyle, nextMove, accounts) are theirs by id. Ledger items with no spentBy are anyone's.
+export const OWNED = { entries: "person", activities: "owner", habitDays: "owner", moves: "owner", meals: "person", burns: "person",
+  diary: "person", diaryPhotos: "person", ledgerTxns: "spentBy" };
+const BY_ID = ["diaryStyle", "nextMove", "accounts"];
+export function mayWrite(col, id, body) {
+  if (BY_ID.includes(col)) return canEdit(id);
+  const f = OWNED[col], v = f && body?.[f];
+  return !f || (f === "spentBy" && !v) || canEdit(v);
+}
+
 // The line shown where the edit controls would be: "Muna's mood. Only Muna can change it."
 export function viewOnly(pid, what) {
   const n = esc(nameOf(pid) || "They");
