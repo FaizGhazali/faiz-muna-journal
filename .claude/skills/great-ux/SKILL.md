@@ -37,7 +37,18 @@ Before finishing any change the family can see, walk through it as them on a 375
 - A form someone is filling in is not redrawn by live updates from the other phone (keep it out of the `innerHTML` redraw: a `formKey`, a `data-dirty` flag, or skip the redraw while the form is in the DOM).
 - Drafts that take effort (diary) autosave per device.
 
-## 5. Phone-first and calm
+## 5. Long lists can be searched
+
+Nobody should scroll and squint to find one thing. **Any list that can grow past `SEARCH_MIN` (8) items gets a search-by-name box** at its top (Stocky's At home is the model: `shelvesHtml()` in `public/features/stocky/stockyui.js`). When you build a list that will grow (items, foods, sets, shops, bills, kinds, memories), add it in the same change.
+
+- **Matching:** use `findByName(items, query, nameOf)` from `public/logic/search.js`; never write a new matcher. It ignores case, accents and extra spaces, needs every typed word in any order, puts names that start with the text first, and gives "Did you mean" (`close`) for typos and texting short forms (`ayma` → Ayam, `bwg` → Bawang).
+- **Filter as they type**, no Search button. Redraw only the results, never the box, so the focus and phone keyboard stay (`input` → `results.innerHTML = …`). Enter closes the keyboard; Escape clears.
+- **Search everything:** look inside folded groups and past "+ more" limits, and show every match with its group heading. Say how many: "3 of 19 items · Clear search".
+- **Nothing found is helpful,** never a blank: "Nothing called "x"", the "Did you mean" names as taps that open the thing, and "+ Add "x"" that opens the add form with the name already typed.
+- `<input type="search">` with `class="gsearch"` (16 px, so iPhones don't zoom), a placeholder that says what's searched ("Search 19 items"), `autocomplete="off"`, `enterkeyhint="search"`, an `aria-label`.
+- Keep the query in memory while the app is open, so opening an item and coming back still shows the results; live updates from the other phone wait until the box loses focus.
+
+## 6. Phone-first and calm
 
 - Check every new layout at 375 px wide: no sideways scroll, tap targets ≥ 40 px, the number keyboard for money (`inputmode="decimal"`), the date picker for days.
 - Put the main action first and make it look primary; secondary actions are plain; dangerous ones are never the default.
@@ -45,6 +56,6 @@ Before finishing any change the family can see, walk through it as them on a 375
 - Motion is short (≤ 300 ms for moves, ~2 s for a glow), and `prefers-reduced-motion` turns it off.
 - Dark and light themes both: use the colour tokens in `styles.css`, never hard-coded colours.
 
-## 6. Prove it
+## 7. Prove it
 
 Run the demo (`hosting` preview, "Try the demo"), do the flow as the family would at phone width, and check: did the page stay where I was? did it tell me it worked? could I fix a mistake? did anything I typed get lost? Fix anything that fails before shipping.

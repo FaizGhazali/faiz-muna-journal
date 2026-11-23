@@ -5,6 +5,7 @@ import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "../..
 import { confirmDelete } from "../../core/confirm.js";
 import { UNITS, LEVELS, allKinds, kindOf, shelves, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice, setCost, linksTo, linkRows, LINKS_MAX } from "../../logic/stocky.js";
 import { readFood } from "../../logic/meals.js";
+import { findByName, SEARCH_MIN } from "../../logic/search.js";
 import { $, esc, iso, parse, today, lastUsed } from "../../core/util.js";
 
 const day = (d) => parse(d).toLocaleDateString(undefined, { day: "numeric", month: "short" });
@@ -14,6 +15,7 @@ let pantry = [], buys = [], prices = [], list = [], kinds = allKinds(), ests = {
 // Page state: which row's "Bought" form is open, the item in the quick sheet, folded shelves, the meal plan, messages.
 let buying = null, pricing = false, editing = false, byShop = false, peek = null, msg = "", plan = {}, pending = false;
 let shut = new Set(), opened = new Set(), unfolded = new Set(); // folded shelves (kept per device), shelves showing every tile, open parts of the item page
+let homeQ = "", newName = ""; // the At home search (kept in memory), and the name "+ Add" carries to the add page
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (_) { return d; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} },
@@ -26,7 +28,7 @@ export function initStocky(opts) {
   for (const c of ["pantry", "buys", "prices", "shopList", "foods", "kinds"]) cols[c] = collection(opts.db, c);
   byShop = store.get("journal-stocky-byshop", "") === "1";
   try { shut = new Set(JSON.parse(store.get("journal-stocky-shut", "[]"))); } catch (_) { shut = new Set(); }
-  addEventListener("hashchange", () => { closePeek(); pricing = false; editing = false; unfolded.clear(); refreshStocky(true); });
+  addEventListener("hashchange", () => { if (route().page !== "add") newName = ""; closePeek(); pricing = false; editing = false; unfolded.clear(); refreshStocky(true); });
   wire();
 }
 export function startStocky() {
@@ -213,8 +215,8 @@ function homePage() {
   </section>
   <section class="panel sk-home" aria-labelledby="skHomeTitle" data-title="At home">
     <div class="mhead"><h2 id="skHomeTitle">At home</h2><a class="btn mini" href="#stocky/add">+ Add item</a></div>
-    ${pantry.length ? shelves(pantry, ests, kinds).map(shelfHtml).join("")
-      : `<div class="mempty"><p><b>Add the things you buy often.</b></p><p class="note">Rice, eggs, milk, soap, tissue. Each time you buy one, Stocky learns how fast it goes and tells you before it runs out. Link food to your Meals foods and the meals you log count too.</p><a class="btn primary" href="#stocky/add">Add your first item</a></div>`}
+    ${pantry.length >= SEARCH_MIN || homeQ ? `<input type="search" id="skFind" class="gsearch sk-find" placeholder="Search ${pantry.length} items" aria-label="Search what's at home" aria-controls="skShelves" autocomplete="off" enterkeyhint="search" value="${esc(homeQ)}">` : ""}
+    <div id="skShelves">${shelvesHtml()}</div>
   </section>
   <p class="note">"Days left" is a guess from how often you buy each thing and the meals you log. Tap an item and say how much is left to put it right.</p>`;
 }
@@ -231,12 +233,28 @@ function tileLeft(e) {
   if (d == null) return e.left == null ? "New" : "Not sure";
   return d === 0 ? "Today" : d < 14 ? `${d} day${d === 1 ? "" : "s"}` : d < 60 ? `${Math.round(d / 7)} wk` : "2+ months";
 }
-function shelfHtml({ kind, items, need }) {
-  const open = !shut.has(kind.id), all = opened.has(kind.id) || items.length <= SHELF_TILES + 1;
+// The shelves, or only what matches the search. A search looks on every shelf, folded ones too, and shows
+// every match (no "+ more"); nothing found offers "Did you mean" and adding it. Redrawn alone while typing,
+// so the search box keeps its focus and keyboard.
+function shelvesHtml() {
+  if (!pantry.length) return `<div class="mempty"><p><b>Add the things you buy often.</b></p><p class="note">Rice, eggs, milk, soap, tissue. Each time you buy one, Stocky learns how fast it goes and tells you before it runs out. Link food to your Meals foods and the meals you log count too.</p><a class="btn primary" href="#stocky/add">Add your first item</a></div>`;
+  const q = homeQ.trim();
+  if (!q) return shelves(pantry, ests, kinds).map((s) => shelfHtml(s)).join("");
+  const { hits, close } = findByName(pantry, q);
+  const clear = `<button type="button" class="linkbtn" data-sk="findclear">Clear search</button>`;
+  if (!hits.length) return `<div class="sk-none" role="status"><p>Nothing called "<b>${esc(q)}</b>" at home.</p>
+    ${close.length ? `<p class="note">Did you mean:</p><div class="chips">${close.map((p) => `<button type="button" class="chip" data-sk="peek" data-id="${esc(p.id)}">${esc(p.name)}</button>`).join("")}</div>` : ""}
+    <div class="actions"><a class="btn primary" href="#stocky/add" data-sk="addnamed" data-name="${esc(q)}">+ Add "${esc(q)}"</a>${clear}</div></div>`;
+  return `<p class="note sk-found" role="status">${hits.length} of ${pantry.length} item${pantry.length === 1 ? "" : "s"} · ${clear}</p>
+    ${shelves(hits, ests, kinds).map((s) => shelfHtml(s, true)).join("")}`;
+}
+function shelfHtml({ kind, items, need }, searching = false) {
+  const open = searching || !shut.has(kind.id), all = searching || opened.has(kind.id) || items.length <= SHELF_TILES + 1;
   const shown = all ? items : items.slice(0, SHELF_TILES);
+  const head = `<b>${esc(kind.name)}</b><small>${items.length}</small>${need ? `<span class="sk-need">${need} to buy</span>` : ""}`;
   return `<div class="sk-shelf">
-    <button type="button" class="sk-shelfhead" data-sk="shelf" data-kind="${esc(kind.id)}" aria-expanded="${open}">
-      <b>${esc(kind.name)}</b><small>${items.length}</small>${need ? `<span class="sk-need">${need} to buy</span>` : ""}<i aria-hidden="true">▾</i></button>
+    ${searching ? `<div class="sk-shelfhead">${head}</div>` : `<button type="button" class="sk-shelfhead" data-sk="shelf" data-kind="${esc(kind.id)}" aria-expanded="${open}">
+      ${head}<i aria-hidden="true">▾</i></button>`}
     ${open ? `<div class="sk-tiles">${shown.map((p) => { const e = ests[p.id]; return `<button type="button" class="sk-tile is-${e.status}" data-sk="peek" data-id="${esc(p.id)}">
       <b>${esc(p.name)}</b><small>${esc(tileLeft(e))}</small>${bar(e)}</button>`; }).join("")}${all ? "" : `<button type="button" class="sk-tile more" data-sk="more" data-kind="${esc(kind.id)}">+${items.length - shown.length} more</button>`}</div>` : ""}
   </div>`;
@@ -340,7 +358,7 @@ const linkRow = (foods, a = {}, unit = "g") => `<div class="srow" data-link-row>
 function itemForm(p) {
   const { foods } = mealData(), v = (k, d = "") => esc(p?.[k] ?? d);
   return `<form class="mform" data-skform="item" novalidate>
-    <label>Name<input type="text" name="name" maxlength="60" value="${v("name")}" placeholder="Beras, Telur, Tisu"></label>
+    <label>Name<input type="text" name="name" maxlength="60" value="${p ? v("name") : esc(newName)}" placeholder="Beras, Telur, Tisu"></label>
     <div class="two">${kindField(p ? kindOf(p.kind, kinds).id : lastKind())}${unitSelect(p ? p.unit : lastUnit())}</div>
     <label>Usually bought at once<input type="number" name="pack" inputmode="decimal" min="0" value="${v("pack")}" placeholder="5000 for a 5 kg bag, 30 for a tray"></label>
     <fieldset class="sk-links" data-sk-show="food">
@@ -576,6 +594,8 @@ function wire() {
     if (act === "unpeek") closePeek();
     if (act === "shelf") { const k = b.dataset.kind; shut.has(k) ? shut.delete(k) : shut.add(k); store.set("journal-stocky-shut", JSON.stringify([...shut])); refreshStocky(true); }
     if (act === "more") { opened.add(b.dataset.kind); refreshStocky(true); }
+    if (act === "findclear") { homeQ = ""; refreshStocky(true); $("skFind")?.focus(); }
+    if (act === "addnamed") newName = b.dataset.name; // the link then opens the add page with the name typed in
     if (act === "buy") { buying = b.dataset.key; pricing = false; msg = ""; refreshStocky(true); here.querySelector(".sk-buy input[name=qty]")?.focus(); }
     if (act === "cancel") { buying = null; pricing = false; editing = false; msg = ""; refreshStocky(true); }
     if (act === "byshop") { byShop = !byShop; store.set("journal-stocky-byshop", byShop ? "1" : ""); refreshStocky(true); }
@@ -617,12 +637,18 @@ function wire() {
   // An item page part opened or shut stays that way through live redraws ("toggle" doesn't bubble).
   host.addEventListener("toggle", (ev) => { const k = ev.target.dataset?.part; if (k) ev.target.open ? unfolded.add(k) : unfolded.delete(k); }, true);
   both("input", (ev) => {
+    if (ev.target.id === "skFind") { homeQ = ev.target.value; $("skShelves").innerHTML = shelvesHtml(); return; } // only the results redraw
     const f = ev.target.closest("form"); if (!f) return;
     if (f.matches(".mform")) f.dataset.dirty = "1";
     if (ev.target.name === "kind" && ev.target.closest(".sk-kindf")) { openMenu(f, false); syncForms(); return; }
     hint(f);
   });
   both("keydown", (ev) => {
+    if (ev.target.id === "skFind") {
+      if (ev.key === "Enter") ev.target.blur(); // shuts the phone keyboard so the results show
+      if (ev.key === "Escape" && homeQ) { ev.preventDefault(); homeQ = ""; ev.target.value = ""; $("skShelves").innerHTML = shelvesHtml(); }
+      return;
+    }
     if (ev.target.name !== "kind" || !ev.target.closest(".sk-kindf")) return;
     if (ev.key === "Enter") { ev.preventDefault(); closeMenus(); ev.target.blur(); }
     if (ev.key === "Escape") closeMenus();
