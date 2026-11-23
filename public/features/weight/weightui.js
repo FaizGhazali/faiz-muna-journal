@@ -58,7 +58,8 @@ function goalHtml(p, w) {
   return `<strong>${gap.toFixed(1)} kg to ${w > hi ? "lose" : "gain"}</strong><p>Goal: ${target.toFixed(1)} kg, BMI ${w > hi ? "24.9" : "18.5"}. About ${weeks} weeks at ${PACE} kg a week, around ${when}.${since}</p>`;
 }
 
-// Each person has one card: weight and BMI on top (every journal), then a part for the journal picked on the wheel.
+// Each person has one card: weight and BMI on top, then a part per journal. On Weight it's the whole card;
+// Meals and Ledger move it under their own cards (showView) and CSS shows only the header and their part.
 // #people[data-journal] shows only the matching .pextra. A new journal adds its id here and fills "<id>Slot-<person>".
 const JOURNAL_PARTS = ["weight", "meals", "ledger"];
 export function renderPeople() {
@@ -67,7 +68,9 @@ export function renderPeople() {
     const b = w == null ? null : bmiOf(p, w), s = b == null ? null : statusOf(b);
     const pos = b == null ? 0 : Math.max(0, Math.min(100, ((b - 15) / 20) * 100));
     return `<article class="person">
-      <div class="who"><h2>${esc(p.name)}</h2><span>${esc(p.age)} · ${esc(p.sex)} · ${esc(p.cm)} cm</span></div>
+      <div class="who"><h2><i class="pav" aria-hidden="true">${esc(p.name.trim().charAt(0).toUpperCase())}</i>${esc(p.name)}</h2>
+        <span class="pmeta" data-journal="weight">${esc(p.age)} · ${esc(p.sex)} · ${esc(p.cm)} cm</span>
+        ${s ? `<span class="pmeta pill" data-journal="meals" style="--c:var(${s.c})">BMI ${b.toFixed(1)} · ${s.t}</span>` : ""}</div>
       <div class="stats">
         <div class="stat"><small>Weight</small><b>${w == null ? "–" : w.toFixed(1)}</b><i>kg</i></div>
         <div class="stat"><small>BMI</small><b>${b == null ? "–" : b.toFixed(1)}</b></div>

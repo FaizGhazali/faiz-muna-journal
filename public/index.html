@@ -335,6 +335,7 @@ try {
       <li><time datetime="2026-11-23">23 Nov 2026</time> Tap a bucket on the money plan (Essentials, Fun…) to see what it went on: shops and categories for one month or all months, for either of you or both, and a search. Tap a shop to see all you've ever spent there, a usual month and visit, and the last 12 months. Shop in the wrong bucket? Open it, tap Edit, and pick the right bucket or category: it fixes every purchase there, and new ones too. Give a shop your own name (DUNKIN → "Morning donuts"): it shows beside the statement name, the search finds it, and Add spending offers it, saving under the statement name so it all adds up together.</li>
       <li><time datetime="2026-11-23">23 Nov 2026</time> Ledger money plan: split your income into buckets (55 · 5 · 10 · 15 · 15 to start, yours to change), add your monthly bills and instalments, and see what you can still spend this month and per day. Tick bills as they're paid, watch instalments count down, and see the next 12 months. Your card rebate is one small tile at the top.</li>
       <li><time datetime="2026-11-23">23 Nov 2026</time> Ledger can bring in your past spending from a spreadsheet: copy your tracker tab and paste it. It finds the Date, Merchant and Amount columns, skips anything already there, and adds the rest.</li>
+      <li><time datetime="2026-11-23">23 Nov 2026</time> Each journal opens on what it's for: Meals starts with your plate and the calories each of you ate, Ledger with the money plan and what each of you spent this month. Weight keeps the full picture: your next move, habits, how yesterday felt and both progress cards.</li>
       <li><time datetime="2026-11-23">23 Nov 2026</time> Ledger trends and rules: see each month's spending by category, this statement against the last one and your top shops, for either of you or both, on one card or all. Edit any card's rebate rules (tiers, rates, shared caps, what never earns) and see what this statement would earn before you save.</li>
       <li><time datetime="2026-11-23">23 Nov 2026</time> Ledger statements: pick your card statement PDF and Ledger reads it on your phone (never uploaded), matches it against what you logged, and shows what's missing, extra or different so you can accept it all at once. The statement's real balance and rebate are saved. Change a shop's category and it offers to remember it for next time.</li>
       <li><time datetime="2026-11-23">23 Nov 2026</time> Ledger, a money journal on the round button: log what you both spend, see each person's month by category, and follow a credit card's rebate tier as the statement builds up. It warns you before an early card payment drops you a tier, and says how much is safe to pay now.</li>
@@ -421,7 +422,7 @@ try {
   <header class="top">
     <div>
       <h1 id="heading">Our Journal</h1>
-      <p>Our goal: both of us in the normal BMI range, 18.5 to 24.9.</p>
+      <p id="jline">Our goal: both of us in the normal BMI range, 18.5 to 24.9.</p>
     </div>
     <div class="actions">
       <button type="button" class="theme"></button>
@@ -460,17 +461,19 @@ try {
       <div class="panel mood" id="moodCard" aria-label="Yesterday's mood"></div>
       <div class="panel reflect" id="reflectCard" aria-label="Reflection" data-title="Reflect"></div>
     </section>
-    <section class="people" id="people" aria-label="Progress"></section>
+    <div class="jslot" data-slot="weight"><section class="people" id="people" aria-label="Progress"></section></div>
   </div>
   <div class="view" id="meals" hidden>
     <section class="panel mcard" id="mealCard" aria-labelledby="mealTitle"></section>
     <section class="panel mealday" id="mealDay" aria-label="Meals logged"></section>
+    <div class="jslot" data-slot="meals"><p class="eyebrow jhead">Calories, each of you</p></div>
     <p class="note">Calories, carbs, protein and fat come from the numbers you type for each food, so they're as good as those numbers. The range comes from your BMI and an estimate of what you burn. Use them as a guide, not an exact count.</p>
   </div>
   <div class="view" id="ledger" hidden>
     <div class="lplan" id="ledgerPlan"></div>
     <section class="panel lspend" id="ledgerSpend" aria-labelledby="lsTitle" data-title="Spending by bucket"></section>
     <section class="panel ladd" id="ledgerAdd" aria-labelledby="ledgerAddTitle" data-title="Add spending"></section>
+    <div class="jslot" data-slot="ledger"><p class="eyebrow jhead">This month, each of you</p></div>
     <section class="panel limport" id="ledgerImport" aria-labelledby="liTitle" data-title="Import statement" hidden></section>
     <section class="panel lrules" id="ledgerRules" aria-labelledby="lrTitle" data-title="Rebate rules" hidden></section>
     <div class="lcards" id="ledgerCards"></div>

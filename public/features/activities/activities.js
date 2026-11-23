@@ -10,7 +10,7 @@ import {
 import {
   TYPES, ALL_DAYS, guessType, isScheduled, habitState, habitWeek, describe, firstOpenStep, scoreOf, pickNext, learn,
 } from "../../logic/suggest.js";
-import { journalView } from "../../core/journal.js";
+import { journalView, DASH, DASH_LINE } from "../../core/journal.js";
 import { confirmDelete } from "../../core/confirm.js";
 import { $, esc, iso, parse, dayNum, addDays, today } from "../../core/util.js";
 
@@ -96,12 +96,15 @@ function showView() {
   const view = h === "#activities" ? "activities" : h.startsWith("#fitness") ? "fitness" : h === "#mood" ? "mood" : h === "#soon" ? "soon" : h === "#guide" ? "guide"
     : h.startsWith("#diary") ? "diary" : h.startsWith("#stocky") ? "stocky" : h.startsWith("#ledger") ? "ledger" : h === "#meals" ? "meals" : h === "#mealsets" ? "mealsets" : journalView();
   ["home", "meals", "mealsets", "soon", "guide", "diary", "stocky", "ledger", "activities", "fitness", "mood"].forEach((v) => { $(v).hidden = v !== view; });
-  // Weight, Your Next Move, habits and Yesterday sit on top of Meals, Weight and Ledger (the person cards show each one's part);
-  // the diary keeps its page calm and Stocky is shared by the house.
-  $("shared").hidden = !["home", "meals", "ledger", "soon"].includes(view) || h.startsWith("#ledger/"); // a Ledger page (spending by bucket) keeps to itself
-  // The person cards show the part for this journal (see JOURNAL_PARTS in app.js).
-  const journal = view === "home" ? "weight" : view === "meals" || view === "ledger" ? view : "";
-  if ($("people").dataset.journal !== journal) { $("people").dataset.journal = journal; dispatchEvent(new Event("journalchange")); }
+  // Each journal has its own dashboard (DASH in journal.js): only Weight shows the shared top. Meals and Ledger
+  // get the person cards with just their own part, under their own cards; a Ledger page (#ledger/…) keeps to itself.
+  const dash = DASH[view] || {}, subpage = view === "ledger" && h.includes("/");
+  $("shared").hidden = !dash.shared;
+  const journal = (!subpage && dash.people) || "", slot = journal && document.querySelector(`.jslot[data-slot="${journal}"]`), people = $("people");
+  if (slot && people.parentNode !== slot) slot.append(people);
+  people.hidden = !journal;
+  if (people.dataset.journal !== journal) { people.dataset.journal = journal; dispatchEvent(new Event("journalchange")); }
+  $("jline").textContent = dash.line || DASH_LINE;
   $("meBox").hidden = ["fitness", "mealsets", "guide", "stocky"].includes(view); // the fitness page has its own person switch; sets and groceries are shared
   const tab = ["home", "meals", "mealsets", "soon", "guide", "diary", "stocky", "ledger"].includes(view) ? "home" : view;
   document.querySelectorAll("#nav a").forEach((a) => a.toggleAttribute("aria-current", a.dataset.view === tab));

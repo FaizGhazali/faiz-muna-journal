@@ -365,7 +365,7 @@ export function refreshLedgerParts() {
     const rows = spendByCat(txns, { from, to: t, person: p.id }), total = spendTotal(rows);
     const last = spendTotal(spendByCat(txns, { from: lastFrom, to: lastTo, person: p.id }));
     const big = rows[0]?.sen || 1;
-    slot.innerHTML = `<div class="calhead"><h3 class="ptitle">Spending</h3><a class="btn mini" href="#ledger">Add</a></div>
+    slot.innerHTML = `<div class="calhead"><h3 class="ptitle">Spending</h3><a class="btn mini" href="#ledger/spend/all">See all →</a></div>
       ${rows.length ? `<p class="week"><b>${rm(total)}</b> in ${esc(month)} so far${last ? ` · ${rm(last)} by this day last month` : ""}</p>
       <div class="lcats">${rows.slice(0, 5).map((r) => `<div class="lcat"><span>${cat(r.cat).icon} ${esc(cat(r.cat).name)}</span><i style="width:${Math.max(3, Math.round((r.sen / big) * 100))}%"></i><b>${rm(r.sen, { whole: true })}</b></div>`).join("")}</div>`
         : `<p class="note">Nothing logged in ${esc(month)} yet. Logging is optional: add what you want to keep an eye on.</p>`}`;

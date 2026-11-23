@@ -751,6 +751,24 @@ html.touring .wheel.hint .wmore::after { display: none }
 #people .pextra:empty, #people:not([data-journal="weight"]) .pextra[data-journal="weight"], #people:not([data-journal="meals"]) .pextra[data-journal="meals"], #people:not([data-journal="ledger"]) .pextra[data-journal="ledger"] { display: none }
 #people .pextra .fit { border-top: 0; padding-top: 0 }
 #people .pextra[data-journal] { animation: plateIn .3s ease-out }
+
+/* ---------- Per-journal dashboards ----------
+   Weight shows the whole person card. Meals and Ledger move #people under their own cards (showView) and show
+   only the name and their own part, so each journal opens on what it's for. */
+.jslot { display: grid; gap: 10px; min-width: 0 }
+.jslot:not(:has(#people:not([hidden]))) .jhead { display: none }
+.jhead { padding: 0 4px }
+.who h2 { display: flex; align-items: center; gap: 10px }
+.pav { display: inline-grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 50%; font: 700 16px/1 var(--display); font-style: normal;
+  background: var(--accent-soft); color: var(--accent) }
+.pmeta { display: none }
+#people[data-journal="weight"] .pmeta[data-journal="weight"] { display: inline }
+#people[data-journal="meals"] .pmeta[data-journal="meals"] { display: inline-flex; margin: 0; font-size: 13px; padding: 3px 10px }
+#people:is([data-journal="meals"], [data-journal="ledger"]) .person > :is(.stats, .scale, .goal, .chart) { display: none }
+#people:is([data-journal="meals"], [data-journal="ledger"]) .person { gap: 14px }
+#people:is([data-journal="meals"], [data-journal="ledger"]) .who { align-items: center }
+#people:is([data-journal="meals"], [data-journal="ledger"]) .who h2 { font-size: 20px }
+#people:is([data-journal="meals"], [data-journal="ledger"]) .pextra { border-top: 0; padding-top: 0 }
 .ptitle { font-size: 18px }
 
 /* ---------- Calories: 14 days / Year ---------- */
