@@ -136,12 +136,13 @@ async function save(ev) {
   body.created = was.created || now; body.updated = now;
   if (was.moodAt) body.moodAt = was.moodAt;
   $("save").disabled = true;
-  await commit(() => setDoc(doc(entriesCol, id), body));
+  const who = people().find((p) => p.id === person).name;
+  const done = `${existing || wasEditing ? "Updated" : "Saved"} ${who}'s entry for ${fmt(date, { day: "numeric", month: "short" })}.`;
+  try { await commit(() => setDoc(doc(entriesCol, id), body), done); } catch (_) { $("save").disabled = false; return; }
   if (wasEditing && wasEditing !== id) await commit(() => deleteDoc(doc(entriesCol, wasEditing)));
   try { localStorage.setItem("journal-person", person); } catch (_) {}
-  const who = people().find((p) => p.id === person).name;
   resetForm();
-  msg.textContent = `${existing || wasEditing ? "Updated" : "Saved"} ${who}'s entry for ${fmt(date, { day: "numeric", month: "short" })}.`;
+  msg.textContent = done;
   $("save").disabled = false;
 }
 

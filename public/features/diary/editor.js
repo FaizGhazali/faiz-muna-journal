@@ -180,7 +180,7 @@ async function saveEntry() {
   edMsg("Saving…");
   const gone = [...ed.removed];
   try {
-    await S.commit(() => batch.commit());
+    await S.commit(() => batch.commit(), old ? "Changes saved." : "Saved to your diary.");
     if (gone.length) await S.commit(() => Promise.all(gone.map((id) => deleteDoc(doc(S.photosCol, id)))));
   } finally { const b = $("dySave"); if (b) b.disabled = false; }
   photoCache.delete(ref.id);

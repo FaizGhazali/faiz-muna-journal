@@ -4,6 +4,7 @@
 import { collection, doc, writeBatch } from "../../core/fs.js";
 import { $, esc } from "../../core/util.js";
 import { confirmDelete } from "../../core/confirm.js";
+import { toast } from "../../core/toast.js";
 import { SYSTEM_CATEGORIES, rm, shortDate, cycleOf, cycleForTxn, lastStatement, toSen, computeRebate, rebateSnapshot, programFor } from "../../logic/ledger.js";
 import { pageLines, parseStatement, parsePasted, checkTotals, reconcile, tally, candidates, suggestPattern, parseSheet, sheetDupes } from "../../logic/ledgerimport.js";
 
@@ -271,6 +272,7 @@ async function save() {
     }
   } catch (_) { btn.disabled = false; imp.msg = "That didn't save. Check your connection and try again."; $("liMsg").textContent = imp.msg; return; }
   imp.step = "done";
+  toast(`Statement ${shortDate(p.statement)} saved.`);
   imp.done = `Statement ${shortDate(p.statement)} saved: ${added} added, ${fixed} fixed${removed ? `, ${removed} removed` : ""}.${o ? ` Rebate ${rm(o.result.totalSen)} (${o.result.tierLabel} tier).` : ""}`;
   render();
   ctx.refresh();
@@ -327,6 +329,7 @@ async function saveSheet() {
     }
   } catch (_) { $("lsSave").disabled = false; imp.msg = "That didn't save. Check your connection and try again."; $("liMsg").textContent = imp.msg; return; }
   imp.step = "done";
+  toast(`Added ${pick.length} ${pick.length === 1 ? "item" : "items"} from the spreadsheet.`);
   imp.done = `Added ${pick.length} ${pick.length === 1 ? "item" : "items"} from the spreadsheet${imp.sheetDupes.length ? `; ${imp.sheetDupes.length} ${imp.sheetDupes.length === 1 ? "was" : "were"} already here` : ""}. When the statement comes, import it: these are checked against it.`;
   render();
   ctx.refresh();

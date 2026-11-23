@@ -70,7 +70,7 @@ export async function listFood(foodId) {
   await addRow({ name: p.name, item: p.id, qty: p.pack, unit: p.unit, from: "manual" });
 }
 const onList = (itemId) => list.some((r) => r.item === itemId);
-const addRow = (row) => commit(() => setDoc(doc(cols.shopList), { ...row, created: Date.now() }));
+const addRow = (row) => commit(() => setDoc(doc(cols.shopList), { ...row, created: Date.now() }), `${row.name} is on the list.`);
 
 // ---------- drawing ----------
 const route = () => {
@@ -449,7 +449,7 @@ async function saveBuy(f) {
   }
   const name = r.name || pantry.find((p) => p.id === itemId)?.name || "";
   buying = null; msg = `Bought ${name}.`;
-  await commit(() => setDoc(doc(cols.buys), { item: itemId, date: today(), ...rec, by: me(), at: Date.now() }));
+  await commit(() => setDoc(doc(cols.buys), { item: itemId, date: today(), ...rec, by: me(), at: Date.now() }), msg);
   if (r.doc) await commit(() => deleteDoc(doc(cols.shopList, r.doc)));
   refreshStocky(true);
 }
@@ -458,7 +458,7 @@ async function savePrice(f) {
   const { rec, error } = readPrice({ qty: el.qty.value, price: el.price.value, shop: el.shop.value, sale: el.sale.checked, until: el.until.value }, { needPrice: true });
   if (error) { setMsg(f, error); return; }
   pricing = false; msg = "";
-  await commit(() => setDoc(doc(cols.prices), { item: id, date: today(), ...rec, at: Date.now() }));
+  await commit(() => setDoc(doc(cols.prices), { item: id, date: today(), ...rec, at: Date.now() }), "Price saved.");
   refreshStocky(true);
 }
 async function saveItem(f) {
@@ -492,7 +492,7 @@ async function saveItem(f) {
   const old = id ? pantry.find((p) => p.id === id) : null;
   const body = { ...item, created: old?.created || Date.now(), updated: Date.now(), ...(old?.check ? { check: old.check } : {}) };
   editing = false; msg = id ? "Saved." : `Added ${item.name}.${newFood ? " It's in your Meals foods too." : ""}`;
-  await commit(() => setDoc(ref, body));
+  await commit(() => setDoc(ref, body), msg);
   if (buy) await commit(() => setDoc(doc(cols.buys), { item: ref.id, date: today(), ...buy, by: me(), at: Date.now() }));
   if (!id) location.hash = "#stocky"; else refreshStocky(true);
 }
@@ -585,7 +585,7 @@ function wire() {
       const { foods, sets, meals } = mealData();
       const short = shortfall(planNeeds(sets, plan, foods, meals, people()), pantry, ests, foods).filter((r) => !list.some((x) => (r.item && x.item === r.item) || (!r.item && x.food === r.food)));
       plan = {}; msg = `Added ${short.length} to the list.`;
-      await commit(() => Promise.all(short.map((r) => setDoc(doc(cols.shopList), { ...r, from: "plan", created: Date.now() }))));
+      await commit(() => Promise.all(short.map((r) => setDoc(doc(cols.shopList), { ...r, from: "plan", created: Date.now() }))), msg);
       location.hash = "#stocky";
     }
   });

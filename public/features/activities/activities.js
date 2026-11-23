@@ -413,7 +413,7 @@ async function addActivity(ev) {
   $("addTitle").value = ""; addTypeTouched = false; $("addType").value = "task";
   $("addMsg").textContent = `Saved "${title}" to Ideas. Start it when you're ready.`;
   tab = "inbox"; typeFilter = "";
-  await commit(() => setDoc(ref, { owner: me, title, type, status: "inbox", created: today(), updated: Date.now() }));
+  await commit(() => setDoc(ref, { owner: me, title, type, status: "inbox", created: today(), updated: Date.now() }), `Added "${title}" to Ideas.`);
 }
 
 async function listAction(act, id) {

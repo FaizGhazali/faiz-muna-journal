@@ -228,7 +228,7 @@ async function saveEdit() {
     if (planChanged) await updateDoc(doc(db, "ledgerPlan", "main"), { shopBuckets: shops, updated: now });
     // Clearing the name keeps the doc with nick "" (an edit, not a delete).
     if (nickChanged) await setDoc(shopDoc ? doc(db, "ledgerShops", shopDoc.id) : doc(collection(db, "ledgerShops")), shopDoc ? { nick, name: e.name, updated: now } : { key: e.key, name: e.name, nick, created: now, updated: now }, { merge: true });
-  });
+  }, `Saved ${nick || e.name}.`);
   // Older items (not in the live list) are patched in the fetched history too, so they move at once.
   const byId = Object.fromEntries(patches);
   history?.forEach((t) => { if (byId[t.id]) Object.assign(t, byId[t.id]); });

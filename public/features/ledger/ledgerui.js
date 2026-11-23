@@ -172,11 +172,20 @@ async function save() {
   if (!f.date || f.date > today()) return say("Pick a day up to today.");
   if (f.type === "payment" && a.type !== "credit_card") return say("Card payments are for credit cards.");
   const raw = whereRaw(), r = categorise(raw, aliases);
-  const t = manualTxn(a, { spentBy: who(), date: f.date, amount: f.amount, type: f.type, raw: f.type === "payment" ? "Card payment" : raw, cat: f.cat, merchant: r.merchant || raw.trim() });
+  // `at` (ms) is required: Firestore refuses a field that is undefined, and the save used to fail silently.
+  const t = manualTxn(a, { spentBy: who(), date: f.date, amount: f.amount, type: f.type, raw: f.type === "payment" ? "Card payment" : raw, cat: f.cat, merchant: r.merchant || raw.trim() }, Date.now());
   store.set(ACCT_KEY, a.id);
   const cyc = cycleOf(a, t.posted);
-  await commit(() => Promise.all([setDoc(doc(collection(db, "ledgerTxns")), t), a.type === "credit_card" ? saveCycle(db, cyc) : Promise.resolve()]));
-  msg = `Saved ${rm(sen)} ${f.type === "payment" ? `paid to ${a.name}` : `at ${f.raw.trim()}`} for ${personName(who())}.`;
+  const what = f.type === "payment" ? `${rm(sen)} paid to ${a.name}` : `${f.type === "refund" ? "Refund of " : ""}${rm(sen)} at ${f.raw.trim()}`;
+  const save = $("lgSave"); if (save) save.disabled = true;
+  try {
+    await commit(() => Promise.all([setDoc(doc(collection(db, "ledgerTxns")), t), a.type === "credit_card" ? saveCycle(db, cyc) : Promise.resolve()]),
+      `Saved ${what} for ${personName(who())}.`);
+  } catch (_) {
+    if (save) save.disabled = false;
+    return say("Not saved yet. Your numbers are still here: try again.");
+  }
+  msg = "";
   Object.assign(f, { amount: "", raw: "", cat: "other", catAuto: true, type: "purchase" });
   formKey = "";
   refreshLedger();
@@ -227,9 +236,9 @@ async function saveCard() {
   if (cc && last4) acc.last4 = last4;
   $("lcSave").disabled = true;
   let id = null;
-  await commit(async () => { id = await addAccount(db, acc, cc ? $("lcPreset").value : null); });
+  try { await commit(async () => { id = await addAccount(db, acc, cc ? $("lcPreset").value : null); }, `Added ${name}.`); } catch (_) { $("lcSave").disabled = false; return; }
   if (id) { f.account = id; store.set(ACCT_KEY, id); }
-  cardForm = false; cardMsg = ""; msg = `Added ${name}.`;
+  cardForm = false; cardMsg = ""; msg = "";
   $("ledgerAdd").innerHTML = "";
   refreshLedger();
 }

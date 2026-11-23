@@ -30,6 +30,7 @@ import { initWidget } from "./shell/widget.js";
 import { initDiary, startDiary, stopDiary, refreshDiary, diaryList } from "./features/diary/diaryui.js";
 import { initLedger, startLedger, stopLedger, refreshLedger, refreshLedgerParts } from "./features/ledger/ledgerui.js";
 import { $, today } from "./core/util.js";
+import { toast } from "./core/toast.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
 const LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
@@ -67,13 +68,17 @@ let PEOPLE = [], entries = [], unsubs = [];
 const people = () => PEOPLE, allEntries = () => entries;
 const entriesCol = collection(db, "entries");
 
-// Offline, Firestore keeps a write and sends it later, so its promise waits. Don't hold the form for that.
-async function commit(write) {
-  const done = write();
-  done.catch(() => banner("A change couldn't be saved. Reload the app and check your entries."));
+// Every save goes through here. Offline, Firestore keeps a write and sends it later, so its promise waits:
+// don't hold the form for that. `ok` (optional) is the "it worked" toast. A failed write shows the error
+// toast and rejects, so the caller stops (keeps the form as typed) instead of carrying on as if saved.
+const FAILED = "That didn't save. Check your connection and try again.";
+async function commit(write, ok) {
+  let done;
+  try { done = Promise.resolve(write()); } catch (e) { done = Promise.reject(e); } // a bad field throws at once
+  done.catch((e) => { console.error("Save failed", e); toast(FAILED, { kind: "error" }); });
   await Promise.race([done, new Promise((res) => setTimeout(res, 2500))]);
+  if (ok) toast(navigator.onLine ? ok : `${ok} It'll sync when you're back online.`);
 }
-function banner(text) { $("banner").textContent = text || ""; $("banner").hidden = !text; }
 function render() { renderPeople(); renderFeed(); refreshFitDetail(); refreshMood(); refreshCalories(); refreshLedgerParts(); }
 
 // ---------- wire the modules ----------

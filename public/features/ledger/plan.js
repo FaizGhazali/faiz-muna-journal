@@ -202,7 +202,7 @@ async function saveBill(id) {
   const old = commitments.find((x) => x.id === id), now = Date.now(), db = ctx.db();
   const ref = old ? doc(db, "ledgerCommitments", id) : doc(collection(db, "ledgerCommitments"));
   editing = null; clearDirty(); billMsg = `${old ? "Saved" : "Added"} ${r.c.name}.`;
-  await ctx.commit(() => setDoc(ref, { ...r.c, created: old?.created ?? now, updated: now }));
+  await ctx.commit(() => setDoc(ref, { ...r.c, created: old?.created ?? now, updated: now }), billMsg);
   renderPlan();
 }
 async function pay(id) {

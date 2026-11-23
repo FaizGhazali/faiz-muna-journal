@@ -73,17 +73,23 @@ function write(ref, body, merge) {
   col[ref.id] = out;
   touch(ref.col);
 }
-export const setDoc = async (ref, body, opts) => write(ref, body, !!opts?.merge);
-export async function updateDoc(ref, patch) {
-  if (!data[ref.col]?.[ref.id]) throw new Error("not-found");
-  write(ref, patch, true);
+// Like Firestore, refuse a field that is undefined, at once (not in the promise), so the demo shows the same bug.
+function noUndefined(v, path = "") {
+  if (v === undefined) throw new Error(`invalid-argument: unsupported field value undefined (found in field ${path || "document"})`);
+  if (v && typeof v === "object" && !isSentinel(v)) for (const [k, x] of Object.entries(v)) noUndefined(x, path ? `${path}.${k}` : k);
+}
+export function setDoc(ref, body, opts) { noUndefined(body); return Promise.resolve(write(ref, body, !!opts?.merge)); }
+export function updateDoc(ref, patch) {
+  noUndefined(patch);
+  if (!data[ref.col]?.[ref.id]) return Promise.reject(new Error("not-found"));
+  return Promise.resolve(write(ref, patch, true));
 }
 export async function deleteDoc(ref) { if (data[ref.col]) delete data[ref.col][ref.id]; touch(ref.col); }
 export const getDocs = async (q) => colSnap(q);
 export function writeBatch() {
   const ops = [];
   return {
-    set(ref, body, opts) { ops.push(() => write(ref, body, !!opts?.merge)); return this; },
+    set(ref, body, opts) { noUndefined(body); ops.push(() => write(ref, body, !!opts?.merge)); return this; },
     delete(ref) { ops.push(() => { if (data[ref.col]) delete data[ref.col][ref.id]; touch(ref.col); }); return this; },
     async commit() { ops.forEach((f) => f()); },
   };
