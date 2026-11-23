@@ -1343,6 +1343,8 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 .lsbar small { font-size: 11px; color: var(--muted) }
 .lsnamerow { display: flex; align-items: center; justify-content: space-between; gap: 10px }
 .lsnamerow .mini { flex: none }
+.lsnick { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font: 700 12px/1.6 var(--body); vertical-align: middle; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis }
+.lsname .lsnick { font-size: 13px }
 .lsmsg { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--good-soft) }
 #lsSheet .mhead { align-items: center }
 #lsSheet .lsx { margin-left: auto }

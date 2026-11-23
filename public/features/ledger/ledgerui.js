@@ -8,6 +8,7 @@ import {
   manualTxn, payWarning, warningText, tierLabel, spendByCat, spendTotal, ruleMatches,
 } from "../../logic/ledger.js";
 import { suggestPattern } from "../../logic/ledgerimport.js";
+import { shopKey, nickMap, byNick, usualCat } from "../../logic/bucketspend.js";
 import { initImport, startImport, renderImport } from "./import.js";
 import { initTrends, renderTrends } from "./trends.js";
 import { initRules, startRules, renderRules } from "./rules.js";
@@ -28,7 +29,7 @@ const CATS = SYSTEM_CATEGORIES.filter((c) => !c.hidden);
 const cat = (id) => SYSTEM_CATEGORIES.find((c) => c.id === id) ?? SYSTEM_CATEGORIES.find((c) => c.id === "other");
 
 let db, commit, people, me, unsubs = [], seeded = false;
-let accounts = [], programs = [], aliases = [], cycles = {}, txns = [], rebates = {};
+let accounts = [], programs = [], aliases = [], cycles = {}, txns = [], rebates = {}, shopNames = [];
 // "Always categorise" offer after a category is changed by hand: { raw, cat, pattern, host, msg }.
 let offer = null, openRow = null;
 // The add form. catAuto: the category came from a merchant rule (it follows the shop until picked by hand).
@@ -51,7 +52,7 @@ export function initLedger(opts) {
   initTrends(shared);
   initRules(shared);
   initPlan({ ...shared, me });
-  initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases });
+  initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases, shops: () => shopNames });
   $("me").addEventListener("change", () => { f.who = null; formKey = ""; refreshLedger(); });
   addEventListener("journalchange", () => refreshLedgerParts());
 }
@@ -62,6 +63,7 @@ export function startLedger() {
   sub("ledgerAliases", (x) => { aliases = x; });
   sub("ledgerCycles", (x) => { cycles = Object.fromEntries(x.map((c) => [c.id, c])); });
   sub("ledgerRebates", (x) => { rebates = Object.fromEntries(x.map((r) => [r.id, r])); });
+  sub("ledgerShops", (x) => { shopNames = x; });
   unsubs.push(onSnapshot(query(collection(db, "ledgerTxns"), where("date", ">=", addDays(today(), -LOAD_DAYS))), (s) => {
     txns = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((t) => /^\d{4}-\d{2}-\d{2}$/.test(t.date || "") && Number.isInteger(t.amountSen));
     refreshLedger();
@@ -103,18 +105,34 @@ function renderAdd() {
         <label>${pay ? "Card" : "Paid with"}<select id="lgAcct">${live().filter((x) => !pay || x.type === "credit_card").map((x) => `<option value="${x.id}"${x.id === a?.id ? " selected" : ""}>${esc(x.name)}${x.last4 ? ` ··${esc(x.last4)}` : ""}</option>`).join("")}</select></label>
       </div>
       ${pay ? "" : `<label>Where<input type="text" id="lgRaw" list="lgShops" autocomplete="off" placeholder="Shop, e.g. Setel or Econsave" value="${esc(f.raw)}"></label>
-      <datalist id="lgShops">${shops().map((s) => `<option value="${esc(s)}"></option>`).join("")}</datalist>
+      <datalist id="lgShops"></datalist>
       <label>Category <small id="lgWhy"></small><select id="lgCat">${CATS.map((c) => `<option value="${c.id}"${c.id === f.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>`}
       <div class="lwarn" id="lgWarn" role="status" hidden></div>
       <div class="actions"><button type="button" class="primary" id="lgSave">Save</button><button type="button" class="mini" id="lgCard">＋ Card or wallet</button></div>
       <p class="msg" id="lgMsg" aria-live="polite"></p>`;
   }
+  if ($("lgShops")) $("lgShops").innerHTML = shopOptions(); // refreshed every time: it never disturbs typing
   paintWhy(); paintWarn();
   $("lgMsg").textContent = msg;
 }
-// Past shops for the "Where" suggestions: most recent first, no repeats.
-function shops() {
-  const seen = new Set(), out = [];
+// The "Where" suggestions: your own shop names first (the statement name beside), then past shops,
+// most recent first, no repeats, leaving out shops you named.
+function shopOptions() {
+  const named = shopNames.filter((s) => s.nick && s.name).sort((a, b) => a.nick.localeCompare(b.nick));
+  return [...named.map((s) => `<option value="${esc(s.nick)}" label="${esc(s.name)}"></option>`), ...shops(new Set(named.map((s) => s.key))).map((s) => `<option value="${esc(s)}"></option>`)].join("");
+}
+// The shop name to save: a typed nickname gives its shop's statement name, so it groups with the rest.
+const whereRaw = () => byNick(f.raw, shopNames)?.name ?? f.raw;
+// The category for what's typed in Where: the merchant rules first; for one of your shop names with no
+// rule, the category that shop's items usually have. { cat, rule, usual }
+function autoCat() {
+  const r = categorise(whereRaw(), aliases), named = byNick(f.raw, shopNames);
+  if (r.rule || !named) return r;
+  const mine = txns.filter((t) => t.type !== "payment" && shopKey(t) === named.key);
+  return mine.length ? { cat: usualCat(mine), usual: true } : r;
+}
+function shops(skip = new Set()) {
+  const seen = new Set(skip), out = [];
   for (const t of [...txns].sort((x, y) => y.date.localeCompare(x.date))) {
     const s = t.merchant || t.raw; if (!s || t.type === "payment" || seen.has(norm(s))) continue;
     seen.add(norm(s)); out.push(s); if (out.length >= 60) break;
@@ -123,8 +141,8 @@ function shops() {
 }
 function paintWhy() {
   const el = $("lgWhy"); if (!el) return;
-  const r = f.raw.trim() ? categorise(f.raw, aliases) : null;
-  el.textContent = f.catAuto && r?.rule ? "· picked from the shop name" : "";
+  const r = f.raw.trim() ? autoCat() : null, named = byNick(f.raw, shopNames);
+  el.textContent = [named ? `· your name for ${named.name}` : "", f.catAuto && r?.rule ? "· picked from the shop name" : f.catAuto && r?.usual ? "· what it usually is" : ""].filter(Boolean).join(" ");
 }
 // The live "don't pay yet" check while a card payment is being typed.
 function paintWarn() {
@@ -153,8 +171,8 @@ async function save() {
   if (f.type !== "payment" && !f.raw.trim()) return say("Type where, like Setel or Econsave.");
   if (!f.date || f.date > today()) return say("Pick a day up to today.");
   if (f.type === "payment" && a.type !== "credit_card") return say("Card payments are for credit cards.");
-  const r = categorise(f.raw, aliases);
-  const t = manualTxn(a, { spentBy: who(), date: f.date, amount: f.amount, type: f.type, raw: f.type === "payment" ? "Card payment" : f.raw, cat: f.cat, merchant: r.merchant || f.raw.trim() });
+  const raw = whereRaw(), r = categorise(raw, aliases);
+  const t = manualTxn(a, { spentBy: who(), date: f.date, amount: f.amount, type: f.type, raw: f.type === "payment" ? "Card payment" : raw, cat: f.cat, merchant: r.merchant || raw.trim() });
   store.set(ACCT_KEY, a.id);
   const cyc = cycleOf(a, t.posted);
   await commit(() => Promise.all([setDoc(doc(collection(db, "ledgerTxns")), t), a.type === "credit_card" ? saveCycle(db, cyc) : Promise.resolve()]));
@@ -271,13 +289,13 @@ function withEligible(r) {
 function renderList() {
   const host = $("ledgerList");
   const list = [...txns].sort((a, b) => b.date.localeCompare(a.date) || (b.at ?? 0) - (a.at ?? 0));
-  const names = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
+  const names = Object.fromEntries(accounts.map((a) => [a.id, a.name])), nicks = nickMap(shopNames);
   host.innerHTML = `<h2>Recent</h2><div id="lgOffer"></div>${list.length ? `<div class="llist">${list.slice(0, shown).map((t) => {
     const c = cat(t.cat), credit = t.amountSen < 0, open = openRow === t.id, name = t.merchant || t.raw || c.name;
     return `<div class="lrow${open ? " open" : ""}">
       <button type="button" class="lopen" data-lopen="${t.id}" aria-expanded="${open}">
         <span class="lic" aria-hidden="true">${c.icon}</span>
-        <span class="lmain"><b>${esc(name)}</b><small>${shortDate(t.date)} · ${esc(personName(t.spentBy))} · ${esc(names[t.account] ?? "")}${t.type === "payment" ? "" : ` · ${esc(c.name)}`}${t.reconciled ? " · ✓ statement" : ""}</small></span>
+        <span class="lmain"><b>${esc(name)}${t.type !== "payment" && nicks[shopKey(t)] ? ` <span class="lsnick">🏷 ${esc(nicks[shopKey(t)])}</span>` : ""}</b><small>${shortDate(t.date)} · ${esc(personName(t.spentBy))} · ${esc(names[t.account] ?? "")}${t.type === "payment" ? "" : ` · ${esc(c.name)}`}${t.reconciled ? " · ✓ statement" : ""}</small></span>
         <span class="lamt${credit ? " cr" : ""}">${rm(Math.abs(t.amountSen))}${credit ? " CR" : ""}</span>
       </button>
       ${open ? `<div class="ledit">
@@ -362,7 +380,7 @@ function wire() {
     if (id === "lgAmt") { f.amount = ev.target.value; paintWarn(); }
     if (id === "lgRaw") {
       f.raw = ev.target.value;
-      if (f.catAuto) { const r = categorise(f.raw, aliases); f.cat = r.cat === "payment" ? "other" : r.cat; if ($("lgCat")) $("lgCat").value = f.cat; }
+      if (f.catAuto) { const r = autoCat(); f.cat = r.cat === "payment" ? "other" : r.cat; if ($("lgCat")) $("lgCat").value = f.cat; }
       paintWhy();
     }
     if (id === "lcStmt") paintCardForm();

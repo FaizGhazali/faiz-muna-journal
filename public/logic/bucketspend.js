@@ -8,12 +8,24 @@ export { shopName, shopKey };
 
 export const ALL = "all"; // the page for every bucket at once
 export const TRACK_MONTHS = 12; // months in a shop's bar chart
+export const NICK_MAX = 40; // characters in your own name for a shop
+
+// ---------- your own names for shops ----------
+// ledgerShops/{auto id} { key (shopKey), name (the statement name when it was named), nick, created, updated }
+// A nickname is only a label: items keep the statement name, so they still group and match statements.
+export const cleanNick = (s) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, NICK_MAX);
+export const nickMap = (shops = []) => Object.fromEntries(shops.filter((s) => s.key && s.nick).map((s) => [s.key, s.nick]));
+// "Where" typed as one of your names gives that shop (its statement name goes on the item); else null.
+export function byNick(text, shops = []) {
+  const k = norm(text);
+  return k ? shops.find((s) => s.nick && s.name && norm(s.nick) === k) ?? null : null;
+}
 
 
-// Does an item match the search? Shop name, statement text or category name, ignoring case and spaces.
-export function matches(t, q) {
+// Does an item match the search? Shop name, your name for it, statement text or category name, ignoring case and spaces.
+export function matches(t, q, nicks = {}) {
   const k = norm(q);
-  return !k || [shopName(t), t.raw, catName(t.cat)].some((s) => norm(s).includes(k));
+  return !k || [shopName(t), nicks[shopKey(t)], t.raw, catName(t.cat)].some((s) => norm(s).includes(k));
 }
 
 // The category most of a shop's items have (ties: the newest item's), for its Edit popup.
@@ -24,10 +36,10 @@ export function usualCat(items) {
 }
 
 // The bucket's items, newest first. month null = every month; person null = both.
-export function bucketItems(txns, plan, bucket, { month = null, person = null, q = "" } = {}) {
+export function bucketItems(txns, plan, bucket, { month = null, person = null, q = "", nicks = {} } = {}) {
   return txns.filter((t) => {
     const b = txnBucket(t, plan);
-    return b && (bucket === ALL || b === bucket) && (!month || monthOf(t.date) === month) && (!person || t.spentBy === person) && matches(t, q);
+    return b && (bucket === ALL || b === bucket) && (!month || monthOf(t.date) === month) && (!person || t.spentBy === person) && matches(t, q, nicks);
   }).sort((a, b) => b.date.localeCompare(a.date) || (b.at ?? 0) - (a.at ?? 0));
 }
 

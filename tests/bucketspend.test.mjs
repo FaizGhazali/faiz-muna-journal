@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_BUCKETS, txnBucket, spentByBucket, catBucket, shopBucketsWith } from "../public/logic/moneyplan.js";
-import { ALL, bucketItems, byMonth, byShop, byCat, totals, shopTrack, monthsWith, matches, shopKey, usualCat } from "../public/logic/bucketspend.js";
+import { ALL, bucketItems, byMonth, byShop, byCat, totals, shopTrack, monthsWith, matches, shopKey, usualCat, byNick, nickMap, cleanNick } from "../public/logic/bucketspend.js";
 
 const PLAN = { incomeSen: 400000, buckets: DEFAULT_BUCKETS };
 const T = (date, cat, sen, merchant, extra = {}) => ({ date, cat, amountSen: sen, merchant, type: sen < 0 ? "refund" : "purchase", spentBy: "p1", ...extra });
@@ -102,4 +102,18 @@ test("usualCat picks the category most of a shop's items have", () => {
   assert.equal(usualCat([T("2026-11-02", "dining", 1, "A"), T("2026-11-01", "groceries", 1, "A"), T("2026-10-01", "groceries", 1, "A")]), "groceries");
   assert.equal(usualCat([T("2026-11-02", "dining", 1, "A"), T("2026-11-01", "groceries", 1, "A")]), "dining");
   assert.equal(usualCat([]), "other");
+});
+
+test("your own shop names: search finds them, Where maps them back to the statement name", () => {
+  const shops = [{ key: "ECONSAVE", name: "Econsave", nick: "Kedai bawah rumah" }, { key: "X", name: "X", nick: "" }];
+  const nicks = nickMap(shops);
+  assert.deepEqual(nicks, { ECONSAVE: "Kedai bawah rumah" });
+  assert.ok(matches(TX[1], "bawah", nicks)); // "ECONSAVE " spelling too
+  assert.ok(!matches(TX[2], "bawah", nicks));
+  assert.equal(bucketItems(TX, PLAN, ALL, { q: "kedai bawah", nicks }).length, 4);
+  assert.equal(byNick("  kedai BAWAH rumah ", shops).name, "Econsave");
+  assert.equal(byNick("Econsave", shops), null);
+  assert.equal(byNick("", shops), null);
+  assert.equal(cleanNick("  Donut   stop  "), "Donut stop");
+  assert.equal(cleanNick("x".repeat(60)).length, 40);
 });
