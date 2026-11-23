@@ -748,7 +748,7 @@ html.touring .wheel.hint .wmore::after { display: none }
 
 /* ---------- One card per person: weight on top, then the part for the picked journal ---------- */
 #people .pextra { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); min-width: 0 }
-#people .pextra:empty, #people:not([data-journal="weight"]) .pextra[data-journal="weight"], #people:not([data-journal="meals"]) .pextra[data-journal="meals"] { display: none }
+#people .pextra:empty, #people:not([data-journal="weight"]) .pextra[data-journal="weight"], #people:not([data-journal="meals"]) .pextra[data-journal="meals"], #people:not([data-journal="ledger"]) .pextra[data-journal="ledger"] { display: none }
 #people .pextra .fit { border-top: 0; padding-top: 0 }
 #people .pextra[data-journal] { animation: plateIn .3s ease-out }
 .ptitle { font-size: 18px }
@@ -1177,3 +1177,116 @@ button.mini.primary { color: var(--on-accent); font-weight: 700 }
 .cdel-body { display: grid; gap: 8px; line-height: 1.5 }
 .cdel-body p { margin: 0 }
 .cdel .actions button { min-height: 44px }
+
+/* ---------- Ledger ---------- */
+#ledger { display: grid; gap: 16px }
+#ledger[hidden] { display: none }
+.ladd, .lcard, .lrecent { display: grid; gap: 14px; align-content: start }
+.lcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px }
+.lcards:empty { display: none }
+.ladd .actions .mini { margin-left: auto }
+.lwarn { border: 1px solid var(--over); background: color-mix(in srgb, var(--over) 14%, var(--surface)); border-radius: 10px; padding: 12px 14px; font-size: 15px; line-height: 1.45 }
+.lwarn b { display: block; margin-bottom: 2px }
+.lwarn.calm { border-color: var(--good); background: var(--good-soft) }
+.lhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px }
+.lcycle { margin: -8px 0 0; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums }
+.lcycle b { color: var(--ink) }
+.lgauge { position: relative; padding-bottom: 34px; margin-top: 4px }
+.lbarbg { height: 12px; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); overflow: hidden }
+.lbarbg.thin { height: 8px }
+.lbarbg i { display: block; height: 100%; background: var(--c, var(--accent)); border-radius: 99px; transition: width .5s ease }
+.ltick { position: absolute; top: -4px; display: grid; justify-items: center; transform: translateX(-50%); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; pointer-events: none }
+.ltick::before { content: ""; width: 2px; height: 20px; background: var(--ink); border-radius: 1px; outline: 2px solid var(--surface) }
+.ltick em { font-style: normal; font-weight: 700; color: var(--ink) }
+.ltick small { font-size: 11px; line-height: 1 }
+.lnext { margin: 0; font-size: 15px }
+.lgroups { display: grid; gap: 12px }
+.lgroup { display: grid; gap: 5px }
+.lgline { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; font-variant-numeric: tabular-nums }
+.lgline small { font-weight: 400; color: var(--muted) }
+.llist { display: grid }
+.lrow:first-child { border-top: 0 }
+.lic { font-size: 18px; text-align: center }
+.lmain { display: grid; min-width: 0 }
+.lmain b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.lmain small { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.lamt { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap }
+.lamt.cr { color: var(--good) }
+.lrecent > .mini { justify-self: start }
+.lcats { display: grid; gap: 6px }
+.lcat { display: grid; grid-template-columns: minmax(0, 9em) minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 14px; font-variant-numeric: tabular-nums }
+.lcat span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.lcat i { display: block; height: 8px; border-radius: 99px; background: var(--accent) }
+.lowed { margin: 0; font-size: 14px; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft) }
+.limport { display: grid; gap: 14px; align-content: start }
+.limp { margin-left: auto }
+.llast { margin-top: -8px }
+.lfile { position: relative; cursor: pointer; overflow: hidden }
+.lfile input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100% }
+.lpaste summary, .lgrp summary { cursor: pointer; font-weight: 700; padding: 4px 0 }
+.lpaste[open] { display: grid; gap: 12px }
+.lpaste code { font-size: 13px; overflow-wrap: anywhere }
+.lsum { margin: 0 }
+.lgrp h3 { font-family: var(--body); font-size: 15px; margin: 6px 0 4px }
+.lgrp h3 b, .lgrp summary b { color: var(--muted); font-weight: 400; margin-left: 4px }
+.lgrp > .note { margin-bottom: 6px }
+.lrrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line) }
+.lrrow input[type=checkbox] { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent) }
+.lrrow .lmain { gap: 2px }
+.lrrow .lmain b { white-space: normal; overflow-wrap: anywhere; font-size: 14px }
+.lrrow select { margin-top: 6px; padding: 6px 8px; font-size: 15px }
+.lnote { color: var(--muted); font-size: 13px }
+.lrrow.k-missing .lmain b { color: var(--muted) }
+.loffer { display: grid; gap: 10px; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px }
+.loffer p { margin: 0; font-size: 15px }
+.loffer .msg:empty { display: none }
+label.inline { display: flex; align-items: center; gap: 8px; font-weight: 400 }
+.lrow { display: block; padding: 0; border-top: 1px solid var(--line) }
+.lopen { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; padding: 10px 0; border: 0; border-radius: 6px; background: none; text-align: left; font: inherit; font-weight: 400; color: inherit }
+.lrow.open { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); border-radius: 8px; padding-inline: 6px }
+.ledit { display: grid; gap: 10px; padding: 0 0 12px 38px }
+.lrrow .lmain small { white-space: normal; overflow: visible }
+/* Ledger trends: eight category colours (checked for colour-blind separation on both themes) + Other. */
+:root { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948; --s-other: #a3a9b8 }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s8: #e66767; --s-other: #6b7390 } }
+:root[data-theme="dark"] { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s8: #e66767; --s-other: #6b7390 }
+.ltrends, .lrules { display: grid; gap: 12px; align-content: start }
+.ltf { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center }
+.ltf select { width: auto; max-width: 100% }
+.lth { font-family: var(--body); font-size: 15px; margin-top: 6px }
+.lleg { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted) }
+.lleg li { display: flex; align-items: center; gap: 6px }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--c); margin-right: 6px; vertical-align: -1px; flex: none }
+.lleg .sw { margin: 0 }
+.ltchart { height: 190px }
+.ltchart .tip .sw { outline: 1px solid var(--bg) }
+.ltnum summary { cursor: pointer; font-size: 14px; color: var(--muted) }
+.lttable { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; margin-top: 8px; display: block; overflow-x: auto }
+.lttable th, .lttable td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap }
+.lttable th:first-child { text-align: left }
+.ltcmp { display: grid; font-size: 14px; font-variant-numeric: tabular-nums }
+.ltrow { display: grid; grid-template-columns: minmax(0, 1fr) 5.5em 5.5em 4.5em; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); align-items: center }
+.ltrow > span:not(:first-child) { text-align: right }
+.ltrow > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.ltrow.lthead { color: var(--muted); font-size: 12px; border-top: 0 }
+.ltd { color: var(--muted) }
+.ltshops { display: grid; gap: 8px }
+.ltshop { display: grid; grid-template-columns: minmax(0, 10em) minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 14px; font-variant-numeric: tabular-nums }
+.ltsn { display: grid; overflow: hidden }
+.ltsn, .ltsn small { white-space: nowrap; text-overflow: ellipsis; overflow: hidden }
+.ltsn small { color: var(--muted); font-size: 12px }
+.ltshop i { display: block; height: 8px; border-radius: 0 4px 4px 0; background: var(--accent) }
+.lbtnrow { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap }
+.ltier { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px 12px; display: grid; gap: 10px; min-width: 0 }
+.ltier legend { font-weight: 700; padding: 0 4px }
+.lrsmall { width: 7em !important }
+.lrates { display: grid; gap: 6px }
+.lrate { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) 34px; gap: 6px 8px; align-items: end; padding: 8px 0; border-top: 1px solid var(--line) }
+.lrate:first-child { border-top: 0 }
+.lrate select { grid-column: 1 / 4 }
+.lrate > button { grid-column: 4; grid-row: 1 }
+.lrf { gap: 2px; font-weight: 400 }
+.lrf small { color: var(--muted); font-size: 12px }
+.lrate input, .lrate select { padding: 7px 6px; font-size: 15px }
+.lrules .chips label.chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); cursor: pointer }
+@media (max-width: 460px) { .ltrow { grid-template-columns: minmax(0, 1fr) 4.6em 4.6em 3.8em } }

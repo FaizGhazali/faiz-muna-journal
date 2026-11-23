@@ -88,21 +88,22 @@ export function habitFacts(pid) {
   return out;
 }
 
-const RESUME = /^#(activities|mood|mealsets|fitness\/[\w-]+|diary(?:\/(?:write|ai|(?:edit|read)\/[\w-]+))?|stocky(?:\/(?:add|prices|plan|item\/[\w-]+))?)$/;
+const RESUME = /^#(activities|mood|mealsets|fitness\/[\w-]+|diary(?:\/(?:write|ai|(?:edit|read)\/[\w-]+))?|stocky(?:\/(?:add|prices|plan|item\/[\w-]+))?|ledger)$/;
 function showView() {
   const h = location.hash;
   store.set("journal-page", RESUME.test(h) ? h : "");
   // The Dashboard tab shows the journal picked on the wheel (journalView in journal.js).
   const view = h === "#activities" ? "activities" : h.startsWith("#fitness") ? "fitness" : h === "#mood" ? "mood" : h === "#soon" ? "soon" : h === "#guide" ? "guide"
-    : h.startsWith("#diary") ? "diary" : h.startsWith("#stocky") ? "stocky" : h === "#meals" ? "meals" : h === "#mealsets" ? "mealsets" : journalView();
-  ["home", "meals", "mealsets", "soon", "guide", "diary", "stocky", "activities", "fitness", "mood"].forEach((v) => { $(v).hidden = v !== view; });
-  // Weight, Your Next Move, habits and Yesterday sit on top of every journal except the diary, which keeps its page calm.
-  $("shared").hidden = !["home", "meals", "soon"].includes(view);
+    : h.startsWith("#diary") ? "diary" : h.startsWith("#stocky") ? "stocky" : h.startsWith("#ledger") ? "ledger" : h === "#meals" ? "meals" : h === "#mealsets" ? "mealsets" : journalView();
+  ["home", "meals", "mealsets", "soon", "guide", "diary", "stocky", "ledger", "activities", "fitness", "mood"].forEach((v) => { $(v).hidden = v !== view; });
+  // Weight, Your Next Move, habits and Yesterday sit on top of Meals, Weight and Ledger (the person cards show each one's part);
+  // the diary keeps its page calm and Stocky is shared by the house.
+  $("shared").hidden = !["home", "meals", "ledger", "soon"].includes(view);
   // The person cards show the part for this journal (see JOURNAL_PARTS in app.js).
-  const journal = view === "home" ? "weight" : view === "meals" ? "meals" : "";
+  const journal = view === "home" ? "weight" : view === "meals" || view === "ledger" ? view : "";
   if ($("people").dataset.journal !== journal) { $("people").dataset.journal = journal; dispatchEvent(new Event("journalchange")); }
   $("meBox").hidden = ["fitness", "mealsets", "guide", "stocky"].includes(view); // the fitness page has its own person switch; sets and groceries are shared
-  const tab = ["home", "meals", "mealsets", "soon", "guide", "diary", "stocky"].includes(view) ? "home" : view;
+  const tab = ["home", "meals", "mealsets", "soon", "guide", "diary", "stocky", "ledger"].includes(view) ? "home" : view;
   document.querySelectorAll("#nav a").forEach((a) => a.toggleAttribute("aria-current", a.dataset.view === tab));
 }
 

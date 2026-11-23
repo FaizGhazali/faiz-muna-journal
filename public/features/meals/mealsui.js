@@ -573,7 +573,7 @@ export const JOURNALS = [
   { id: "weight", name: "Weight", icon: "⚖️" },
   { id: "diary", name: "Dearly", icon: "📔" },
   { id: "stocky", name: "Stocky", icon: "🛒" },
-  { id: "soon-3", name: "Empty", icon: "＋", soon: true },
+  { id: "ledger", name: "Ledger", icon: "💳" },
 ];
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (_) { return d; } },

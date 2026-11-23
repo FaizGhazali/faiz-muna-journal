@@ -28,6 +28,7 @@ import { initZoom } from "./core/zoom.js";
 import { initGuides } from "./shell/tour.js";
 import { initWidget } from "./shell/widget.js";
 import { initDiary, startDiary, stopDiary, refreshDiary, diaryList } from "./features/diary/diaryui.js";
+import { initLedger, startLedger, stopLedger, refreshLedger, refreshLedgerParts } from "./features/ledger/ledgerui.js";
 import { $, today } from "./core/util.js";
 
 const FAMILY_EMAIL = "family@journal.invalid"; // a login name only; no mail is ever sent to it
@@ -73,7 +74,7 @@ async function commit(write) {
   await Promise.race([done, new Promise((res) => setTimeout(res, 2500))]);
 }
 function banner(text) { $("banner").textContent = text || ""; $("banner").hidden = !text; }
-function render() { renderPeople(); renderFeed(); refreshFitDetail(); refreshMood(); refreshCalories(); }
+function render() { renderPeople(); renderFeed(); refreshFitDetail(); refreshMood(); refreshCalories(); refreshLedgerParts(); }
 
 // ---------- wire the modules ----------
 const exercisedToday = (pid) => entries.some((e) => e.person === pid && e.date === today() && (e.minutes > 0 || e.run));
@@ -84,6 +85,7 @@ initActivities({ db, people, commit, exercisedToday, onChange: () => refreshMood
 initBackup({ db });
 initMeals({ db, people, me: currentPerson, entries: allEntries, commit, stock: { of: stockOf, list: listFood, items: priceItems, cost: costOf, changed: () => refreshStocky() } });
 initStocky({ db, people, me: currentPerson, commit, mealData, pricesChanged: refreshMealCost });
+initLedger({ db, people, me: currentPerson, commit });
 initWheel();
 initCollapse();
 initZoom();
@@ -116,6 +118,7 @@ function startApp() {
     refreshMeals();
     refreshDiary();
     refreshStocky();
+    refreshLedger();
   }, denied));
   unsubs.push(onSnapshot(entriesCol, (snap) => {
     entries = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.date || ""));
@@ -125,8 +128,9 @@ function startApp() {
   startMeals();
   startDiary();
   startStocky();
+  startLedger();
 }
-function stop() { unsubs.forEach((u) => u()); unsubs = []; stopActivities(); stopMeals(); stopDiary(); stopStocky(); }
+function stop() { unsubs.forEach((u) => u()); unsubs = []; stopActivities(); stopMeals(); stopDiary(); stopStocky(); stopLedger(); }
 
 initDemo();
 if (DEMO) {

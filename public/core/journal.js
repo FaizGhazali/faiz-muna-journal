@@ -9,5 +9,5 @@ export function setJournal(id) { try { localStorage.setItem(JOURNAL_KEY, id); } 
 // The view the Dashboard tab opens: the last journal picked on this phone, Meals at first.
 export function journalView() {
   const t = currentJournal();
-  return t === "weight" ? "home" : t === "diary" ? "diary" : t === "stocky" ? "stocky" : "meals";
+  return t === "weight" ? "home" : t === "diary" ? "diary" : t === "stocky" ? "stocky" : t === "ledger" ? "ledger" : "meals";
 }

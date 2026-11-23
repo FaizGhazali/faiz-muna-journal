@@ -2,6 +2,7 @@
 // Pure: no Firebase, no DOM. The numbers are random but repeatable, so every visitor sees the same story.
 // Never put real family data here.
 import { iso, parse, addDays } from "../core/util.js";
+import { CIMB_PETRONAS, lastStatement, cycleOf, manualTxn } from "../logic/ledger.js";
 
 const DAYS = 84;
 
@@ -197,5 +198,39 @@ export function sampleData(now = new Date()) {
   const kinds = { "d-kind-clean": { name: "Cleaning", created: stamp(80) } };
   const shopList = { "d-list-0": { name: "Bawang merah", qty: 500, unit: "g", from: "manual", created: stamp(1) } };
 
-  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns, diary, pantry, buys, prices, shopList, kinds };
+  // Ledger: one made-up credit card with the PETRONAS-style rebate rules, about 10 weeks of spending, each statement paid in full after it came out.
+  const card = { type: "credit_card", name: "Fuel card", last4: "1234", owner: "p1", statementDay: 20, dueDay: 10, cycleBasis: "posted", active: true, program: "d-prog", created: 1, updated: 1 };
+  card.openingDate = lastStatement({ id: "d-card", ...card }, ago(70)); card.openingSen = 0;
+  const acc = { id: "d-card", ...card };
+  const shopsBy = [
+    ["ECS* SETEL VENTURES", "fuel-petronas", "Setel", 60, 140, 0.22],
+    ["PASAR RAYA SEGAR", "groceries", "Pasar Raya Segar", 25, 160, 0.3],
+    ["KEDAI RUNCIT MAJU", "groceries", "Kedai Runcit Maju", 6, 30, 0.2],
+    ["RESTORAN SELERA KITA", "dining", "Selera Kita", 12, 55, 0.35],
+    ["KOPI PAGI CAFE", "dining", "Kopi Pagi", 8, 24, 0.25],
+    ["SMART PARKING", "parking", "Smart Parking", 2, 8, 0.12],
+    ["APSB_SAMPLE_TOLL", "tolls", "Toll", 2, 9, 0.18],
+    ["KEDAI SERBANEKA", "shopping", "Kedai Serbaneka", 10, 90, 0.06],
+  ];
+  const ledgerTxns = {};
+  let ln = 0;
+  for (let i = 69; i >= 0; i--) {
+    const d = ago(i);
+    for (const [raw, cat, merchant, lo, hi, p] of shopsBy) {
+      if (rnd() >= p) continue;
+      const amount = (lo + rnd() * (hi - lo)).toFixed(2);
+      ledgerTxns[`d-ltx-${ln++}`] = manualTxn(acc, { spentBy: rnd() < 0.6 ? "p1" : "p2", date: d, amount, type: "purchase", raw, cat, merchant }, parse(d).getTime() + 12 * 36e5);
+    }
+  }
+  // Pay each finished statement in full 12 days after it (after the cut-off, so the rebate tier holds).
+  for (let s = cycleOf(acc, card.openingDate).statement; s < T; s = cycleOf(acc, addDays(s, 1)).statement) {
+    const payDay = addDays(s, 12);
+    if (s <= card.openingDate || payDay >= T) continue;
+    const owed = Object.values(ledgerTxns).filter((t) => t.posted <= s).reduce((a, t) => a + t.amountSen, 0);
+    if (owed > 0) ledgerTxns[`d-ltx-${ln++}`] = manualTxn(acc, { spentBy: "p1", date: payDay, amount: (owed / 100).toFixed(2), type: "payment", raw: "Card payment" }, parse(payDay).getTime() + 20 * 36e5);
+  }
+  const ledgerAccounts = { "d-card": card };
+  const ledgerPrograms = { "d-prog": { ...structuredClone(CIMB_PETRONAS), account: "d-card", preset: "cimb-petronas", created: 1, updated: 1 } };
+
+  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns, diary, pantry, buys, prices, shopList, kinds, ledgerAccounts, ledgerPrograms, ledgerTxns };
 }

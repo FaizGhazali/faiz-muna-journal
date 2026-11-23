@@ -60,7 +60,7 @@ function goalHtml(p, w) {
 
 // Each person has one card: weight and BMI on top (every journal), then a part for the journal picked on the wheel.
 // #people[data-journal] shows only the matching .pextra. A new journal adds its id here and fills "<id>Slot-<person>".
-const JOURNAL_PARTS = ["weight", "meals"];
+const JOURNAL_PARTS = ["weight", "meals", "ledger"];
 export function renderPeople() {
   $("people").innerHTML = people().map((p) => {
     const pts = weighIns(p), w = pts.length ? pts[pts.length - 1].weight : null;

@@ -82,5 +82,9 @@ export async function deleteDoc(ref) { if (data[ref.col]) delete data[ref.col][r
 export const getDocs = async (q) => colSnap(q);
 export function writeBatch() {
   const ops = [];
-  return { set(ref, body, opts) { ops.push(() => write(ref, body, !!opts?.merge)); return this; }, async commit() { ops.forEach((f) => f()); } };
+  return {
+    set(ref, body, opts) { ops.push(() => write(ref, body, !!opts?.merge)); return this; },
+    delete(ref) { ops.push(() => { if (data[ref.col]) delete data[ref.col][ref.id]; touch(ref.col); }); return this; },
+    async commit() { ops.forEach((f) => f()); },
+  };
 }
