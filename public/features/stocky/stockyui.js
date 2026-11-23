@@ -5,7 +5,7 @@ import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "../..
 import { confirmDelete } from "../../core/confirm.js";
 import { UNITS, LEVELS, allKinds, kindOf, shelves, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice, setCost, linksTo, linkRows, LINKS_MAX } from "../../logic/stocky.js";
 import { readFood } from "../../logic/meals.js";
-import { $, esc, iso, parse, today } from "../../core/util.js";
+import { $, esc, iso, parse, today, lastUsed } from "../../core/util.js";
 
 const day = (d) => parse(d).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
@@ -132,8 +132,15 @@ const datalist = () => `<datalist id="skShops">${shopList().map((s) => `<option 
 // The Kind field: type a name (the keyboard opens), or tap ▾ for the list. A name that isn't a kind yet
 // becomes a new kind when the item is saved. Your own kinds have ✕ in the list. Only Food links to Meals.
 const kindName = (id) => kindOf(id, kinds).name;
+// Forms start from the last choice (great-ux skill): the shop of the newest buy or price seen, the kind and unit of
+// the newest item. Blank until there is one, so nothing is guessed the first time.
+const lastShop = () => lastUsed([...buys, ...prices], "shop");
+const lastKind = () => { const k = lastUsed(pantry, "kind"); return k && kinds.some((x) => x.id === k) ? k : ""; };
+const lastUnit = () => lastUsed(pantry, "unit");
+const UNIT_WORDS = { g: "grams", ml: "ml", pcs: "pieces" };
+const unitSelect = (sel) => `<label>Counted in<select name="unit">${sel ? "" : `<option value="" selected disabled>Pick one</option>`}${Object.keys(UNITS).map((u) => `<option value="${u}"${sel === u ? " selected" : ""}>${UNIT_WORDS[u]}</option>`).join("")}</select></label>`;
 const kindField = (selId) => `<div class="sk-kindf"><span class="sk-lbl">Kind</span>
-  <div class="sk-combo"><input type="text" name="kind" value="${esc(kindName(selId))}" maxlength="30" autocomplete="off" autocapitalize="words" enterkeyhint="done" placeholder="Type or pick" role="combobox" aria-label="Kind" aria-autocomplete="list" aria-expanded="false"><button type="button" class="sk-combo-btn" data-sk="kindmenu" aria-label="Show all kinds" aria-expanded="false">▾</button></div>
+  <div class="sk-combo"><input type="text" name="kind" value="${selId ? esc(kindName(selId)) : ""}" maxlength="30" autocomplete="off" autocapitalize="words" enterkeyhint="done" placeholder="Type or pick" role="combobox" aria-label="Kind" aria-autocomplete="list" aria-expanded="false"><button type="button" class="sk-combo-btn" data-sk="kindmenu" aria-label="Show all kinds" aria-expanded="false">▾</button></div>
   <div class="sk-menu" role="listbox" aria-label="Kinds" hidden></div>
   <small class="sk-kindnote" data-sk-kindnote></small></div>`;
 function menuHtml(text, all) {
@@ -171,14 +178,12 @@ function kindNote(f) {
 const isFood = (f) => matchKind(f.elements.kind?.value, kinds).id === "food";
 // The "Bought" form: how much, and (optional) the price, shop and whether it was on sale.
 function buyForm(r, p) {
-  const unit = p?.unit || r.unit || "pcs", qty = r.qty || p?.pack || "";
-  const last = buys.filter((b) => b.item === p?.id && b.shop).sort((a, b) => b.date.localeCompare(a.date))[0];
+  const unit = p?.unit || r.unit || lastUnit(), qty = r.qty || p?.pack || "";
   return `<form class="mform sk-buy" data-skform="buy" data-key="${esc(r.key)}" novalidate>
-    ${p ? "" : `<div class="two">${kindField(r.food ? "food" : FALLBACK_KIND)}
-      <label>Counted in<select name="unit">${Object.keys(UNITS).map((u) => `<option${u === unit ? " selected" : ""}>${u}</option>`).join("")}</select></label></div>`}
+    ${p ? "" : `<div class="two">${kindField(r.food ? "food" : lastKind())}${unitSelect(unit)}</div>`}
     <div class="two"><label>How much${p ? ` (${unit})` : ""}<input type="number" name="qty" inputmode="decimal" min="0" value="${esc(qty)}"></label>
       <label>Price paid, ${"RM"}<input type="number" name="price" inputmode="decimal" min="0" step="0.01" placeholder="optional"></label></div>
-    <label>Shop<input type="text" name="shop" list="skShops" maxlength="40" value="${esc(last?.shop || "")}" placeholder="Like Mydin, Lotus's, pasar"></label>
+    <label>Shop<input type="text" name="shop" list="skShops" maxlength="40" value="${esc(lastShop())}" placeholder="Like Mydin, Lotus's, pasar"></label>
     <label class="sk-check"><input type="checkbox" name="sale"> It was on sale</label>
     <p class="note" data-sk-hint></p>
     <div class="actions"><button type="submit" class="primary">Save</button><button type="button" data-sk="cancel">Cancel</button></div>
@@ -315,7 +320,7 @@ function priceForm(p) {
   return `<form class="mform" data-skform="price" novalidate>
     <div class="two"><label>Amount (${p.unit})<input type="number" name="qty" inputmode="decimal" min="0" value="${esc(p.pack)}"></label>
       <label>Price, RM<input type="number" name="price" inputmode="decimal" min="0" step="0.01"></label></div>
-    <label>Shop<input type="text" name="shop" list="skShops" maxlength="40" placeholder="Like Mydin, Lotus's, pasar"></label>
+    <label>Shop<input type="text" name="shop" list="skShops" maxlength="40" value="${esc(lastShop())}" placeholder="Like Mydin, Lotus's, pasar"></label>
     <label class="sk-check"><input type="checkbox" name="sale" data-sk-toggle="until"> On sale</label>
     <label data-sk-show="until" hidden>Sale ends (optional)<input type="date" name="until" min="${today()}"></label>
     <p class="note" data-sk-hint></p>
@@ -336,8 +341,7 @@ function itemForm(p) {
   const { foods } = mealData(), v = (k, d = "") => esc(p?.[k] ?? d);
   return `<form class="mform" data-skform="item" novalidate>
     <label>Name<input type="text" name="name" maxlength="60" value="${v("name")}" placeholder="Beras, Telur, Tisu"></label>
-    <div class="two">${kindField(p ? kindOf(p.kind, kinds).id : "food")}
-      <label>Counted in<select name="unit">${Object.keys(UNITS).map((u) => `<option value="${u}"${(p?.unit || "g") === u ? " selected" : ""}>${{ g: "grams", ml: "ml", pcs: "pieces" }[u]}</option>`).join("")}</select></label></div>
+    <div class="two">${kindField(p ? kindOf(p.kind, kinds).id : lastKind())}${unitSelect(p ? p.unit : lastUnit())}</div>
     <label>Usually bought at once<input type="number" name="pack" inputmode="decimal" min="0" value="${v("pack")}" placeholder="5000 for a 5 kg bag, 30 for a tray"></label>
     <fieldset class="sk-links" data-sk-show="food">
       <legend>Used in meals</legend>
@@ -351,7 +355,7 @@ function itemForm(p) {
     </fieldset>
     ${p ? "" : `<label class="sk-check"><input type="checkbox" name="bought" checked data-sk-toggle="bought"> I just bought it</label>
     <div data-sk-show="bought"><div class="two"><label>Price paid, RM<input type="number" name="price" inputmode="decimal" min="0" step="0.01" placeholder="optional"></label>
-      <label>Shop<input type="text" name="shop" list="skShops" maxlength="40" placeholder="optional"></label></div>
+      <label>Shop<input type="text" name="shop" list="skShops" maxlength="40" value="${esc(lastShop())}" placeholder="optional"></label></div>
       <label class="sk-check"><input type="checkbox" name="sale"> It was on sale</label></div>${datalist()}`}
     <p class="note sk-msg" role="status">${esc(msg)}</p>
     <div class="actions"><button type="submit" class="primary">${p ? "Save changes" : "Add item"}</button>${p ? `<button type="button" data-sk="cancel">Cancel</button>` : `<a class="btn" href="#stocky">Cancel</a>`}</div>
@@ -403,7 +407,7 @@ function syncForms() {
       const food = isFood(f), rows = [...f.querySelectorAll("[data-link-row]")];
       show("food", food);
       show("newfood", food && rows.some((r) => r.querySelector("select").value === "new"));
-      f.querySelectorAll("[data-link-unit]").forEach((x) => { x.textContent = el.unit.value; });
+      f.querySelectorAll("[data-link-unit]").forEach((x) => { x.textContent = el.unit.value || "g"; });
       // A meal food made from the item itself is all item: 100 g in 100 g unless something else is typed.
       rows.forEach((r) => { r.querySelector('[name="linkPer"]').placeholder = r.querySelector("select").value === "new" && el.unit.value !== "pcs" ? "100" : el.unit.value === "pcs" ? "0.5" : "40"; });
       const add = f.querySelector('[data-sk="link-add"]'); if (add) { add.hidden = rows.length >= LINKS_MAX; add.textContent = rows.length ? "+ Another meal food" : "+ Add a meal food"; }
@@ -449,6 +453,7 @@ async function saveBuy(f) {
     else {
       const k = kindFrom(f);
       if (k.error) { setMsg(f, k.error); return; }
+      if (!el.unit.value) { setMsg(f, "Pick what it's counted in: grams, ml or pieces."); return; }
       const { item, error: e2 } = readItem({ name: r.name, kind: k.id, unit: el.unit?.value, pack: rec.qty, links: r.food && el.unit?.value !== "pcs" ? [{ food: r.food, per100: 100 }] : [] }, k.ids); // a planned food bought as it is eaten
       if (e2) { setMsg(f, e2); return; }
       await commitKind(k);
@@ -474,6 +479,7 @@ async function saveItem(f) {
   const el = f.elements, id = $("skSheet").contains(f) ? peek : route().page === "item" ? route().id : null, { foods } = mealData();
   const k = kindFrom(f);
   if (k.error) { setMsg(f, k.error); return; }
+  if (!el.unit.value) { setMsg(f, "Pick what it's counted in: grams, ml or pieces."); return; }
   const links = k.id === "food" ? [...f.querySelectorAll("[data-link-row]")].map((r) => ({ food: r.querySelector('[name="linkFood"]').value, per100: r.querySelector('[name="linkPer"]').value })) : [];
   // "+ New meal food from this": the numbers per 100 g become a food in the Meals library (one per save).
   // Eaten as it is bought, so 100 g of it in 100 g of the food unless something else is typed.

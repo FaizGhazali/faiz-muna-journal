@@ -32,6 +32,8 @@ Before finishing any change the family can see, walk through it as them on a 375
 
 ## 4. Never lose typing
 
+- **Start from the last choice.** A field the family fills in again and again (a shop, a kind, a unit, a card, a category, a meal slot) starts on what they picked last time, from the newest saved doc (`lastUsed(docs, field)` in `public/core/util.js`), or from a per-device `journal-*` key when it's a device habit (Ledger's card / wallet). The very first time there's nothing to copy, so leave it blank (a select gets a disabled "Pick one") and ask for it on save; never quietly guess. Something the row itself already says (a planned meal food is Food) beats the last choice.
+
 - A form someone is filling in is not redrawn by live updates from the other phone (keep it out of the `innerHTML` redraw: a `formKey`, a `data-dirty` flag, or skip the redraw while the form is in the DOM).
 - Drafts that take effort (diary) autosave per device.
 

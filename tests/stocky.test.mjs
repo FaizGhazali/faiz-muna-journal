@@ -288,3 +288,12 @@ test("setCost for cooked and bought sets", () => {
   assert.equal(setCost({ made: "bought" }, pantry, buys, [], T), null);
   assert.equal(setCost({ name: "old set" }, pantry, buys, [], T), null);
 });
+
+import { lastUsed } from "../public/core/util.js";
+test("lastUsed: the newest doc's choice, blank the first time", () => {
+  assert.equal(lastUsed([], "shop"), "");
+  assert.equal(lastUsed([{ shop: "" }, { date: "2026-11-01" }], "shop"), "");
+  const buys = [{ date: "2026-11-02", at: 5, shop: "Mydin" }, { date: "2026-11-03", at: 1, shop: "Lotus's" }, { date: "2026-11-03", at: 9 }, { date: "2026-11-01", at: 99, shop: "Pasar" }];
+  assert.equal(lastUsed(buys, "shop"), "Lotus's"); // a later day wins over a later time; docs without a shop are skipped
+  assert.equal(lastUsed([{ created: 1, kind: "food" }, { created: 3, kind: "home" }, { created: 2, kind: "x" }], "kind"), "home");
+});
