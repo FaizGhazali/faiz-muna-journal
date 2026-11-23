@@ -12,6 +12,7 @@ import { initImport, startImport, renderImport } from "./import.js";
 import { initTrends, renderTrends } from "./trends.js";
 import { initRules, startRules, renderRules } from "./rules.js";
 import { ensureSeeds, addAccount, saveCycle } from "./seeds.js";
+import { initPlan, planSubs, renderPlan } from "./plan.js";
 
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (_) { return d; } },
@@ -48,6 +49,7 @@ export function initLedger(opts) {
   const shared = { db: () => db, commit, people, today, accounts: () => live(), programs: () => programs, cycles: () => cycles, txns: () => txns, refresh: () => refreshLedger() };
   initTrends(shared);
   initRules(shared);
+  initPlan({ ...shared, me });
   $("me").addEventListener("change", () => { f.who = null; formKey = ""; refreshLedger(); });
   addEventListener("journalchange", () => refreshLedgerParts());
 }
@@ -62,12 +64,14 @@ export function startLedger() {
     txns = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((t) => /^\d{4}-\d{2}-\d{2}$/.test(t.date || "") && Number.isInteger(t.amountSen));
     refreshLedger();
   }));
+  unsubs.push(...planSubs(db));
   if (!seeded) { seeded = true; ensureSeeds(db).catch(() => { seeded = false; }); }
 }
 export function stopLedger() { unsubs.forEach((u) => u()); unsubs = []; }
 
 export function refreshLedger() {
   if (!$("ledgerAdd") || !people().length) return;
+  renderPlan();
   renderAdd();
   renderImport();
   renderRules();
@@ -224,14 +228,14 @@ function renderCards() {
     const head = `<div class="lhead"><h2>${esc(a.name)}</h2>${a.last4 ? `<span class="note">··${esc(a.last4)}</span>` : ""}<span class="lbtnrow"><button type="button" class="mini" data-lrules="${a.id}">⚙️ Rules</button><button type="button" class="mini" data-limport="${a.id}">📄 Import statement</button></span></div>
       <p class="lcycle">${shortDate(v.cycle.start)} – ${shortDate(v.cycle.statement)} · <b>${v.daysLeft === 0 ? "statement today" : `${v.daysLeft} ${v.daysLeft === 1 ? "day" : "days"} to statement`}</b> · due ${shortDate(v.cycle.due)}</p>
       ${last ? `<p class="note llast">Last statement ${shortDate(last.statement)}: <b>${last.balanceSen == null ? "–" : rm(last.balanceSen)}</b>${lastReb ? ` · rebate <b>${rm(lastReb.totalSen)}</b> (${esc(lastReb.tierLabel)} tier)` : ""} ✓</p>` : ""}`;
-    if (!v.program) return `<section class="panel lcard" data-title="${esc(a.name)}">${head}
+    if (!v.program) return `<section class="panel lcard" id="lcard-${a.id}" data-title="${esc(a.name)}">${head}
       <div class="stats"><div class="stat"><small>Next statement so far</small><b>${rm(v.balanceSen)}</b></div></div>
       <p class="note">No rebate rules for this card yet. Tap ⚙️ Rules to add them.</p></section>`;
     const p = v.program, r = v.rebate, top = p.tiers.at(-1).minSen;
     const max = Math.max(top * 1.25, v.balanceSen * 1.05, 1), at = (sen) => Math.max(0, Math.min(100, (sen / max) * 100));
     // At the 0% tier, show what the first paying tier would give, so the gap is real money.
     const gs = withEligible(r.tier > 0 || !p.tiers[1] ? r : computeRebate(p, { txns: v.txns, balanceSen: p.tiers[1].minSen }));
-    return `<section class="panel lcard" data-title="${esc(a.name)} rebate">${head}
+    return `<section class="panel lcard" id="lcard-${a.id}" data-title="${esc(a.name)} rebate">${head}
       <div class="stats">
         <div class="stat"><small>Next statement so far</small><b>${rm(v.balanceSen, { whole: true })}</b><i>.${String(Math.abs(v.balanceSen) % 100).padStart(2, "0")}</i></div>
         <div class="stat"><small>Rebate so far</small><b>${rm(r.totalSen, { whole: true })}</b></div>

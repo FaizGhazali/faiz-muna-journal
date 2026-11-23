@@ -3,6 +3,7 @@
 // Never put real family data here.
 import { iso, parse, addDays } from "../core/util.js";
 import { CIMB_PETRONAS, lastStatement, cycleOf, manualTxn } from "../logic/ledger.js";
+import { DEFAULT_BUCKETS, addMonths, paidKey, dueDate } from "../logic/moneyplan.js";
 
 const DAYS = 84;
 
@@ -232,5 +233,21 @@ export function sampleData(now = new Date()) {
   const ledgerAccounts = { "d-card": card };
   const ledgerPrograms = { "d-prog": { ...structuredClone(CIMB_PETRONAS), account: "d-card", preset: "cimb-petronas", created: 1, updated: 1 } };
 
-  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns, diary, pantry, buys, prices, shopList, kinds, ledgerAccounts, ledgerPrograms, ledgerTxns };
+  // Money plan: a made-up income, the default split, and a few bills and instalments; the ones due by today are ticked.
+  const mo = T.slice(0, 7);
+  const ledgerPlan = { main: { incomeSen: 450000, buckets: structuredClone(DEFAULT_BUCKETS), created: 1, updated: 1 } };
+  const bills = [
+    ["d-c-house", "House and bills", "essentials", 120000, 1, null], ["d-c-car", "Car", "essentials", 52000, 8, addMonths(mo, 40)],
+    ["d-c-phone", "Phone and internet", "essentials", 15000, 15, null], ["d-c-loan", "Personal loan", "debt", 28000, 25, addMonths(mo, 30)],
+    ["d-c-pay1", "PayLater (sofa)", "debt", 18000, 5, addMonths(mo, 3)], ["d-c-pay2", "PayLater (phone)", "debt", 9500, 12, addMonths(mo, 1)],
+    ["d-c-asb", "Monthly savings", "savings", 30000, 28, null],
+  ];
+  const ledgerCommitments = Object.fromEntries(bills.map(([id, name, bucket, amountSen, dueDay, endMonth]) => [id, { name, bucket, amountSen, dueDay, startMonth: addMonths(mo, -6), ...(endMonth ? { endMonth } : {}), created: 1, updated: 1 }]));
+  const ledgerPaid = {};
+  for (const [id, , , amountSen, dueDay] of bills) {
+    const due = dueDate({ dueDay }, mo);
+    if (due <= T) ledgerPaid[paidKey(id, mo)] = { commitment: id, month: mo, date: due, amountSen, by: "p1", source: "typed", at: parse(due).getTime() + 9 * 36e5 };
+  }
+
+  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns, diary, pantry, buys, prices, shopList, kinds, ledgerAccounts, ledgerPrograms, ledgerTxns, ledgerPlan, ledgerCommitments, ledgerPaid };
 }
