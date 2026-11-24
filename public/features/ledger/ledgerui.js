@@ -71,6 +71,7 @@ const live = () => accounts.filter((a) => a.active !== false).sort((a, b) => (a.
 const acct = () => live().find((a) => a.id === f.account) ?? live().find((a) => a.id === store.get(ACCT_KEY, "")) ?? live()[0] ?? null;
 const personName = (id) => people().find((p) => p.id === id)?.name ?? "";
 
+export { billsDue, payBill, undoPayBill } from "./plan.js";
 export function initLedger(opts) {
   ({ db, commit, people, me } = opts);
   board = makeBoard({ host: $("ledger"), bar: $("ledgerBar"), key: "ledger", ...BOARD, redraw: () => refreshLedger(), sync: boardPrefs("ledger") });
@@ -82,7 +83,7 @@ export function initLedger(opts) {
   const shared = { db: () => db, commit, people, today, accounts: () => live(), programs: () => programs, cycles: () => cycles, txns: () => txns, incomes: () => incomes, refresh: () => refreshLedger(), board };
   initTrends(shared);
   initRules(shared);
-  initPlan({ ...shared, me, planChanged: () => renderAnalytics() });
+  initPlan({ ...shared, me, planChanged: () => renderAnalytics(), billsChanged: opts.billsChanged });
   initAnalytics(shared);
   initDocs({ db: () => db, commit, me });
   initIncome({ ...shared, me });

@@ -107,6 +107,20 @@ export function monthBills(commitments, paid, m, pay = 1) {
     ...rows.filter((r) => r.paid).sort((a, b) => (b.paid.date || "").localeCompare(a.paid.date || ""))];
 }
 
+// Debt bills that belong in "Your next move" (decided 24 Nov 2026): unpaid, in the debt bucket, from LEAD_DAYS
+// before the due date until it's ticked (overdue ones stay while their pay month lasts). Worked out, never stored,
+// so nothing piles up in the Activities list. who = whoever ticked it last (they usually pay it), null = both.
+export const BILL_LEAD_DAYS = 3;
+export const BILL_BUCKETS = ["debt"];
+export function billTasks(commitments, paid, day, pay = 1, lead = BILL_LEAD_DAYS) {
+  const m = monthOf(day, pay), last = {};
+  for (const p of Object.values(paid)) if (p.commitment && (!last[p.commitment] || p.month > last[p.commitment].month)) last[p.commitment] = p;
+  const debt = commitments.filter((c) => BILL_BUCKETS.includes(c.bucket));
+  return [m, addMonths(m, 1)].flatMap((month) => monthBills(debt, paid, month, pay)
+    .filter((r) => !r.paid && dayNum(r.due) - dayNum(day) <= lead && (month === m || r.due >= day))
+    .map((r) => ({ c: r.c, month, due: r.due, amountSen: r.amountSen, who: last[r.c.id]?.by ?? null })));
+}
+
 // Day-to-day spending this month by bucket (both people), leaving out commitments paid by card.
 export function spentByBucket(txns, plan, m) {
   const out = {}, pay = payOf(plan);

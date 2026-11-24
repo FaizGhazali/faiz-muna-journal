@@ -29,7 +29,7 @@ import { initZoom } from "./core/zoom.js";
 import { initGuides } from "./shell/tour.js";
 import { initWidget } from "./shell/widget.js";
 import { initDiary, startDiary, stopDiary, refreshDiary, diaryList } from "./features/diary/diaryui.js";
-import { initLedger, startLedger, stopLedger, refreshLedger, refreshLedgerParts } from "./features/ledger/ledgerui.js";
+import { initLedger, startLedger, stopLedger, refreshLedger, refreshLedgerParts, billsDue, payBill, undoPayBill } from "./features/ledger/ledgerui.js";
 import { setSelf, selfId } from "./core/owner.js";
 import { initPrefs, startPrefs, stopPrefs } from "./shell/prefs.js";
 import { $, today } from "./core/util.js";
@@ -89,14 +89,14 @@ const exercisedToday = (pid) => entries.some((e) => e.person === pid && e.date =
 initWeight({ people, entries: allEntries });
 initEntryForm({ entriesCol, people, entries: allEntries, commit });
 initSetup({ db, entriesCol });
-initActivities({ db, people, commit, exercisedToday, onChange: () => refreshMood() });
+initActivities({ db, people, commit, exercisedToday, onChange: () => refreshMood(), bills: { due: billsDue, pay: payBill, undo: undoPayBill } });
 initBackup({ db });
 initMeals({ db, people, me: currentPerson, entries: allEntries, commit, stock: { of: stockOf, list: listFood, items: priceItems, cost: costOf, changed: () => refreshStocky() } });
 // Shared journals stamp who did it (a buy, a bill ticked, new spending): the one signed in, not who "For" shows.
 const doer = () => selfId() ?? currentPerson();
 initStocky({ db, people, me: doer, commit, mealData, pricesChanged: refreshMealCost });
 initPrefs({ db, commit, demo: DEMO }); // card layouts that follow each person (before the Ledger board uses it)
-initLedger({ db, people, me: doer, commit });
+initLedger({ db, people, me: doer, commit, billsChanged: refreshMove });
 initWheel();
 initCollapse();
 initZoom();

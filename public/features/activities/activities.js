@@ -14,6 +14,7 @@ import { journalView, DASH, DASH_LINE } from "../../core/journal.js";
 import { confirmDelete } from "../../core/confirm.js";
 import { canEdit, viewOnly } from "../../core/owner.js";
 import { $, esc, iso, parse, dayNum, addDays, today, lastUsed } from "../../core/util.js";
+import { rm } from "../../logic/ledger.js";
 
 const fmt = (s) => parse(s).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "";
@@ -24,13 +25,13 @@ const store = {
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const TABS = { inbox: "Ideas", active: "Active", paused: "Paused", done: "Done" };
 
-let db, people, commit, exercisedToday, onChange, actsCol, daysCol, movesCol, nextCol;
+let db, people, commit, exercisedToday, onChange, bills, actsCol, daysCol, movesCol, nextCol;
 let acts = [], dayDocs = [], moves = [], movesReady = false, nextReady = false, unsubs = [];
 let me = null, tab = "inbox", typeFilter = "", editing = null, draft = null;
 let moveMsg = "", undoFn = null, undoId = null, addTypeTouched = false, lastDay = today();
 
 export function initActivities(opts) {
-  ({ db, people, commit, exercisedToday, onChange } = opts);
+  ({ db, people, commit, exercisedToday, onChange, bills } = opts);
   actsCol = collection(db, "activities");
   daysCol = collection(db, "habitDays");
   movesCol = collection(db, "moves");
@@ -118,6 +119,14 @@ function showView() {
 
 // ---------- data ----------
 const mine = (p = me) => acts.filter((a) => a.owner === p);
+// Debt bills due within 3 days (billTasks() in moneyplan.js, from Ledger through app.js) join the Next Move
+// candidates as one-time tasks. They're never saved as activities, so the list stays clean; "Paid" ticks the
+// bill in Ledger and it's gone for both. Shown to whoever ticked it last, or to both when nobody has yet.
+const billItems = (p) => (bills?.due() ?? []).filter((r) => !r.who || r.who === p).map((r) => ({
+  id: `bill:${r.c.id}_${r.month}`, owner: p, type: "task", status: "active", title: `Pay ${r.c.name}`,
+  due: r.due, minutes: 5, created: r.due, note: `${rm(r.amountSen)} for ${r.c.name}. Paid ticks it off in Ledger's bills.`, bill: r,
+}));
+const moveList = (p = me) => [...mine(p), ...billItems(p)];
 const logs = (p = me) => Object.fromEntries(dayDocs.filter((d) => d.owner === p).map((d) => [d.date, d]));
 const strip = ({ id, ...rest }) => rest;
 const update = (id, patch) => commit(() => updateDoc(doc(actsCol, id), { ...patch, updated: Date.now() }));
@@ -126,7 +135,7 @@ const replace = (id, body) => commit(() => setDoc(doc(actsCol, id), { ...body, u
 function logMove(a, act) {
   if (ro()) return async () => {};
   const ref = doc(movesCol), now = new Date();
-  commit(() => setDoc(ref, { owner: me, item: a.id, type: a.type, act, date: iso(now), hour: now.getHours(), at: now.getTime() }));
+  commit(() => setDoc(ref, { owner: me, item: a.id, type: a.bill ? "bill" : a.type, act, date: iso(now), hour: now.getHours(), at: now.getTime() }));
   return () => commit(() => deleteDoc(ref));
 }
 function markHabit(id, state, date = today()) {
@@ -149,7 +158,7 @@ const setSkip = (ids, p = me) => store.set(skipKey(p), { date: today(), ids });
 // The pick published to nextMove is kept too, so phones agree: for the person picked with "For" this phone's own
 // pick comes first (they're using it), for the other person the published one does (their phone may have moved on).
 function currentMove(p = me) {
-  const ctx = ctxNow(p), all = mine(p), local = store.get(`journal-current-${p}`, null), shared = published[p];
+  const ctx = ctxNow(p), all = moveList(p), local = store.get(`journal-current-${p}`, null), shared = published[p];
   const mineToday = local && local.date === ctx.today; // id null = acted on here today (Done / Not now / Suggest another)
   const keeps = [mineToday && local.id, !(p === me && mineToday) && shared && shared.date === ctx.today && shared.item];
   if (p !== me) keeps.reverse();
@@ -206,8 +215,8 @@ function renderMove() {
       ${msg}`;
     return;
   }
-  const { a, why } = m, t = TYPES[a.type], { detail, minutes } = describe(a), url = safeUrl(a.url);
-  const doneLabel = { skill: "Did it", habit: "Done", explore: "Been there", cook: "Cooked it", task: "Done" }[a.type];
+  const { a, why } = m, t = a.bill ? { label: "Bill", color: "--s8" } : TYPES[a.type], { detail, minutes } = describe(a), url = safeUrl(a.url);
+  const doneLabel = a.bill ? "Paid" : { skill: "Did it", habit: "Done", explore: "Been there", cook: "Cooked it", task: "Done" }[a.type];
   el.innerHTML = `<p class="eyebrow">${eyebrow}</p>
     <span class="tag" style="--c:var(${t.color})">${t.label}</span>
     <h2>${esc(a.title)}</h2>
@@ -230,7 +239,11 @@ async function moveAction(act) {
   moveMsg = ""; undoFn = null; undoId = a.id;
   if (act === "done") {
     if (a.type === "habit") { await markHabit(a.id, "done"); undoFn = () => markHabit(a.id, null); }
-    else {
+    else if (a.bill) {
+      const { c, month } = a.bill;
+      await bills.pay(c.id, month, `${c.name} ticked as paid.`);
+      undoFn = () => bills.undo(c.id, month);
+    } else {
       const patch = a.type === "skill" ? { lastDone: today() } : { status: "done", doneOn: today() };
       const step = a.type === "skill" && firstOpenStep(a);
       if (step) patch.steps = a.steps.map((s) => s === step ? { ...s, done: true } : s);
@@ -240,15 +253,16 @@ async function moveAction(act) {
     }
     const unlog = logMove(a, "done"), undoDone = undoFn;
     undoFn = async () => { await unlog(); await undoDone(); };
-    moveMsg = a.type === "skill" ? `Good work on "${a.title}".` : `"${a.title}" is done.`;
+    moveMsg = a.type === "skill" ? `Good work on "${a.title}".` : a.bill ? `${a.bill.c.name} is paid for this month.` : `"${a.title}" is done.`;
     clearCurrent();
   }
   if (act === "later") {
-    // Hidden today and the next two days. Habits just step aside for today.
-    if (a.type === "habit") setSkip([...skipList(), a.id]);
+    // Hidden today and the next two days. Habits and bills just step aside for today.
+    const todayOnly = a.type === "habit" || !!a.bill;
+    if (todayOnly) setSkip([...skipList(), a.id]);
     else await update(a.id, { snoozed: addDays(today(), 2) });
     const unlog = logMove(a, "later");
-    undoFn = a.type === "habit" ? () => { setSkip(skipList().filter((x) => x !== a.id)); return unlog(); } : async () => { await unlog(); await replace(a.id, before); };
+    undoFn = todayOnly ? () => { setSkip(skipList().filter((x) => x !== a.id)); return unlog(); } : async () => { await unlog(); await replace(a.id, before); };
     moveMsg = "Okay, not now.";
     clearCurrent();
   }
@@ -256,11 +270,11 @@ async function moveAction(act) {
     logMove(a, "another");
     const skip = [...skipList(), a.id];
     clearCurrent();
-    if (pickNext(mine(), { ...ctxNow(), skip: new Set(skip) })) setSkip(skip);
+    if (pickNext(moveList(), { ...ctxNow(), skip: new Set(skip) })) setSkip(skip);
     else {
       // Went through everything: start a fresh round, just not with the one on screen.
       setSkip([]);
-      const again = pickNext(mine(), { ...ctxNow(), skip: new Set([a.id]) });
+      const again = pickNext(moveList(), { ...ctxNow(), skip: new Set([a.id]) });
       if (again) remember(again.a.id);
       moveMsg = again ? "That's everything. Starting from the top." : "This is the only thing on your list right now.";
     }

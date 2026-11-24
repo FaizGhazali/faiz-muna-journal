@@ -11,7 +11,7 @@ import { monthIncome } from "../../logic/income.js";
 import { rm, toSen, shortDate } from "../../logic/ledger.js";
 import {
   DEFAULT_BUCKETS, DEFAULT_PAY_DAY, PAY_DAY_MAX, bucketsOf, checkPlan, planView, checkCommitment, paidRecord, paidKey,
-  monthOf, monthName, liveIn, payOf,
+  monthOf, monthName, liveIn, payOf, billTasks,
 } from "../../logic/moneyplan.js";
 
 // Each default bucket keeps one colour slot from the chart palette (--s1…--s8); added buckets take the free ones.
@@ -32,6 +32,15 @@ const colourOf = (buckets) => {
 export const planState = () => ({ plan, commitments, paid });
 export const bucketColours = () => colourOf(bucketsOf(plan));
 
+// For "Your next move" (activities.js, through app.js): debt bills due soon, and ticking one from there.
+export const billsDue = (day = ctx?.today()) => (ctx ? billTasks(commitments, paid, day, payOf(plan)) : []);
+export async function payBill(id, month, ok) {
+  const c = commitments.find((x) => x.id === id); if (!c) return;
+  await ctx.commit(() => setDoc(doc(ctx.db(), "ledgerPaid", paidKey(id, month)), paidRecord(c, { month, date: ctx.today(), by: ctx.me(), at: Date.now() })), ok);
+}
+// Only Undo right after "Paid" on the card uses this, so it doesn't ask again.
+export const undoPayBill = (id, month) => ctx.commit(() => deleteDoc(doc(ctx.db(), "ledgerPaid", paidKey(id, month))));
+
 export function initPlan(c) {
   ctx = c;
   const host = $("ledgerPlan");
@@ -40,7 +49,7 @@ export function initPlan(c) {
 }
 // Live data: returns the unsubscribe functions for ledgerui's list.
 export function planSubs(db) {
-  const redraw = () => { renderPlan(); ctx.planChanged?.(); };
+  const redraw = () => { renderPlan(); ctx.planChanged?.(); ctx.billsChanged?.(); };
   return [
     onSnapshot(doc(db, "ledgerPlan", "main"), (s) => { plan = s.exists() ? s.data() : null; redraw(); }),
     onSnapshot(collection(db, "ledgerCommitments"), (s) => { commitments = s.docs.map((d) => ({ id: d.id, ...d.data() })); redraw(); }),
