@@ -162,7 +162,8 @@ async function savePlan() {
   if (!r.ok) { sumMsg = r.error; document.querySelector("#ledgerPlan .lpsum .msg").textContent = r.error; return; }
   const now = Date.now();
   editing = null; sumMsg = ""; clearDirty();
-  await ctx.commit(() => setDoc(doc(ctx.db(), "ledgerPlan", "main"), { ...r.plan, created: plan?.created ?? now, updated: now }));
+  // merge: the plan doc also holds shopBuckets (shops moved by hand on the spending page); a plain set wiped them.
+  await ctx.commit(() => setDoc(doc(ctx.db(), "ledgerPlan", "main"), { ...r.plan, created: plan?.created ?? now, updated: now }, { merge: true }), "Plan saved.");
   renderPlan();
 }
 
