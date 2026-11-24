@@ -3,10 +3,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   DEFAULT_BUCKETS, addMonths, monthsBetween, dueDate, monthName, checkPlan, liveIn, paymentsLeft, monthBills,
-  spentByBucket, planView, outlook, countdown, checkCommitment, paidKey, bucketFor,
+  spentByBucket, planView, outlook, countdown, checkCommitment, paidKey, bucketFor, monthOf, monthRange, payLabel, payOf,
 } from "../public/logic/moneyplan.js";
 
-const PLAN = { incomeSen: 400000, buckets: DEFAULT_BUCKETS };
+const PLAN = { incomeSen: 400000, payDay: 1, buckets: DEFAULT_BUCKETS }; // calendar months; pay months are tested below
 const C = (id, amountSen, extra = {}) => ({ id, name: id, bucket: "essentials", amountSen, dueDay: 1, startMonth: "2026-01", ...extra });
 const T = (date, cat, sen, extra = {}) => ({ date, cat, amountSen: sen, type: sen < 0 ? "refund" : "purchase", spentBy: "p1", ...extra });
 
@@ -61,7 +61,7 @@ test("spentByBucket: dining and shopping are Fun, BNPL is left out, refunds net,
 });
 
 test("spentByBucket sends spending to the first bucket when Essentials/Fun were removed", () => {
-  const plan = { incomeSen: 1, buckets: [{ id: "x", name: "All", pct: 100 }] };
+  const plan = { incomeSen: 1, payDay: 1, buckets: [{ id: "x", name: "All", pct: 100 }] };
   assert.deepEqual(spentByBucket([T("2026-11-02", "dining", 3000)], plan, "2026-11"), { x: 3000 });
   assert.equal(bucketFor(plan, "debt"), "x");
 });
@@ -87,7 +87,7 @@ test("planView: the sheet's November adds up (committed, free, over plan, per da
 });
 
 test("planView with no plan yet still draws: no income, nothing free per day", () => {
-  const v = planView({ plan: null, commitments: [], day: "2026-11-30" });
+  const v = planView({ plan: null, commitments: [], day: "2026-11-24" }) // no plan: payday 25, so the 24th is the last day;
   assert.equal(v.incomeSen, 0);
   assert.equal(v.perDaySen, 0);
   assert.equal(v.daysLeft, 1);
@@ -96,7 +96,7 @@ test("planView with no plan yet still draws: no income, nothing free per day", (
 
 test("outlook frees money in the month after an instalment ends", () => {
   const cs = [C("house", 100000), C("paylater", 30000, { endMonth: "2027-02" })];
-  const o = outlook(cs, 400000, "2026-11", 6);
+  const o = outlook(cs, 400000, "2026-11", { n: 6 });
   assert.equal(o.length, 6);
   assert.equal(o[3].month, "2027-02");
   assert.equal(o[3].freeSen, 270000);
@@ -120,4 +120,55 @@ test("checkCommitment checks the form and defaults start to this month", () => {
   assert.equal(checkCommitment({ name: "x", amountSen: 1, dueDay: 32 }, PLAN, "2026-11").ok, false);
   assert.equal(checkCommitment({ name: "x", amountSen: 1, dueDay: 1, endMonth: "2026-10" }, PLAN, "2026-11").ok, false);
   assert.equal(checkCommitment({ name: "x", amountSen: 1, dueDay: 1, endMonth: "2027-01", bucket: "gone" }, PLAN, "2026-11").c.bucket, "essentials");
+});
+
+// ---------- pay months (payday 25) ----------
+const PAY = { ...PLAN, payDay: 25 };
+
+test("pay months: from the 25th it's next month's money, named after the month it ends in", () => {
+  assert.equal(monthOf("2026-11-24", 25), "2026-11");
+  assert.equal(monthOf("2026-11-25", 25), "2026-12");
+  assert.equal(monthOf("2026-12-30", 25), "2027-01");
+  assert.equal(monthOf("2026-11-30"), "2026-11"); // calendar months still the default
+  assert.deepEqual(monthRange("2026-12", 25), { from: "2026-11-25", to: "2026-12-24" });
+  assert.deepEqual(monthRange("2027-02", 1), { from: "2027-02-01", to: "2027-02-28" });
+  assert.equal(payLabel("2026-12", 25), "25 Nov – 24 Dec");
+  assert.equal(payOf(null), 25);
+  assert.equal(payOf({ payDay: 1 }), 1);
+  assert.equal(payOf({ payDay: 31 }), 25);
+});
+
+test("pay months: a bill due on or after payday is paid from the next pay month", () => {
+  assert.equal(dueDate({ dueDay: 8 }, "2026-12", 25), "2026-12-08");
+  assert.equal(dueDate({ dueDay: 28 }, "2026-12", 25), "2026-11-28");
+  assert.equal(dueDate({ dueDay: 31 }, "2027-03", 25), "2027-02-28");
+  // A loan due on the 28th with its final payment in Feb 2027 is paid from the Mar 2027 pay month.
+  const loan = C("loan", 28000, { dueDay: 28, startMonth: "2026-11", endMonth: "2027-02" });
+  assert.equal(liveIn(loan, "2026-11", 25), false);
+  assert.equal(liveIn(loan, "2026-12", 25), true);
+  assert.equal(liveIn(loan, "2027-03", 25), true);
+  assert.equal(liveIn(loan, "2027-04", 25), false);
+  assert.equal(paymentsLeft(loan, "2026-12", false, 25), 4);
+  assert.equal(countdown([loan], "2026-12", 25).last, "2027-02");
+  assert.equal(outlook([loan], 100000, "2027-03", { n: 2, pay: 25 })[1].freeSen, 100000);
+});
+
+test("planView on payday: the new month starts, spending before it counts in the old one", () => {
+  const txns = [T("2026-11-24", "groceries", 5000), T("2026-11-25", "groceries", 7000), T("2026-12-03", "dining", 2000)];
+  const v = planView({ plan: PAY, commitments: [C("car", 52000, { dueDay: 8 }), C("asb", 30000, { dueDay: 28 })], txns, day: "2026-11-25" });
+  assert.equal(v.month, "2026-12");
+  assert.equal(v.label, "25 Nov – 24 Dec");
+  assert.equal(v.spentSen, 9000);
+  assert.deepEqual(v.bills.map((r) => r.due), ["2026-11-28", "2026-12-08"]);
+  assert.equal(v.daysLeft, 30);
+  const before = planView({ plan: PAY, commitments: [], txns, day: "2026-11-24" });
+  assert.equal(before.month, "2026-11");
+  assert.equal(before.spentSen, 5000);
+  assert.equal(before.daysLeft, 1);
+});
+
+test("checkPlan keeps payday 1-28", () => {
+  assert.equal(checkPlan({ ...PLAN, payDay: 25 }).plan.payDay, 25);
+  assert.equal(checkPlan({ ...PLAN, payDay: 30 }).ok, false);
+  assert.equal(checkPlan({ incomeSen: 1, buckets: [{ id: "a", name: "A", pct: 100 }] }).plan.payDay, 25);
 });

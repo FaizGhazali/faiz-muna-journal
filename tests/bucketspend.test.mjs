@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { DEFAULT_BUCKETS, txnBucket, spentByBucket, catBucket, shopBucketsWith } from "../public/logic/moneyplan.js";
 import { ALL, bucketItems, byMonth, byShop, byCat, totals, shopTrack, monthsWith, matches, shopKey, usualCat, byNick, nickMap, cleanNick } from "../public/logic/bucketspend.js";
 
-const PLAN = { incomeSen: 400000, buckets: DEFAULT_BUCKETS };
+const PLAN = { incomeSen: 400000, payDay: 1, buckets: DEFAULT_BUCKETS }; // calendar months; pay months are tested below
 const T = (date, cat, sen, merchant, extra = {}) => ({ date, cat, amountSen: sen, merchant, type: sen < 0 ? "refund" : "purchase", spentBy: "p1", ...extra });
 const TX = [
   T("2026-11-20", "groceries", 8000, "Econsave"),

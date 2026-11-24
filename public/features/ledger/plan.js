@@ -8,8 +8,8 @@ import { $, esc, lastUsed } from "../../core/util.js";
 import { confirmDelete } from "../../core/confirm.js";
 import { rm, toSen, shortDate } from "../../logic/ledger.js";
 import {
-  DEFAULT_BUCKETS, bucketsOf, checkPlan, planView, checkCommitment, paidRecord, paidKey,
-  monthOf, monthName, liveIn, dueDate,
+  DEFAULT_BUCKETS, DEFAULT_PAY_DAY, PAY_DAY_MAX, bucketsOf, checkPlan, planView, checkCommitment, paidRecord, paidKey,
+  monthOf, monthName, liveIn, payOf,
 } from "../../logic/moneyplan.js";
 
 // Each default bucket keeps one colour slot from the chart palette (--s1…--s8); added buckets take the free ones.
@@ -61,23 +61,18 @@ export function renderPlan() {
 // ---------- where the money goes ----------
 function summary(v, size = "l") {
   const col = colourOf(v.buckets), used = v.buckets.filter((b) => b.usedSen > 0);
-  const over = v.freeSen < 0, end = shortDate(dueDate({ dueDay: 31 }, v.month));
+  const over = v.freeSen < 0, end = shortDate(v.to);
   const left = `${rm(Math.abs(v.freeSen), { whole: true })}`, label = over ? "Over your income by" : "Can still spend";
-  if (size === "s") return ctx.board.tile("sum", `<small id="lpTitle">${label}</small><b class="bdbig${over ? " over" : ""}">${left}</b><small>${over ? `in ${esc(monthName(v.month))}` : `${rm(v.perDaySen, { whole: true })} a day`}</small>`, label);
-  const usedPct = v.incomeSen ? Math.min(100, Math.round(((v.committedSen + v.spentSen) / v.incomeSen) * 100)) : 100;
-  if (size === "m") return `<div class="lhead"><h2 id="lpTitle">${label}</h2><span class="note">${esc(monthName(v.month))}</span></div>
-    <div class="lpleft">
-      <div><small>${over ? "over" : "left this month"}</small><b class="${over ? "over" : ""}">${left}</b></div>
-      ${over ? "" : `<div><small>a day, to ${end}</small><b class="sm">${rm(v.perDaySen, { whole: true })}</b></div>`}
-    </div>
-    <div class="lbarbg"><i style="width:${usedPct}%;--c:${over ? "var(--obese)" : "var(--accent)"}"></i></div>
-    <p class="note">${usedPct}% of ${rm(v.incomeSen, { whole: true })} used · bills ${rm(v.committedSen, { whole: true })} · day to day ${rm(v.spentSen, { whole: true })} ${ctx.board.more("sum", "See your plan")}</p>`;
-  return `<div class="lhead"><h2 id="lpTitle">Where ${rm(v.incomeSen, { whole: true })} goes</h2><span class="note">${esc(monthName(v.month))}</span>
+  if (size === "s") return ctx.board.tile("sum", `<small id="lpTitle">${label}</small><b class="bdbig${over ? " over" : ""}">${left}</b><small>${over ? `in ${esc(v.label)}` : `${rm(v.perDaySen, { whole: true })} a day`}</small>`, label);
+  // Medium (the family's favourite, 24 Nov 2026): the ring and where each ringgit went; Large adds the rest.
+  const top = `<div class="lhead"><h2 id="lpTitle">Where ${rm(v.incomeSen, { whole: true })} goes</h2><span class="note">${esc(v.label)}</span>
       <span class="lbtnrow"><button type="button" class="mini" data-lp="edit-plan">Edit plan</button>${ctx.board.less("sum")}</span></div>
     <div class="lpring">
       ${ring(v, used, col, over)}
       <ul class="lpleg">${used.map((b) => `<li><a href="#ledger/spend/${b.id}"><span class="dot" style="--c:${col[b.id]}"></span><span>${esc(b.name)}</span><b>${rm(b.usedSen, { whole: true })}</b></a></li>`).join("")}${over ? "" : `<li><span class="dot free"></span><span>Free</span><b>${rm(v.freeSen, { whole: true })}</b></li>`}</ul>
-    </div>
+    </div>`;
+  if (size === "m") return `${top}<p class="note">${over ? "" : `${rm(v.perDaySen, { whole: true })} a day to ${end}. `}${ctx.board.more("sum", "See your plan")}</p>`;
+  return `${top}
     <div class="lpleft">
       <div><small>${over ? "Over your income by" : "Can still spend"}</small><b class="${over ? "over" : ""}">${rm(Math.abs(v.freeSen), { whole: true })}</b></div>
       ${over ? "" : `<div><small>a day, to ${end}</small><b class="sm">${rm(v.perDaySen, { whole: true })}</b></div>`}
@@ -119,7 +114,11 @@ function planForm() {
   return `<div data-form="plan">
     <h2 id="lpTitle">${first ? "Plan your month" : "Edit your plan"}</h2>
     ${first ? `<p class="note">Split your monthly income into buckets, then add your bills. Ledger shows what's left to spend each month and when each instalment ends.</p>` : ""}
-    <label>Monthly income (take-home), RM<input type="text" id="lpIncome" inputmode="decimal" autocomplete="off" placeholder="4000" value="${plan ? (plan.incomeSen / 100).toFixed(2).replace(/\.00$/, "") : ""}"></label>
+    <div class="two">
+      <label>Monthly income (take-home), RM<input type="text" id="lpIncome" inputmode="decimal" autocomplete="off" placeholder="4000" value="${plan ? (plan.incomeSen / 100).toFixed(2).replace(/\.00$/, "") : ""}"></label>
+      <label>Payday <small>your month starts here</small><input type="number" id="lpPayDay" min="1" max="${PAY_DAY_MAX}" step="1" inputmode="numeric" value="${payOf(plan)}"></label>
+    </div>
+    <p class="note">Your money month runs from payday to the day before the next one. Use 1 for calendar months.</p>
     <div class="lpform">${bs.map((b, i) => `<div class="lpfrow">
       <input type="text" data-name="${i}" value="${esc(b.name)}" aria-label="Bucket name" maxlength="30">
       <label class="lppct"><input type="number" data-pct="${i}" min="0" max="100" step="1" inputmode="numeric" value="${b.pct}" aria-label="${esc(b.name)} percent">%</label>
@@ -139,7 +138,7 @@ function paintSum() {
 async function savePlan() {
   const bs = bucketsOf(plan);
   const buckets = bs.map((b, i) => ({ id: b.id, name: document.querySelector(`#ledgerPlan [data-name="${i}"]`).value, pct: Number(document.querySelector(`#ledgerPlan [data-pct="${i}"]`).value), ...(b.about ? { about: b.about } : {}) }));
-  const r = checkPlan({ incomeSen: toSen($("lpIncome").value), buckets });
+  const r = checkPlan({ incomeSen: toSen($("lpIncome").value), payDay: Number($("lpPayDay").value || DEFAULT_PAY_DAY), buckets });
   if (!r.ok) { sumMsg = r.error; document.querySelector("#ledgerPlan .lpsum .msg").textContent = r.error; return; }
   const now = Date.now();
   editing = null; sumMsg = ""; clearDirty();
@@ -183,16 +182,16 @@ function billRow(r, people) {
 }
 // Every bill, including ones not live this month (finished, or starting later), to edit.
 function manageList() {
-  const m = monthOf(ctx.today()), bs = Object.fromEntries(bucketsOf(plan).map((b) => [b.id, b.name]));
-  const sorted = [...commitments].sort((a, b) => Number(liveIn(b, m)) - Number(liveIn(a, m)) || a.name.localeCompare(b.name));
+  const pay = payOf(plan), m = monthOf(ctx.today(), pay), cal = ctx.today().slice(0, 7), bs = Object.fromEntries(bucketsOf(plan).map((b) => [b.id, b.name]));
+  const sorted = [...commitments].sort((a, b) => Number(liveIn(b, m, pay)) - Number(liveIn(a, m, pay)) || a.name.localeCompare(b.name));
   return `<div class="lpbl">${sorted.map((c) => `<div class="lpb">
-    <span class="lpbn"><b>${esc(c.name)}</b><small>${esc(bs[c.bucket] ?? "")} · due ${c.dueDay}${c.endMonth ? ` · final ${esc(monthName(c.endMonth))}` : ""}${!liveIn(c, m) ? (c.endMonth && c.endMonth < m ? " · finished" : ` · starts ${esc(monthName(c.startMonth))}`) : ""}</small></span>
+    <span class="lpbn"><b>${esc(c.name)}</b><small>${esc(bs[c.bucket] ?? "")} · due ${c.dueDay}${c.endMonth ? ` · final ${esc(monthName(c.endMonth))}` : ""}${!liveIn(c, m, pay) ? (c.endMonth && c.endMonth < cal ? " · finished" : ` · starts ${esc(monthName(c.startMonth))}`) : ""}</small></span>
     <span class="lpba">${rm(c.amountSen)}</span>
     <button type="button" class="mini" data-lp="edit-bill" data-id="${c.id}">Edit</button>
   </div>`).join("")}</div>`;
 }
 function billForm(id) {
-  const c = commitments.find((x) => x.id === id) ?? null, m = monthOf(ctx.today());
+  const c = commitments.find((x) => x.id === id) ?? null, m = ctx.today().slice(0, 7); // start / final are calendar months
   // A new bill starts in the last bill's bucket (great-ux: start from the last choice); none yet = pick one.
   const last = lastUsed(commitments, "bucket"), bucketSel = c?.bucket ?? (bucketsOf(plan).some((b) => b.id === last) ? last : "");
   return `<div class="lpbform" data-form="bill">
@@ -214,7 +213,7 @@ function billForm(id) {
   </div>`;
 }
 async function saveBill(id) {
-  const m = monthOf(ctx.today());
+  const m = ctx.today().slice(0, 7);
   if (!$("lpbBucket").value) { $("lpbMsg").textContent = "Pick which bucket it comes out of."; return; }
   const r = checkCommitment({ name: $("lpbName").value, amountSen: toSen($("lpbAmt").value), bucket: $("lpbBucket").value, dueDay: $("lpbDue").value, endMonth: $("lpbEnd").value, startMonth: $("lpbStart").value }, plan, m);
   if (!r.ok) { $("lpbMsg").textContent = r.error; return; }
@@ -226,14 +225,14 @@ async function saveBill(id) {
 }
 async function pay(id) {
   const c = commitments.find((x) => x.id === id); if (!c) return;
-  const day = ctx.today(), month = monthOf(day);
+  const day = ctx.today(), month = monthOf(day, payOf(plan));
   billMsg = `${c.name} ticked as paid.`;
   await ctx.commit(() => setDoc(doc(ctx.db(), "ledgerPaid", paidKey(id, month)), paidRecord(c, { month, date: day, by: ctx.me(), at: Date.now() })));
 }
 // Unticking deletes the paid record, so it asks first (safe-delete).
 async function unpay(id) {
-  const c = commitments.find((x) => x.id === id), month = monthOf(ctx.today()); if (!c) return;
-  const ok = await confirmDelete({ title: `Untick ${c.name}?`, body: `<p>It goes back to not paid for ${esc(monthName(month))}.</p>`, yes: "Untick" });
+  const c = commitments.find((x) => x.id === id), month = monthOf(ctx.today(), payOf(plan)); if (!c) return;
+  const ok = await confirmDelete({ title: `Untick ${c.name}?`, body: `<p>It goes back to not paid for this month.</p>`, yes: "Untick" });
   if (!ok) return;
   billMsg = "";
   await ctx.commit(() => deleteDoc(doc(ctx.db(), "ledgerPaid", paidKey(id, month))));

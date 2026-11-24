@@ -32,7 +32,7 @@ export function renderAnalytics() {
 
 // The next 12 months: income less bills each month, with a "+N" over each month where an instalment ends.
 function ahead(v, commitments) {
-  const o = outlook(commitments, v.incomeSen, v.month), cd = countdown(commitments, v.month);
+  const o = outlook(commitments, v.incomeSen, v.month, { pay: v.pay }), cd = countdown(commitments, v.month, v.pay);
   const W = 300, H = 112, L = 24, B = 92, top = 22, bw = (W - L - 4) / o.length;
   const max = Math.max(...o.map((x) => Math.abs(x.freeSen)), 1), y = (sen) => B - (Math.max(0, sen) / max) * (B - top);
   const steps = o.map((x, i) => (i && x.freeSen > o[i - 1].freeSen ? x.freeSen - o[i - 1].freeSen : 0));

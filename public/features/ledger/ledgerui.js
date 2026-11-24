@@ -1,7 +1,7 @@
 // The Ledger journal (#ledger view, picked on the wheel): add spending, card rebates, recent items,
 // and the "Spending" part of each person card (ledgerSlot-<id>). All maths lives in ledger.js (pure).
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where, writeBatch } from "../../core/fs.js";
-import { $, esc, today, addDays } from "../../core/util.js";
+import { $, esc, today, addDays, dayNum } from "../../core/util.js";
 import { confirmDelete } from "../../core/confirm.js";
 import { canEdit, viewOnly } from "../../core/owner.js";
 import {
@@ -14,7 +14,8 @@ import { initImport, startImport, renderImport } from "./import.js";
 import { initTrends, renderTrends } from "./trends.js";
 import { initRules, startRules, renderRules } from "./rules.js";
 import { ensureSeeds, addAccount, saveCycle } from "./seeds.js";
-import { initPlan, planSubs, renderPlan } from "./plan.js";
+import { initPlan, planSubs, renderPlan, planState } from "./plan.js";
+import { payOf, monthOf, monthRange, addMonths } from "../../logic/moneyplan.js";
 import { initSpend, renderSpend } from "./spend.js";
 import { initAnalytics, renderAnalytics, ANALYTICS } from "./analytics.js";
 import { makeBoard } from "../../shell/board.js";
@@ -34,7 +35,7 @@ const RECENT_BY_SIZE = { s: 1, m: 3, l: RECENT };
 const BOARD = {
   defaults: [
     { id: "add", size: "m" }, { id: "recent", size: "m" },
-    { id: "sum", size: "s" }, { id: "bills", size: "s" }, { id: "card:*", size: "s" },
+    { id: "sum", size: "m" }, { id: "bills", size: "s" }, { id: "card:*", size: "s" },
     { id: "people", size: "l" }, { id: "trends", size: "m" },
   ],
   sizes: { people: "l" },
@@ -559,20 +560,21 @@ async function acceptOffer(host) {
 }
 
 // ---------- person card part ----------
-const monthStart = (d) => `${d.slice(0, 7)}-01`;
+// This pay month so far (from payday, moneyplan.js), against the same number of days of the last one.
 export function refreshLedgerParts() {
   if (!people().length) return;
-  const t = today(), from = monthStart(t), lastFrom = monthStart(addDays(from, -1)), lastTo = addDays(lastFrom, Number(t.slice(8)) - 1);
-  const month = new Date(`${t}T12:00`).toLocaleDateString(undefined, { month: "long" });
+  const t = today(), pay = payOf(planState().plan), m = monthOf(t, pay), from = monthRange(m, pay).from;
+  const lastFrom = monthRange(addMonths(m, -1), pay).from, lastTo = addDays(lastFrom, dayNum(t) - dayNum(from));
+  const month = pay > 1 ? `since ${shortDate(from)}` : `in ${new Date(`${t}T12:00`).toLocaleDateString(undefined, { month: "long" })}`;
   people().forEach((p) => {
     const slot = $("ledgerSlot-" + p.id); if (!slot) return;
     const rows = spendByCat(txns, { from, to: t, person: p.id }), total = spendTotal(rows);
     const last = spendTotal(spendByCat(txns, { from: lastFrom, to: lastTo, person: p.id }));
     const big = rows[0]?.sen || 1;
     slot.innerHTML = `<div class="calhead"><h3 class="ptitle">Spending</h3><a class="btn mini" href="#ledger/spend/all">See all →</a></div>
-      ${rows.length ? `<p class="week"><b>${rm(total)}</b> in ${esc(month)} so far${last ? ` · ${rm(last)} by this day last month` : ""}</p>
+      ${rows.length ? `<p class="week"><b>${rm(total)}</b> ${esc(month)}${pay > 1 ? "" : " so far"}${last ? ` · ${rm(last)} by this day last month` : ""}</p>
       <div class="lcats">${rows.slice(0, 5).map((r) => `<div class="lcat"><span>${cat(r.cat).icon} ${esc(cat(r.cat).name)}</span><i style="width:${Math.max(3, Math.round((r.sen / big) * 100))}%"></i><b>${rm(r.sen, { whole: true })}</b></div>`).join("")}</div>`
-        : `<p class="note">Nothing logged in ${esc(month)} yet. Logging is optional: add what you want to keep an eye on.</p>`}`;
+        : `<p class="note">Nothing logged ${esc(month)} yet. Logging is optional: add what you want to keep an eye on.</p>`}`;
   });
 }
 

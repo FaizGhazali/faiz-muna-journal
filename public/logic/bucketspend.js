@@ -2,7 +2,7 @@
 // items by month, by shop and by category, a search, and one shop's whole history.
 // Pure: no Firebase, no DOM. Tests: tests/bucketspend.test.mjs.
 import { norm, catName } from "./ledger.js";
-import { txnBucket, monthOf, addMonths, monthsBetween, shopName, shopKey } from "./moneyplan.js";
+import { txnBucket, monthOf, addMonths, monthsBetween, shopName, shopKey, payOf } from "./moneyplan.js";
 
 export { shopName, shopKey };
 
@@ -35,11 +35,12 @@ export function usualCat(items) {
   return Object.keys(n).sort((a, b) => n[b] - n[a] || (a === items[0]?.cat ? -1 : b === items[0]?.cat ? 1 : 0))[0] ?? "other";
 }
 
-// The bucket's items, newest first. month null = every month; person null = both.
+// The bucket's items, newest first. month null = every month; person null = both. Months are pay months (the plan's payday).
 export function bucketItems(txns, plan, bucket, { month = null, person = null, q = "", nicks = {} } = {}) {
+  const pay = payOf(plan);
   return txns.filter((t) => {
     const b = txnBucket(t, plan);
-    return b && (bucket === ALL || b === bucket) && (!month || monthOf(t.date) === month) && (!person || t.spentBy === person) && matches(t, q, nicks);
+    return b && (bucket === ALL || b === bucket) && (!month || monthOf(t.date, pay) === month) && (!person || t.spentBy === person) && matches(t, q, nicks);
   }).sort((a, b) => b.date.localeCompare(a.date) || (b.at ?? 0) - (a.at ?? 0));
 }
 
@@ -55,7 +56,7 @@ function group(items, keyOf) {
 }
 
 // Months, newest first (items come newest first).
-export const byMonth = (items) => group(items, (t) => monthOf(t.date)).map((g) => ({ ...g, month: g.key }));
+export const byMonth = (items, pay = 1) => group(items, (t) => monthOf(t.date, pay)).map((g) => ({ ...g, month: g.key }));
 // Shops, most spent first; name = the latest spelling.
 export const byShop = (items) => group(items, shopKey).map((g) => ({ ...g, name: shopName(g.items[0]), last: g.items[0].date }))
   .sort((a, b) => b.sen - a.sen || a.name.localeCompare(b.name));
@@ -63,9 +64,9 @@ export const byCat = (items) => group(items, (t) => t.cat).map((g) => ({ ...g, c
 
 // Totals for the tiles. Over every month, perMonthSen spreads the total from the first month to `month`
 // (empty months count, so it's a fair monthly average).
-export function totals(items, month) {
+export function totals(items, month, pay = 1) {
   const sen = sum(items), first = items.at(-1)?.date ?? null;
-  const months = first ? Math.max(1, monthsBetween(monthOf(first), month) + 1) : 0;
+  const months = first ? Math.max(1, monthsBetween(monthOf(first, pay), month) + 1) : 0;
   return { sen, n: items.length, first, months, perMonthSen: months ? Math.round(sen / months) : 0 };
 }
 
@@ -73,20 +74,20 @@ export function totals(items, month) {
 // typical amount, the last TRACK_MONTHS months (empty ones as 0) and every month it was used.
 export function shopTrack(txns, plan, key, { person = null, month }) {
   const items = bucketItems(txns, plan, ALL, { person }).filter((t) => shopKey(t) === key);
-  const t = totals(items, month), amounts = items.filter((x) => x.amountSen > 0).map((x) => x.amountSen).sort((a, b) => a - b);
-  const per = Object.fromEntries(byMonth(items).map((g) => [g.month, g]));
+  const pay = payOf(plan), t = totals(items, month, pay), amounts = items.filter((x) => x.amountSen > 0).map((x) => x.amountSen).sort((a, b) => a - b);
+  const per = Object.fromEntries(byMonth(items, pay).map((g) => [g.month, g]));
   return {
     ...t, key, items, name: items[0] ? shopName(items[0]) : key,
     last: items[0]?.date ?? null,
     perVisitSen: amounts.length ? amounts[Math.floor((amounts.length - 1) / 2)] : 0, // the median visit
     lowSen: amounts[0] ?? 0, highSen: amounts.at(-1) ?? 0,
     recent: Array.from({ length: TRACK_MONTHS }, (_, i) => addMonths(month, i - TRACK_MONTHS + 1)).map((m) => ({ month: m, sen: per[m]?.sen ?? 0, n: per[m]?.n ?? 0 })),
-    months: byMonth(items),
+    months: byMonth(items, pay),
   };
 }
 
 // The months that have spending in the bucket (newest first), plus `month` itself, for the month picker.
 export function monthsWith(txns, plan, bucket, month) {
-  const set = new Set([month, ...bucketItems(txns, plan, bucket).map((t) => monthOf(t.date))]);
+  const pay = payOf(plan), set = new Set([month, ...bucketItems(txns, plan, bucket).map((t) => monthOf(t.date, pay))]);
   return [...set].sort().reverse();
 }

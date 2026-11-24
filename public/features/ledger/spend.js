@@ -10,7 +10,7 @@ import { collection, doc, getDocs, setDoc, updateDoc, writeBatch } from "../../c
 import { $, esc } from "../../core/util.js";
 import { SYSTEM_CATEGORIES, rm, shortDate, categorise, norm } from "../../logic/ledger.js";
 import { suggestPattern } from "../../logic/ledgerimport.js";
-import { bucketsOf, bucketFor, monthOf, monthName, monthBills, txnBucket, catBucket, shopBucketsWith } from "../../logic/moneyplan.js";
+import { bucketsOf, bucketFor, monthOf, monthName, monthBills, txnBucket, catBucket, shopBucketsWith, payOf, payLabel } from "../../logic/moneyplan.js";
 import { ALL, bucketItems, byMonth, byShop, byCat, totals, shopTrack, monthsWith, shopKey, shopName, usualCat, nickMap, cleanNick, NICK_MAX } from "../../logic/bucketspend.js";
 import { planState, bucketColours } from "./plan.js";
 
@@ -25,6 +25,10 @@ const money = (sen) => `${rm(Math.abs(sen))}${sen < 0 ? " CR" : ""}`;
 const nicks = () => nickMap(ctx.shops());
 const nickTag = (key, n = nicks()) => (n[key] ? ` <span class="lsnick">🏷 ${esc(n[key])}</span>` : "");
 const times = (n) => `${n} ${n === 1 ? "time" : "times"}`;
+// Months here are pay months (the plan's payday): "25 Oct – 24 Nov", with the year when it isn't this year's.
+const pay = () => payOf(planState().plan);
+const thisMonth = () => monthOf(ctx.today(), pay());
+const mLabel = (m) => (pay() > 1 ? `${payLabel(m, pay())}${m.slice(0, 4) !== thisMonth().slice(0, 4) ? ` ${m.slice(0, 4)}` : ""}` : monthName(m));
 
 let ctx, history = null, loading = false, frameKey = "";
 // month: "YYYY-MM" or ALL (null = this month); who: "" = both; shop: the shop being followed (its key).
@@ -84,7 +88,7 @@ export function renderSpend() {
   st.route = id;
   if (!id || !host || !ctx.people().length) return;
   loadHistory();
-  const { plan } = planState(), buckets = bucketsOf(plan), now = monthOf(ctx.today());
+  const { plan } = planState(), buckets = bucketsOf(plan), now = thisMonth();
   const bucket = id === ALL ? ALL : bucketFor(plan, id);
   if (!st.month) st.month = now;
   if (st.who && !ctx.people().some((p) => p.id === st.who)) st.who = "";
@@ -104,7 +108,7 @@ function frame(bucket, buckets, months, now) {
     <div class="chips" role="group" aria-label="Bucket">${[...buckets.map((x) => [x.id, x.name]), [ALL, "All"]].map(([i, n]) => `<button type="button" class="chip" data-lsb="${i}" aria-pressed="${i === bucket}">${esc(n)}</button>`).join("")}</div>
     <div class="ltf">
       <div class="chips" role="group" aria-label="Whose spending">${[["", "Both"], ...ctx.people().map((p) => [p.id, p.name])].map(([i, n]) => `<button type="button" class="chip" data-lsw="${i}" aria-pressed="${st.who === i}">${esc(n)}</button>`).join("")}</div>
-      <select id="lsMonth" aria-label="Which month"><option value="${ALL}"${st.month === ALL ? " selected" : ""}>All months</option>${months.map((m) => `<option value="${m}"${m === st.month ? " selected" : ""}>${m === now ? "This month" : esc(monthName(m))}</option>`).join("")}</select>
+      <select id="lsMonth" aria-label="Which month"><option value="${ALL}"${st.month === ALL ? " selected" : ""}>All months</option>${months.map((m) => `<option value="${m}"${m === st.month ? " selected" : ""}>${m === now ? "This month" : esc(mLabel(m))}</option>`).join("")}</select>
     </div>
     <input type="search" id="lsQ" placeholder="Search a shop or category" autocomplete="off" aria-label="Search a shop or category" value="${esc(st.q)}">
     <div id="lsBody" class="lsbody"></div>`;
@@ -118,11 +122,11 @@ function paintBody() {
 
 // ---------- the bucket ----------
 function body(plan, bucket) {
-  const now = monthOf(ctx.today()), month = st.month === ALL ? null : st.month, q = st.q.trim();
+  const now = thisMonth(), month = st.month === ALL ? null : st.month, q = st.q.trim();
   const nk = nicks(), items = bucketItems(all(), plan, bucket, { month, person: st.who || null, q, nicks: nk });
-  const t = totals(items, now), b = bucketsOf(plan).find((x) => x.id === bucket);
+  const t = totals(items, now, pay()), b = bucketsOf(plan).find((x) => x.id === bucket);
   const { commitments, paid } = planState();
-  const bills = month && b && !q ? monthBills(commitments, paid, month).filter((r) => bucketFor(plan, r.c.bucket) === bucket) : [];
+  const bills = month && b && !q ? monthBills(commitments, paid, month, pay()).filter((r) => bucketFor(plan, r.c.bucket) === bucket) : [];
   const billSen = bills.reduce((s, r) => s + r.amountSen, 0), planSen = b && plan ? Math.round((plan.incomeSen * b.pct) / 100) : 0;
   const shops = byShop(items), cats = byCat(items);
   const shopList = st.allShops ? shops : shops.slice(0, SHOPS_SHOWN);
@@ -132,7 +136,7 @@ function body(plan, bucket) {
       <div class="stat"><small>How many times</small><b class="sm">${t.n}</b></div>
       ${!month && t.months ? `<div class="stat"><small>a month on average</small><b class="sm">${rm(t.perMonthSen, { whole: true })}</b></div>` : ""}
     </div>
-    ${!month && t.first ? `<p class="note">Since ${esc(monthName(monthOf(t.first)))}${loading ? " · loading older months…" : ""}.</p>` : ""}
+    ${!month && t.first ? `<p class="note">Since ${esc(mLabel(monthOf(t.first, pay())))}${loading ? " · loading older months…" : ""}.</p>` : ""}
     ${month && b && plan && !q ? `<p class="note">With ${bills.length ? `${rm(billSen, { whole: true })} of bills` : "no bills"}: ${rm(t.sen + billSen, { whole: true })} of the ${rm(planSen, { whole: true })} planned for ${esc(b.name)}${t.sen + billSen > planSen ? ` <span class="lpover">+${rm(t.sen + billSen - planSen, { whole: true })} over</span>` : ""}.</p>` : ""}`;
   if (!items.length) {
     const dayToDay = [bucketFor(plan, "essentials"), bucketFor(plan, "fun")].includes(bucket);
@@ -165,9 +169,9 @@ function billsHtml(bills) {
 // Items grouped by month (newest first), a page at a time. Tapping one follows its shop.
 function itemsHtml(items) {
   const names = Object.fromEntries(ctx.people().map((p) => [p.id, p.name])), nk = nicks();
-  const whole = Object.fromEntries(byMonth(items).map((g) => [g.month, g]));
-  return `${byMonth(items.slice(0, st.shown)).map((g) => `<div class="lsmonth">
-      <h4>${esc(monthName(g.month))} <span>${rm(whole[g.month].sen)} · ${times(whole[g.month].n)}</span></h4>
+  const whole = Object.fromEntries(byMonth(items, pay()).map((g) => [g.month, g]));
+  return `${byMonth(items.slice(0, st.shown), pay()).map((g) => `<div class="lsmonth">
+      <h4>${esc(mLabel(g.month))} <span>${rm(whole[g.month].sen)} · ${times(whole[g.month].n)}</span></h4>
       <div class="llist">${g.items.map((t) => `<div class="lrow"><button type="button" class="lopen" data-lshop="${esc(shopKey(t))}">
         <span class="lic" aria-hidden="true">${cat(t.cat).icon}</span>
         <span class="lmain"><b>${esc(t.merchant || t.raw || cat(t.cat).name)}${nickTag(shopKey(t), nk)}</b><small>${shortDate(t.date)} · ${esc(names[t.spentBy] ?? "")} · ${esc(cat(t.cat).name)}</small></span>
@@ -239,7 +243,7 @@ async function saveEdit() {
 
 // ---------- one shop, its whole life ----------
 function tracker(plan, bucket) {
-  const now = monthOf(ctx.today()), s = shopTrack(all(), plan, st.shop, { person: st.who || null, month: now });
+  const now = thisMonth(), s = shopTrack(all(), plan, st.shop, { person: st.who || null, month: now });
   const b = bucketsOf(plan).find((x) => x.id === bucket);
   const back = `<button type="button" class="mini" data-ls="unshop">← ${b ? esc(b.name) : "All spending"}</button>`;
   if (!s.n) return `${back}<p class="note">Nothing at ${esc(s.name)}${st.who ? " for this person" : ""}.</p>`;
@@ -258,7 +262,7 @@ function tracker(plan, bucket) {
       <i style="height:${m.sen > 0 ? Math.max(3, Math.round((m.sen / big) * 100)) : 0}%"></i><small>${esc(monthName(m.month, { short: true }))}</small>
     </div>`).join("")}</div>
     <h3 class="lth">Each month</h3>
-    <div class="lpbl">${s.months.map((g) => `<div class="lpb lsrow"><span class="lpbn"><b>${esc(monthName(g.month))}</b><small>${times(g.n)}</small></span><span class="lpba">${rm(g.sen)}</span></div>`).join("")}</div>
+    <div class="lpbl">${s.months.map((g) => `<div class="lpb lsrow"><span class="lpbn"><b>${esc(mLabel(g.month))}</b><small>${times(g.n)}</small></span><span class="lpba">${rm(g.sen)}</span></div>`).join("")}</div>
     <h3 class="lth">Every visit</h3>
     ${itemsHtml(s.items)}`;
 }

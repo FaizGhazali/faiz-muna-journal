@@ -12,7 +12,7 @@
 // for the family (new phones, the other person until they arrange theirs, Start over); with none saved, the
 // code's `defaults` are used (the demo always uses those). Order is CSS `order`, so cards are never moved in the DOM and
 // redraws (innerHTML) never fight it; a MutationObserver puts the controls back after a redraw.
-// `extra` is shown beside "Arrange cards" (links to the journal's other pages, e.g. Ledger's Analytics).
+// `extra` is shown before "Arrange cards" (links to the journal's other pages, e.g. Ledger's Analytics).
 // A card can say data-force="l" while it shows a form, so the form always gets the full width.
 // Order and row-filling rules are pure, in logic/board.js.
 import { esc } from "../core/util.js";
@@ -106,7 +106,7 @@ export function makeBoard({ host, bar, key, defaults, sizes = {}, extra = "", re
     bar.innerHTML = arranging
       ? `<p class="note">Move cards with ↑ ↓ and pick a size: S, M or L. ${sync?.who() ? "It's saved to your account, so every phone you sign in on looks the same." : "It's kept on this phone."}</p>
          <span class="bd-acts">${sync?.canShare() ? `<button type="button" class="mini" data-bd="share">Make this the starting layout</button>` : ""}<button type="button" class="mini" data-bd="reset">Start over</button><button type="button" class="primary" data-bd="done">Done</button></span>`
-      : `<span class="bd-acts"><button type="button" class="mini" data-bd="arrange" aria-label="Arrange cards: move them and pick their sizes">⇅ Arrange cards</button>${extra}</span>`;
+      : `<span class="bd-acts">${extra}<button type="button" class="mini" data-bd="arrange" aria-label="Arrange cards: move them and pick their sizes">⇅ Arrange cards</button></span>`;
   }
 
   // After a change, keep the card in view and let it glow briefly so the eye finds it.
