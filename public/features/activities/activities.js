@@ -127,6 +127,14 @@ const billItems = (p) => (bills?.due() ?? []).filter((r) => !r.who || r.who === 
   due: r.due, minutes: 5, created: r.due, note: `${rm(r.amountSen)} for ${r.c.name}. Paid ticks it off in Ledger's bills.`, bill: r,
 }));
 const moveList = (p = me) => [...mine(p), ...billItems(p)];
+const BILL_TAG = { label: "Bill", color: "--s8" };
+// "Paid" on a bill row in the list: ticks it in Ledger, and it leaves the list and the card.
+async function payFromList(id) {
+  const a = billItems(me).find((x) => x.id === id); if (!a || ro()) return;
+  const { c, month } = a.bill;
+  await bills.pay(c.id, month, `${c.name} ticked as paid.`);
+  logMove(a, "done");
+}
 const logs = (p = me) => Object.fromEntries(dayDocs.filter((d) => d.owner === p).map((d) => [d.date, d]));
 const strip = ({ id, ...rest }) => rest;
 const update = (id, patch) => commit(() => updateDoc(doc(actsCol, id), { ...patch, updated: Date.now() }));
@@ -162,6 +170,10 @@ function currentMove(p = me) {
   const mineToday = local && local.date === ctx.today; // id null = acted on here today (Done / Not now / Suggest another)
   const keeps = [mineToday && local.id, !(p === me && mineToday) && shared && shared.date === ctx.today && shared.item];
   if (p !== me) keeps.reverse();
+  // A bill due soon steps in front of whatever was picked earlier today (until it's paid or put off with Not now).
+  const kept = keeps.find((id) => id && all.some((x) => x.id === id && x.bill));
+  const bill = !kept && pickNext(billItems(p), { ...ctx, all, skip: new Set(skipList(p)) });
+  if (bill) { if (movesReady) remember(bill.a.id, p); return bill; }
   for (const id of keeps) {
     const a = id && all.find((x) => x.id === id), s = a && scoreOf(a, { ...ctx, recent: [], all });
     if (s) return { a, ...s };
@@ -215,7 +227,7 @@ function renderMove() {
       ${msg}`;
     return;
   }
-  const { a, why } = m, t = a.bill ? { label: "Bill", color: "--s8" } : TYPES[a.type], { detail, minutes } = describe(a), url = safeUrl(a.url);
+  const { a, why } = m, t = a.bill ? BILL_TAG : TYPES[a.type], { detail, minutes } = describe(a), url = safeUrl(a.url);
   const doneLabel = a.bill ? "Paid" : { skill: "Did it", habit: "Done", explore: "Been there", cook: "Cooked it", task: "Done" }[a.type];
   el.innerHTML = `<p class="eyebrow">${eyebrow}</p>
     <span class="tag" style="--c:var(${t.color})">${t.label}</span>
@@ -300,13 +312,13 @@ function renderHabits() {
 function bucket(a) { return a.status === "archived" ? "done" : a.status; }
 
 function renderList() {
-  const all = mine(), counts = {};
+  const all = [...mine(), ...billItems(me)], counts = {};
   all.forEach((a) => { const b = bucket(a); counts[b] = (counts[b] || 0) + 1; });
   $("tabs").innerHTML = Object.entries(TABS).map(([k, v]) => `<button type="button" class="chip" data-tab="${k}" aria-pressed="${k === tab}">${v}${counts[k] ? ` <span>${counts[k]}</span>` : ""}</button>`).join("");
   $("typeFilter").value = typeFilter;
   let rows = all.filter((a) => bucket(a) === tab && (!typeFilter || a.type === typeFilter));
   const order = { habit: 0, task: 1, skill: 2, explore: 3, cook: 4 };
-  rows.sort((a, b) => tab === "done" ? (b.updated || 0) - (a.updated || 0) : order[a.type] - order[b.type] || (b.updated || 0) - (a.updated || 0));
+  rows.sort((a, b) => tab === "done" ? (b.updated || 0) - (a.updated || 0) : !!b.bill - !!a.bill || order[a.type] - order[b.type] || (b.updated || 0) - (a.updated || 0));
   const empty = {
     inbox: "No ideas waiting. New things you add land here first, so nothing becomes a commitment until you start it.",
     active: "Nothing active. Start something from Ideas.", paused: "Nothing paused.", done: "Nothing finished yet.",
@@ -335,7 +347,7 @@ function metaOf(a) {
     }
   }
   if (a.location) out.push(esc(a.location));
-  if (a.minutes && a.type !== "habit") out.push(`About ${a.minutes} min`);
+  if (a.minutes && a.type !== "habit" && !a.bill) out.push(`About ${a.minutes} min`);
   if (a.favourite) out.push("★ Favourite");
   if (a.status === "done" && a.doneOn) out.push(`${{ explore: "Visited", cook: "Tried" }[a.type] || "Done"} ${esc(fmt(a.doneOn))}`);
   if (a.status === "archived") out.push("Archived");
@@ -344,9 +356,10 @@ function metaOf(a) {
 }
 
 function rowHtml(a) {
-  const t = TYPES[a.type], id = esc(a.id), b = (act, label, cls = "") => `<button type="button" class="mini ${cls}" data-act="${act}" data-id="${id}">${label}</button>`;
+  const t = a.bill ? BILL_TAG : TYPES[a.type], id = esc(a.id), b = (act, label, cls = "") => `<button type="button" class="mini ${cls}" data-act="${act}" data-id="${id}">${label}</button>`;
   let btns = ""; // the other person's: nothing to press
   if (!canEdit(a.owner)) btns = "";
+  else if (a.bill) btns = b("bill-paid", "Paid", "go"); // a due bill: only paying it makes sense here
   else if (a.status === "inbox") btns = b("start", "Start", "go") + b("edit", "Edit") + b("archive", "Archive");
   else if (a.status === "active") btns = (a.type === "habit" && isScheduled(a, today()) ? (habitState(a, logs(), today()) === "skipped" ? b("unskip", "Unskip") : b("skip", "Skip today")) : "") + b("edit", "Edit") + b("pause", "Pause");
   else if (a.status === "paused") btns = b("resume", "Resume", "go") + b("edit", "Edit");
@@ -502,6 +515,7 @@ function wire() {
   $("list").addEventListener("click", (ev) => {
     const b = ev.target.closest("button[data-act]"); if (!b) return;
     if (b.dataset.act === "step-del") { readEditor(); draft.steps.splice(Number(b.dataset.i), 1); renderList(); return; }
+    if (b.dataset.act === "bill-paid") { b.disabled = true; payFromList(b.dataset.id).finally(() => { b.disabled = false; }); return; }
     listAction(b.dataset.act, b.dataset.id || editing);
   });
   $("list").addEventListener("change", (ev) => { if (ev.target.id === "ed-type") { readEditor(); renderList(); } });

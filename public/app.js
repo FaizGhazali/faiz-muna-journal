@@ -96,7 +96,7 @@ initMeals({ db, people, me: currentPerson, entries: allEntries, commit, stock: {
 const doer = () => selfId() ?? currentPerson();
 initStocky({ db, people, me: doer, commit, mealData, pricesChanged: refreshMealCost });
 initPrefs({ db, commit, demo: DEMO }); // card layouts that follow each person (before the Ledger board uses it)
-initLedger({ db, people, me: doer, commit, billsChanged: refreshMove });
+initLedger({ db, people, me: doer, commit, billsChanged: refreshActivities });
 initWheel();
 initCollapse();
 initZoom();
