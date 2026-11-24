@@ -16,6 +16,7 @@ import { initRules, startRules, renderRules } from "./rules.js";
 import { ensureSeeds, addAccount, saveCycle } from "./seeds.js";
 import { initPlan, planSubs, renderPlan } from "./plan.js";
 import { initSpend, renderSpend } from "./spend.js";
+import { initAnalytics, renderAnalytics, ANALYTICS } from "./analytics.js";
 import { makeBoard } from "../../shell/board.js";
 import { boardPrefs } from "../../shell/prefs.js";
 
@@ -33,10 +34,12 @@ const RECENT_BY_SIZE = { s: 1, m: 3, l: RECENT };
 const BOARD = {
   defaults: [
     { id: "add", size: "m" }, { id: "recent", size: "m" },
-    { id: "sum", size: "s" }, { id: "bills", size: "s" }, { id: "ahead", size: "s" }, { id: "card:*", size: "s" },
+    { id: "sum", size: "s" }, { id: "bills", size: "s" }, { id: "card:*", size: "s" },
     { id: "people", size: "l" }, { id: "trends", size: "m" },
   ],
   sizes: { people: "l" },
+  // Beside "Arrange cards": graphs that don't need a place on the board (analytics.js).
+  extra: `<a class="btn mini" href="${ANALYTICS}">📊 Analytics</a>`,
 };
 const KINDS = { purchase: "Spend", payment: "Card payment", refund: "Refund" };
 const TYPES = { credit_card: "Credit card", debit: "Debit card", ewallet: "E-wallet", cash: "Cash", bank: "Bank account" };
@@ -76,7 +79,8 @@ export function initLedger(opts) {
   const shared = { db: () => db, commit, people, today, accounts: () => live(), programs: () => programs, cycles: () => cycles, txns: () => txns, refresh: () => refreshLedger(), board };
   initTrends(shared);
   initRules(shared);
-  initPlan({ ...shared, me });
+  initPlan({ ...shared, me, planChanged: () => renderAnalytics() });
+  initAnalytics(shared);
   initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases, shops: () => shopNames });
   $("me").addEventListener("change", () => { f.who = null; formKey = ""; refreshLedger(); });
   addEventListener("journalchange", () => refreshLedgerParts());
@@ -103,6 +107,7 @@ export function refreshLedger() {
   if (!$("ledgerAdd") || !people().length) return;
   renderPlan();
   renderSpend();
+  renderAnalytics();
   renderAdd();
   renderImport();
   renderRules();

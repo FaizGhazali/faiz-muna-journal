@@ -1364,7 +1364,7 @@ label.inline { display: flex; align-items: center; gap: 8px; font-weight: 400 }
 /* Ledger money plan (#ledgerPlan, features/ledger/plan.js). Bucket colours reuse the chart slots --s1…--s8. */
 .lplan { display: grid; gap: 16px }
 .lplan:empty { display: none }
-.lpsum, .lpbills, .lpahead { display: grid; gap: 12px; align-content: start }
+.lpsum, .lpbills { display: grid; gap: 12px; align-content: start }
 #ledgerPlan .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; display: inline-block }
 #ledgerPlan .dot.free { background: var(--bg); box-shadow: inset 0 0 0 1px var(--line) }
 #ledgerPlan .over { color: var(--obese) }
@@ -1391,6 +1391,11 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 /* Spending by bucket (#ledger/spend/<bucket>): the page shows on its own */
 #ledger.spendpage > :not(#ledgerSpend) { display: none }
 #ledger:not(.spendpage) #ledgerSpend { display: none }
+/* Analytics (#ledger/analytics): the same, a page of its own */
+#ledger.anpage > :not(#ledgerAnalytics) { display: none }
+#ledger:not(.anpage) #ledgerAnalytics { display: none }
+.lanalytics { display: grid; gap: 12px; align-content: start }
+.lanalytics .lpb { grid-template-columns: 4.6em minmax(0, 1fr) auto }
 .lspend, .lsbody { display: grid; gap: 12px; align-content: start }
 .lspend h2 { display: flex; align-items: center; gap: 10px }
 .lspend .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex: none }
@@ -1446,7 +1451,6 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 .lpb { display: grid; grid-template-columns: 4.6em minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 15px }
 .lpb:first-child { border-top: 0 }
 .lpbills .lpbl .lpb:not(:has(.lpdue)) { grid-template-columns: minmax(0, 1fr) auto auto }
-.lpahead .lpb { grid-template-columns: 4.6em minmax(0, 1fr) auto }
 .lpb.paid { color: var(--muted) }
 .lpb.paid b { color: var(--ink); font-weight: 400 }
 .lpdue { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap }

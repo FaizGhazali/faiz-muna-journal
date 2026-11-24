@@ -1,6 +1,6 @@
 // Ledger: the money plan at the top of #ledger (#ledgerPlan): where this month's income goes, what's
-// left to spend (and per day), the plan's buckets, this month's bills to tick off, the next 12 months
-// with the instalments that end. Each is a card on the Ledger board (shell/board.js) with a small, medium and
+// left to spend (and per day), the plan's buckets and this month's bills to tick off (the next 12 months
+// moved to the Analytics page, analytics.js). Each is a card on the Ledger board (shell/board.js) with a small, medium and
 // large version (sizeOf); a form always shows large (data-force). Bills are ticked by hand
 // ("Typed"); a statement import can later mark them checked. All maths is in logic/moneyplan.js.
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "../../core/fs.js";
@@ -8,11 +8,10 @@ import { $, esc, lastUsed } from "../../core/util.js";
 import { confirmDelete } from "../../core/confirm.js";
 import { rm, toSen, shortDate } from "../../logic/ledger.js";
 import {
-  DEFAULT_BUCKETS, bucketsOf, checkPlan, planView, outlook, countdown, checkCommitment, paidRecord, paidKey,
-  monthOf, monthName, addMonths, liveIn, dueDate,
+  DEFAULT_BUCKETS, bucketsOf, checkPlan, planView, checkCommitment, paidRecord, paidKey,
+  monthOf, monthName, liveIn, dueDate,
 } from "../../logic/moneyplan.js";
 
-const AHEAD_SHOWN = 4; // instalments listed under the 12-month chart before "and N more"
 // Each default bucket keeps one colour slot from the chart palette (--s1…--s8); added buckets take the free ones.
 const SLOT = { essentials: 1, fun: 4, debt: 8, savings: 3, invest: 7 };
 const SPARE = [2, 5, 6];
@@ -39,7 +38,7 @@ export function initPlan(c) {
 }
 // Live data: returns the unsubscribe functions for ledgerui's list.
 export function planSubs(db) {
-  const redraw = () => renderPlan();
+  const redraw = () => { renderPlan(); ctx.planChanged?.(); };
   return [
     onSnapshot(doc(db, "ledgerPlan", "main"), (s) => { plan = s.exists() ? s.data() : null; redraw(); }),
     onSnapshot(collection(db, "ledgerCommitments"), (s) => { commitments = s.docs.map((d) => ({ id: d.id, ...d.data() })); redraw(); }),
@@ -56,8 +55,7 @@ export function renderPlan() {
   const sumForm = !plan || editing === "plan", billOpen = editing?.startsWith("bill:") || manage;
   host.innerHTML = `
     <section class="panel lpsum" data-card="sum" data-title="Money plan" aria-labelledby="lpTitle"${sumForm ? ` data-force="l"` : ""}>${sumForm ? planForm() : summary(v, size("sum"))}</section>
-    ${plan ? `<section class="panel lpbills" data-card="bills" data-title="Bills this month" aria-labelledby="lpbTitle"${billOpen ? ` data-force="l"` : ""}>${bills(v, billOpen ? "l" : size("bills"))}</section>` : ""}
-    ${plan && commitments.length ? `<section class="panel lpahead" data-card="ahead" data-title="Next 12 months" aria-labelledby="lpaTitle">${ahead(v, size("ahead"))}</section>` : ""}`;
+    ${plan ? `<section class="panel lpbills" data-card="bills" data-title="Bills this month" aria-labelledby="lpbTitle"${billOpen ? ` data-force="l"` : ""}>${bills(v, billOpen ? "l" : size("bills"))}</section>` : ""}`;
 }
 
 // ---------- where the money goes ----------
@@ -255,45 +253,6 @@ async function removeBill(id) {
   editing = null; clearDirty(); billMsg = `Deleted ${c.name}.`;
   await ctx.commit(() => b.commit());
   renderPlan();
-}
-
-// ---------- the next 12 months ----------
-const monthsTo = (from, to) => { const [a, b] = from.split("-").map(Number), [c, d] = to.split("-").map(Number); return (c - a) * 12 + d - b; };
-function ahead(v, size = "l") {
-  const o = outlook(commitments, v.incomeSen, v.month), cd = countdown(commitments, v.month);
-  if (size === "s") {
-    const n = cd.ending.length ? monthsTo(v.month, cd.last) + 1 : 0;
-    return ctx.board.tile("ahead", n
-      ? `<small id="lpaTitle">Instalments done in</small><b class="bdbig">${n} ${n === 1 ? "month" : "months"}</b><small>last payment ${esc(monthName(cd.last))}</small>`
-      : `<small id="lpaTitle">Free after bills</small><b class="bdbig">${rm(o[0].freeSen, { whole: true })}</b><small>a month</small>`, "Next 12 months");
-  }
-  const W = 300, H = 112, L = 24, B = 92, top = 22, bw = (W - L - 4) / o.length;
-  const max = Math.max(...o.map((x) => Math.abs(x.freeSen)), 1), y = (sen) => B - (Math.max(0, sen) / max) * (B - top);
-  // A label over each month where more money frees up than the month before.
-  const steps = o.map((x, i) => (i && x.freeSen > o[i - 1].freeSen ? x.freeSen - o[i - 1].freeSen : 0));
-  const shown = cd.ending.slice(0, AHEAD_SHOWN), more = cd.ending.length - shown.length;
-  const head = `<div class="lhead"><h2 id="lpaTitle">Next 12 months</h2><span class="note">free after bills</span>${ctx.board.less("ahead")}</div>`;
-  const chart = `
-    <svg class="lpchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Free after bills: ${o.map((x) => `${monthName(x.month, { short: true })} ${rm(x.freeSen, { whole: true })}`).join(", ")}">
-      <line x1="${L}" y1="${B}" x2="${W}" y2="${B}" class="axis"></line>
-      ${o.map((x, i) => {
-        const x0 = L + i * bw + 2, h = B - y(x.freeSen);
-        return `<rect x="${x0.toFixed(1)}" y="${y(x.freeSen).toFixed(1)}" width="${(bw - 4).toFixed(1)}" height="${Math.max(h, 1).toFixed(1)}" rx="3" class="${i ? "bar" : "bar now"}${x.freeSen < 0 ? " neg" : ""}"></rect>
-          ${steps[i] ? `<text x="${(x0 + (bw - 4) / 2).toFixed(1)}" y="${(y(x.freeSen) - 4).toFixed(1)}" class="up">+${Math.round(steps[i] / 100)}</text>` : ""}`;
-      }).join("")}
-      ${[0, Math.floor(o.length / 2), o.length - 1].map((i) => `<text x="${(L + i * bw + bw / 2).toFixed(1)}" y="${H - 6}" class="lab">${monthName(o[i].month, { short: true })}</text>`).join("")}
-      <text x="${L - 4}" y="${B + 3}" class="lab end">0</text>
-    </svg>`;
-  if (size === "m") return `${head}${chart}<p class="note">${rm(o[0].freeSen, { whole: true })} this month${o.at(-1).freeSen !== o[0].freeSen ? `, ${rm(o.at(-1).freeSen, { whole: true })} by ${esc(monthName(o.at(-1).month))}` : ""}. ${cd.ending.length ? ctx.board.more("ahead", "Debt-free countdown") : ""}</p>`;
-  return `${head}${chart}
-    <p class="note">Income less bills: ${rm(o[0].freeSen, { whole: true })} this month${o.at(-1).freeSen !== o[0].freeSen ? `, ${rm(o.at(-1).freeSen, { whole: true })} by ${esc(monthName(o.at(-1).month))}` : ""}. Day-to-day spending comes out of this.</p>
-    ${cd.ending.length ? `<h3 class="lph">Debt-free countdown</h3>
-    <div class="lpbl">${shown.map((c) => `<div class="lpb">
-      <span class="lpdue ok">${esc(monthName(c.endMonth, { short: true }))}${c.endMonth.slice(0, 4) !== v.month.slice(0, 4) ? ` ’${c.endMonth.slice(2, 4)}` : ""}</span>
-      <span class="lpbn"><b>${esc(c.name)} ends</b><small>from ${esc(monthName(addMonths(c.endMonth, 1)))}</small></span>
-      <span class="lpba ok">+${rm(c.amountSen, { whole: true })}/mo</span>
-    </div>`).join("")}</div>
-    <p class="note">${more ? `And ${more} more. ` : ""}All instalments done after ${esc(monthName(cd.last))} · ${rm(v.owedSen, { whole: true })} still to pay on them.</p>` : ""}`;
 }
 
 // ---------- events ----------
