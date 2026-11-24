@@ -153,7 +153,7 @@ function body(plan, bucket) {
       <span class="lamt">${money(s.sen)}</span>
       <span class="lbarbg thin"><i style="width:${Math.max(2, Math.round((Math.max(0, s.sen) / big) * 100))}%"></i></span>
     </button>`).join("")}</div>
-    ${shops.length > SHOPS_SHOWN ? `<button type="button" class="mini" data-ls="allshops">${st.allShops ? "Show fewer" : `Show all ${shops.length} shops`}</button>` : ""}
+    ${shops.length > SHOPS_SHOWN ? `<button type="button" class="mini" data-ls="allshops" aria-expanded="${st.allShops}">${st.allShops ? "Show fewer" : `Show all ${shops.length} shops`}</button>` : ""}
     ${cats.length > 1 ? `<h3 class="lth">By category</h3>
     <div class="lcats">${cats.map((c) => `<div class="lcat"><span>${cat(c.cat).icon} ${esc(cat(c.cat).name)}</span><i style="width:${Math.max(3, Math.round((Math.max(0, c.sen) / bigCat) * 100))}%"></i><b>${rm(c.sen, { whole: true })}</b></div>`).join("")}</div>` : ""}
     <h3 class="lth">Every item</h3>

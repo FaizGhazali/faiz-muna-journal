@@ -222,6 +222,9 @@ button.link { border: 0; padding: 0; background: none; color: var(--accent); tex
 .act-note { margin: 2px 0 0; font-size: 14px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere }
 .act .btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; align-items: start }
 button.mini.go { color: var(--accent); border-color: var(--accent); font-weight: 700 }
+/* A button that's switched on (All bills, Show all…) is coloured while on and back to normal when off,
+   so it's clear it did something. Toggles set aria-pressed (on / off) or aria-expanded (open / shut). */
+button.mini[aria-pressed="true"], button.mini[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 700 }
 @media (max-width: 560px) { .act { grid-template-columns: minmax(0, 1fr) } .act .btns { justify-content: flex-start } }
 .editor { padding: 14px 0; border-top: 1px solid var(--line); gap: 12px }
 .editor .push { margin-left: auto; color: var(--obese) }

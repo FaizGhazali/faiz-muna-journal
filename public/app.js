@@ -26,6 +26,7 @@ import { initMeals, startMeals, stopMeals, refreshMeals, refreshCalories, refres
 import { initStocky, startStocky, stopStocky, refreshStocky, stockOf, listFood, priceItems, costOf } from "./features/stocky/stockyui.js";
 import { initCollapse } from "./core/collapse.js";
 import { initZoom } from "./core/zoom.js";
+import { initMotion } from "./core/motion.js";
 import { initGuides } from "./shell/tour.js";
 import { initWidget } from "./shell/widget.js";
 import { initDiary, startDiary, stopDiary, refreshDiary, diaryList } from "./features/diary/diaryui.js";
@@ -100,6 +101,7 @@ initLedger({ db, people, me: doer, commit, billsChanged: refreshActivities });
 initWheel();
 initCollapse();
 initZoom();
+initMotion();
 initGuides();
 initDiary({ db, people, me: currentPerson, commit, onChange: () => refreshMood(), demo: DEMO, token: async () => (auth?.currentUser ? auth.currentUser.getIdToken() : null) });
 initMood({ db, people, entries: allEntries, diary: diaryList, me: currentPerson, habitFacts, commit });
