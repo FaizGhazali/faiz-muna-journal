@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readCommit, modulesOf, kindOf, wheel, calendar, weeksFor, levelOf, kindLine } from "../public/logic/devlog.js";
+import { readCommit, modulesOf, kindOf, wheel, calendar, weeksFor, levelOf, kindLine, waiting, agoText } from "../public/logic/devlog.js";
 
 const c = (subject, files = ["public/app.js"], body = "", at = "2026-11-20T21:15:00+08:00") => readCommit({ sha: "abcdef123", at, subject, body, files });
 
@@ -54,6 +54,28 @@ test("wheel totals each module over its lifetime", () => {
   assert.equal(w.ledger.updates, 0);
   assert.equal(kindLine(w.diary), "2 improvements, 1 fix");
   assert.equal(wheel(null).every((m) => m.updates === 0), true);
+});
+
+test("waiting puts the journal left longest first and marks it due", () => {
+  const w = waiting(wheel(log), "2026-11-24");
+  assert.deepEqual(w.map((m) => [m.id, m.ago]), [["meals", null], ["stocky", null], ["ledger", null], ["weight", 4], ["diary", 4]]);
+  assert.equal(w[0].due, true);
+  assert.equal(w.filter((m) => m.due).length, 1);
+  const all = waiting([{ id: "a", last: "2026-11-24" }, { id: "b", last: "2026-11-24" }], "2026-11-24");
+  assert.equal(all.some((m) => m.due), false); // nobody is behind
+  const two = waiting([{ id: "a", last: "2026-11-24" }, { id: "b", last: "2026-11-10" }], "2026-11-24");
+  assert.deepEqual(two.map((m) => [m.id, m.ago, m.due]), [["b", 14, true], ["a", 0, false]]);
+  const tie = waiting([
+    { id: "a", last: "2026-11-23", lastAt: "2026-11-23T18:00:00+08:00" },
+    { id: "b", last: "2026-11-23", lastAt: "2026-11-23T09:00:00+08:00" },
+    { id: "c", last: "2026-11-24", lastAt: "2026-11-24T08:00:00+08:00" },
+  ], "2026-11-24");
+  assert.deepEqual(tie.map((m) => [m.id, m.due]), [["b", true], ["a", false], ["c", false]]); // same day: earlier waits longer
+  assert.equal(agoText(null), "not yet");
+  assert.equal(agoText(0), "today");
+  assert.equal(agoText(1, true), "yesterday");
+  assert.equal(agoText(9), "9 days ago");
+  assert.equal(agoText(9, true), "9d ago");
 });
 
 test("calendar groups a day's updates and keeps unknown apart from zero", () => {

@@ -7,6 +7,8 @@
 // A day before `since` is "not tracked" (unknown), never zero. A commit can steer itself with trailers:
 //   "Module: ledger, meals" picks the modules, "Dev: skip" leaves it out.
 
+import { dayNum } from "../core/util.js";
+
 export const MODULES = [
   { id: "weight", name: "Weight" },
   { id: "meals", name: "Meals" },
@@ -70,7 +72,7 @@ const valid = (log) => log && Array.isArray(log.items) && /^\d{4}-\d{2}-\d{2}$/.
 
 /** Lifetime totals per module, in MODULES order: updates, points, each kind, active days, first / last day. */
 export function wheel(log) {
-  const out = MODULES.map((m) => ({ ...m, updates: 0, points: 0, feature: 0, improve: 0, fix: 0, days: 0, first: null, last: null }));
+  const out = MODULES.map((m) => ({ ...m, updates: 0, points: 0, feature: 0, improve: 0, fix: 0, days: 0, first: null, last: null, lastAt: "" }));
   if (!valid(log)) return out;
   const byId = Object.fromEntries(out.map((m) => [m.id, m]));
   const seen = new Set();
@@ -81,8 +83,31 @@ export function wheel(log) {
     if (!seen.has(id + it.date)) { seen.add(id + it.date); m.days++; }
     if (!m.first || it.date < m.first) m.first = it.date;
     if (!m.last || it.date > m.last) m.last = it.date;
+    if ((it.at || "") > m.lastAt) m.lastAt = it.at;
   }
   return out;
+}
+
+/**
+ * Journals by how long since they were last worked on, the longest wait first (never worked on leads; on the same day
+ * the earlier last change, `lastAt`, waits longer; then MODULES order). Adds `ago` (whole days, null = never) and marks
+ * the first one `due` when it is behind the others, so the landing page can say which journal is waiting for its turn.
+ */
+export function waiting(mods, today) {
+  const rows = mods.map((m) => ({ ...m, ago: m.last ? Math.max(0, dayNum(today) - dayNum(m.last)) : null, due: false }));
+  const key = (m) => (m.ago == null ? Infinity : m.ago);
+  const time = (m) => Date.parse(m.lastAt || "") || 0;
+  rows.sort((a, b) => key(b) - key(a) || time(a) - time(b));
+  if (rows.length > 1 && key(rows[0]) > key(rows[rows.length - 1])) rows[0].due = true;
+  return rows;
+}
+
+/** "today", "yesterday", "5 days ago", "not yet"; `short` gives "5d ago" for the wheel's labels. */
+export function agoText(ago, short = false) {
+  if (ago == null) return "not yet";
+  if (ago === 0) return "today";
+  if (ago === 1) return "yesterday";
+  return short ? `${ago}d ago` : `${ago} days ago`;
 }
 
 /** "3 new features, 1 fix" for a module's totals. */
