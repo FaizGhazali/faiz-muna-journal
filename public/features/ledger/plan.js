@@ -1,11 +1,12 @@
 // Ledger: the money plan at the top of #ledger (#ledgerPlan): where this month's income goes, what's
 // left to spend (and per day), the plan's buckets, this month's bills to tick off, the next 12 months
-// with the instalments that end, and a small rebate tile per credit card. Bills are ticked by hand
+// with the instalments that end. Each is a card on the Ledger board (shell/board.js) with a small, medium and
+// large version (sizeOf); a form always shows large (data-force). Bills are ticked by hand
 // ("Typed"); a statement import can later mark them checked. All maths is in logic/moneyplan.js.
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "../../core/fs.js";
 import { $, esc, lastUsed } from "../../core/util.js";
 import { confirmDelete } from "../../core/confirm.js";
-import { rm, toSen, shortDate, cycleView } from "../../logic/ledger.js";
+import { rm, toSen, shortDate } from "../../logic/ledger.js";
 import {
   DEFAULT_BUCKETS, bucketsOf, checkPlan, planView, outlook, countdown, checkCommitment, paidRecord, paidKey,
   monthOf, monthName, addMonths, liveIn, dueDate,
@@ -51,19 +52,30 @@ export function renderPlan() {
   // A form someone has started typing in isn't redrawn by the other phone's changes.
   if (host.querySelector("[data-form][data-dirty]")) return;
   const day = ctx.today(), v = planView({ plan, commitments, paid, txns: ctx.txns(), day });
+  const size = (id) => ctx.board.sizeOf(id);
+  const sumForm = !plan || editing === "plan", billOpen = editing?.startsWith("bill:") || manage;
   host.innerHTML = `
-    <section class="panel lpsum" data-title="Money plan" aria-labelledby="lpTitle">${!plan || editing === "plan" ? planForm() : summary(v)}</section>
-    ${plan ? `<section class="panel lpbills" data-title="Bills this month" aria-labelledby="lpbTitle">${bills(v)}</section>` : ""}
-    ${plan && commitments.length ? `<section class="panel lpahead" data-title="Next 12 months" aria-labelledby="lpaTitle">${ahead(v)}</section>` : ""}
-    ${rebateTiles(day)}`;
+    <section class="panel lpsum" data-card="sum" data-title="Money plan" aria-labelledby="lpTitle"${sumForm ? ` data-force="l"` : ""}>${sumForm ? planForm() : summary(v, size("sum"))}</section>
+    ${plan ? `<section class="panel lpbills" data-card="bills" data-title="Bills this month" aria-labelledby="lpbTitle"${billOpen ? ` data-force="l"` : ""}>${bills(v, billOpen ? "l" : size("bills"))}</section>` : ""}
+    ${plan && commitments.length ? `<section class="panel lpahead" data-card="ahead" data-title="Next 12 months" aria-labelledby="lpaTitle">${ahead(v, size("ahead"))}</section>` : ""}`;
 }
 
 // ---------- where the money goes ----------
-function summary(v) {
+function summary(v, size = "l") {
   const col = colourOf(v.buckets), used = v.buckets.filter((b) => b.usedSen > 0);
   const over = v.freeSen < 0, end = shortDate(dueDate({ dueDay: 31 }, v.month));
+  const left = `${rm(Math.abs(v.freeSen), { whole: true })}`, label = over ? "Over your income by" : "Can still spend";
+  if (size === "s") return ctx.board.tile("sum", `<small id="lpTitle">${label}</small><b class="bdbig${over ? " over" : ""}">${left}</b><small>${over ? `in ${esc(monthName(v.month))}` : `${rm(v.perDaySen, { whole: true })} a day`}</small>`, label);
+  const usedPct = v.incomeSen ? Math.min(100, Math.round(((v.committedSen + v.spentSen) / v.incomeSen) * 100)) : 100;
+  if (size === "m") return `<div class="lhead"><h2 id="lpTitle">${label}</h2><span class="note">${esc(monthName(v.month))}</span></div>
+    <div class="lpleft">
+      <div><small>${over ? "over" : "left this month"}</small><b class="${over ? "over" : ""}">${left}</b></div>
+      ${over ? "" : `<div><small>a day, to ${end}</small><b class="sm">${rm(v.perDaySen, { whole: true })}</b></div>`}
+    </div>
+    <div class="lbarbg"><i style="width:${usedPct}%;--c:${over ? "var(--obese)" : "var(--accent)"}"></i></div>
+    <p class="note">${usedPct}% of ${rm(v.incomeSen, { whole: true })} used · bills ${rm(v.committedSen, { whole: true })} · day to day ${rm(v.spentSen, { whole: true })} ${ctx.board.more("sum", "See your plan")}</p>`;
   return `<div class="lhead"><h2 id="lpTitle">Where ${rm(v.incomeSen, { whole: true })} goes</h2><span class="note">${esc(monthName(v.month))}</span>
-      <span class="lbtnrow"><button type="button" class="mini" data-lp="edit-plan">Edit plan</button></span></div>
+      <span class="lbtnrow"><button type="button" class="mini" data-lp="edit-plan">Edit plan</button>${ctx.board.less("sum")}</span></div>
     <div class="lpring">
       ${ring(v, used, col, over)}
       <ul class="lpleg">${used.map((b) => `<li><a href="#ledger/spend/${b.id}"><span class="dot" style="--c:${col[b.id]}"></span><span>${esc(b.name)}</span><b>${rm(b.usedSen, { whole: true })}</b></a></li>`).join("")}${over ? "" : `<li><span class="dot free"></span><span>Free</span><b>${rm(v.freeSen, { whole: true })}</b></li>`}</ul>
@@ -138,12 +150,18 @@ async function savePlan() {
 }
 
 // ---------- bills this month ----------
-function bills(v) {
+const BILLS_M = 3; // unpaid bills on the medium card
+function bills(v, size = "l") {
   const people = Object.fromEntries(ctx.people().map((p) => [p.id, p.name]));
-  const list = v.bills;
+  const list = v.bills, due = list.filter((r) => !r.paid);
+  if (size === "s") return ctx.board.tile("bills", `<small id="lpbTitle">Bills this month</small><b class="bdbig">${list.length ? (due.length ? `${due.length} to pay` : "All paid ✓") : "None yet"}</b><small>${due.length ? `${rm(v.toPaySen, { whole: true })} · next ${shortDate(due[0].due)}` : list.length ? `${list.length} paid` : "Tap to add one"}</small>`, "Bills this month");
+  if (size === "m") return `<div class="lhead"><h2 id="lpbTitle">Bills this month</h2><span class="note">${list.length ? (v.toPaySen ? `${rm(v.toPaySen)} still to pay` : "All paid ✓") : ""}</span></div>
+    ${due.length ? `<div class="lpbl">${due.slice(0, BILLS_M).map((r) => billRow(r, people)).join("")}</div>` : `<p class="note">${list.length ? "Every bill this month is paid." : "No bills yet."}</p>`}
+    <p class="note">${due.length > BILLS_M ? `And ${due.length - BILLS_M} more to pay. ` : ""}${ctx.board.more("bills", list.length - due.length ? `All bills, ${list.length - due.length} paid` : "All bills")}</p>
+    <p class="msg" aria-live="polite">${esc(billMsg)}</p>`;
   const form = editing?.startsWith("bill:") ? billForm(editing.slice(5)) : "";
   return `<div class="lhead"><h2 id="lpbTitle">Bills this month</h2><span class="note">${list.length ? (v.toPaySen ? `${rm(v.toPaySen)} still to pay` : "All paid ✓") : ""}</span>
-      <span class="lbtnrow">${commitments.length ? `<button type="button" class="mini" data-lp="manage" aria-pressed="${manage}">All bills</button>` : ""}<button type="button" class="mini" data-lp="new-bill">＋ Add a bill</button></span></div>
+      <span class="lbtnrow">${commitments.length ? `<button type="button" class="mini" data-lp="manage" aria-pressed="${manage}">All bills</button>` : ""}<button type="button" class="mini" data-lp="new-bill">＋ Add a bill</button>${ctx.board.less("bills")}</span></div>
     ${form}
     ${manage ? manageList() : list.length ? `<div class="lpbl">${list.map((r) => billRow(r, people)).join("")}</div>`
       : `<p class="note">${commitments.length ? "No bills this month." : "Add what you pay every month: house, car, loans, PayLater. For an instalment, add its final payment month so Ledger counts down."}</p>`}
@@ -240,14 +258,22 @@ async function removeBill(id) {
 }
 
 // ---------- the next 12 months ----------
-function ahead(v) {
+const monthsTo = (from, to) => { const [a, b] = from.split("-").map(Number), [c, d] = to.split("-").map(Number); return (c - a) * 12 + d - b; };
+function ahead(v, size = "l") {
   const o = outlook(commitments, v.incomeSen, v.month), cd = countdown(commitments, v.month);
+  if (size === "s") {
+    const n = cd.ending.length ? monthsTo(v.month, cd.last) + 1 : 0;
+    return ctx.board.tile("ahead", n
+      ? `<small id="lpaTitle">Instalments done in</small><b class="bdbig">${n} ${n === 1 ? "month" : "months"}</b><small>last payment ${esc(monthName(cd.last))}</small>`
+      : `<small id="lpaTitle">Free after bills</small><b class="bdbig">${rm(o[0].freeSen, { whole: true })}</b><small>a month</small>`, "Next 12 months");
+  }
   const W = 300, H = 112, L = 24, B = 92, top = 22, bw = (W - L - 4) / o.length;
   const max = Math.max(...o.map((x) => Math.abs(x.freeSen)), 1), y = (sen) => B - (Math.max(0, sen) / max) * (B - top);
   // A label over each month where more money frees up than the month before.
   const steps = o.map((x, i) => (i && x.freeSen > o[i - 1].freeSen ? x.freeSen - o[i - 1].freeSen : 0));
   const shown = cd.ending.slice(0, AHEAD_SHOWN), more = cd.ending.length - shown.length;
-  return `<div class="lhead"><h2 id="lpaTitle">Next 12 months</h2><span class="note">free after bills</span></div>
+  const head = `<div class="lhead"><h2 id="lpaTitle">Next 12 months</h2><span class="note">free after bills</span>${ctx.board.less("ahead")}</div>`;
+  const chart = `
     <svg class="lpchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Free after bills: ${o.map((x) => `${monthName(x.month, { short: true })} ${rm(x.freeSen, { whole: true })}`).join(", ")}">
       <line x1="${L}" y1="${B}" x2="${W}" y2="${B}" class="axis"></line>
       ${o.map((x, i) => {
@@ -257,7 +283,9 @@ function ahead(v) {
       }).join("")}
       ${[0, Math.floor(o.length / 2), o.length - 1].map((i) => `<text x="${(L + i * bw + bw / 2).toFixed(1)}" y="${H - 6}" class="lab">${monthName(o[i].month, { short: true })}</text>`).join("")}
       <text x="${L - 4}" y="${B + 3}" class="lab end">0</text>
-    </svg>
+    </svg>`;
+  if (size === "m") return `${head}${chart}<p class="note">${rm(o[0].freeSen, { whole: true })} this month${o.at(-1).freeSen !== o[0].freeSen ? `, ${rm(o.at(-1).freeSen, { whole: true })} by ${esc(monthName(o.at(-1).month))}` : ""}. ${cd.ending.length ? ctx.board.more("ahead", "Debt-free countdown") : ""}</p>`;
+  return `${head}${chart}
     <p class="note">Income less bills: ${rm(o[0].freeSen, { whole: true })} this month${o.at(-1).freeSen !== o[0].freeSen ? `, ${rm(o.at(-1).freeSen, { whole: true })} by ${esc(monthName(o.at(-1).month))}` : ""}. Day-to-day spending comes out of this.</p>
     ${cd.ending.length ? `<h3 class="lph">Debt-free countdown</h3>
     <div class="lpbl">${shown.map((c) => `<div class="lpb">
@@ -266,21 +294,6 @@ function ahead(v) {
       <span class="lpba ok">+${rm(c.amountSen, { whole: true })}/mo</span>
     </div>`).join("")}</div>
     <p class="note">${more ? `And ${more} more. ` : ""}All instalments done after ${esc(monthName(cd.last))} · ${rm(v.owedSen, { whole: true })} still to pay on them.</p>` : ""}`;
-}
-
-// ---------- the small rebate tile ----------
-// One per credit card with rebate rules; the full card is further down.
-function rebateTiles(day) {
-  const tiles = ctx.accounts().filter((a) => a.type === "credit_card").map((a) => {
-    const v = cycleView(a, { programs: ctx.programs(), cycles: ctx.cycles(), txns: ctx.txns(), day });
-    if (!v.program) return "";
-    return `<button type="button" class="lptile" data-lp="to-card" data-id="${a.id}">
-      <span class="lptl"><small>Card rebate · ${esc(a.name)}</small><b>${rm(v.rebate.totalSen, { whole: true })}</b></span>
-      <span class="lptag">${v.next ? `${rm(v.next.needSen, { whole: true })} to next tier` : "Top tier"}</span>
-      <small class="lptl2">${v.daysLeft === 0 ? "statement today" : `${v.daysLeft} ${v.daysLeft === 1 ? "day" : "days"} to statement`}</small>
-    </button>`;
-  }).join("");
-  return tiles ? `<div class="lptiles">${tiles}</div>` : "";
 }
 
 // ---------- events ----------
@@ -298,6 +311,5 @@ function click(b) {
   if (a === "del-bill") removeBill(id);
   if (a === "pay") pay(id);
   if (a === "unpay") unpay(id);
-  if (a === "to-card") document.getElementById(`lcard-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 const clearDirty = () => document.querySelectorAll("#ledgerPlan [data-form]").forEach((f) => delete f.dataset.dirty);

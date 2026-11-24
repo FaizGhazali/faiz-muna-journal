@@ -49,7 +49,19 @@ export function renderTrends() {
     const d = Math.round(((now - before) / before) * 100);
     return d === 0 ? "same" : `${d > 0 ? "▲" : "▼"} ${Math.abs(d)}%`;
   };
-  host.innerHTML = `<div class="lhead"><h2 id="ltTitle">Spending trends</h2></div>
+  // Small: this month vs last, one tile. Medium: the monthly chart. Large: everything (shell/board.js).
+  const size = ctx.board.sizeOf("trends"), what = per.kind === "cycle" ? "This statement so far" : "This month so far";
+  const change = diff(cmp.nowSen, cmp.beforeSen);
+  if (size === "s") { host.innerHTML = ctx.board.tile("trends", `<small id="ltTitle">${what}</small><b class="bdbig">${rm(cmp.nowSen, { whole: true })}</b><small>${rm(cmp.beforeSen, { whole: true })} by this day last time${change && change !== "new" ? ` · ${change}` : ""}</small>`, "Spending trends"); return; }
+  if (size === "m") {
+    host.innerHTML = `<div class="lhead"><h2 id="ltTitle">Spending trends</h2><span class="note">${filt.who || filt.acct ? "filtered" : "both of you"}</span></div>
+      <ul class="lleg" id="ltLeg"></ul>
+      <div class="chart ltchart" id="ltChart"></div>
+      <p class="week"><b>${rm(cmp.nowSen)}</b> ${what.toLowerCase()} · ${rm(cmp.beforeSen)} by the same day last time ${ctx.board.more("trends", "Shops and categories")}</p>`;
+    drawChart();
+    return;
+  }
+  host.innerHTML = `<div class="lhead"><h2 id="ltTitle">Spending trends</h2>${ctx.board.less("trends")}</div>
     <div class="ltf">
       <div class="chips" role="group" aria-label="Whose spending">${[["", "Both"], ...people.map((p) => [p.id, p.name])].map(([id, n]) => `<button type="button" class="chip" data-who="${id}" aria-pressed="${filt.who === id}">${esc(n)}</button>`).join("")}</div>
       <select id="ltAcct" aria-label="Which card or wallet"><option value="">All cards and wallets</option>${accounts.map((a) => `<option value="${a.id}"${a.id === filt.acct ? " selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
@@ -123,7 +135,7 @@ function drawChart() {
   svgEl.addEventListener("pointerdown", show);
   svgEl.addEventListener("pointerleave", () => { tip.hidden = true; });
   // The same numbers as a table (for screen readers and the colours that are light on white).
-  $("ltTable").innerHTML = `<table class="lttable"><thead><tr><th>Month</th>${used.map((k) => `<th>${esc(label(k))}</th>`).join("")}<th>Total</th></tr></thead>
+  if ($("ltTable")) $("ltTable").innerHTML = `<table class="lttable"><thead><tr><th>Month</th>${used.map((k) => `<th>${esc(label(k))}</th>`).join("")}<th>Total</th></tr></thead>
     <tbody>${rows.map((r) => `<tr><th>${label2(r.ym)}</th>${used.map((k) => `<td>${r.s[k] ? rm(r.s[k], { whole: true }) : "–"}</td>`).join("")}<td><b>${rm(r.totalSen, { whole: true })}</b></td></tr>`).join("")}</tbody></table>`;
 }
 const label2 = (ym) => { const [y, m] = ym.split("-").map(Number); return `${MON[m - 1]} ${y}`; };

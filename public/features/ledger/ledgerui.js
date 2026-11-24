@@ -16,6 +16,7 @@ import { initRules, startRules, renderRules } from "./rules.js";
 import { ensureSeeds, addAccount, saveCycle } from "./seeds.js";
 import { initPlan, planSubs, renderPlan } from "./plan.js";
 import { initSpend, renderSpend } from "./spend.js";
+import { makeBoard } from "../../shell/board.js";
 
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (_) { return d; } },
@@ -24,6 +25,18 @@ const store = {
 const ACCT_KEY = "journal-ledger-acct";
 const LOAD_DAYS = 400; // a year and a bit, for trends later
 const RECENT = 15;
+// How many Recent items each size shows before "Show more".
+const RECENT_BY_SIZE = { s: 1, m: 3, l: RECENT };
+// The Ledger cards' starting order and sizes (shell/board.js; each person can arrange their own phone):
+// the everyday part first (add, check it saved), then the month as small tiles, the details below.
+const BOARD = {
+  defaults: [
+    { id: "add", size: "m" }, { id: "recent", size: "m" },
+    { id: "sum", size: "s" }, { id: "bills", size: "s" }, { id: "ahead", size: "s" }, { id: "card:*", size: "s" },
+    { id: "people", size: "l" }, { id: "trends", size: "m" },
+  ],
+  sizes: { people: "l" },
+};
 const KINDS = { purchase: "Spend", payment: "Card payment", refund: "Refund" };
 const TYPES = { credit_card: "Credit card", debit: "Debit card", ewallet: "E-wallet", cash: "Cash", bank: "Bank account" };
 const CATS = SYSTEM_CATEGORIES.filter((c) => !c.hidden);
@@ -35,7 +48,7 @@ let accounts = [], programs = [], aliases = [], cycles = {}, txns = [], rebates 
 let offer = null, openRow = null;
 // The add form. catAuto: the category came from a merchant rule (it follows the shop until picked by hand).
 const f = { who: null, type: "purchase", amount: "", raw: "", cat: "other", catAuto: true, account: null, date: today() };
-let msg = "", cardForm = false, cardMsg = "", formKey = "", shown = RECENT;
+let msg = "", cardForm = false, cardMsg = "", formKey = "", extra = 0, board;
 // The Recent item being fixed in place (its own row turns into the form): { id, where, who, type, amount, raw,
 // cat, account, date, msg }. where = the Where text it opened with. While it's open the list isn't redrawn.
 let edit = null;
@@ -53,18 +66,20 @@ const personName = (id) => people().find((p) => p.id === id)?.name ?? "";
 
 export function initLedger(opts) {
   ({ db, commit, people, me } = opts);
+  board = makeBoard({ host: $("ledger"), bar: $("ledgerBar"), key: "ledger", ...BOARD, redraw: () => refreshLedger() });
   wire();
   initImport({
     db: () => db, commit, people, me, today, accounts: () => accounts, programs: () => programs, aliases: () => aliases, txns: () => txns,
     refresh: () => refreshLedger(), offer: makeOffer, paintOffer,
   });
-  const shared = { db: () => db, commit, people, today, accounts: () => live(), programs: () => programs, cycles: () => cycles, txns: () => txns, refresh: () => refreshLedger() };
+  const shared = { db: () => db, commit, people, today, accounts: () => live(), programs: () => programs, cycles: () => cycles, txns: () => txns, refresh: () => refreshLedger(), board };
   initTrends(shared);
   initRules(shared);
   initPlan({ ...shared, me });
   initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases, shops: () => shopNames });
   $("me").addEventListener("change", () => { f.who = null; formKey = ""; refreshLedger(); });
   addEventListener("journalchange", () => refreshLedgerParts());
+  board.start();
 }
 export function startLedger() {
   const sub = (name, fn) => unsubs.push(onSnapshot(collection(db, name), (s) => { fn(s.docs.map((d) => ({ id: d.id, ...d.data() }))); refreshLedger(); }));
@@ -99,31 +114,70 @@ export function refreshLedger() {
 // ---------- add spending ----------
 function renderAdd() {
   const host = $("ledgerAdd"), a = acct();
-  if (cardForm || !live().length) return renderCardForm(host);
+  if (cardForm || !live().length) { host.dataset.force = "l"; host.dataset.why = "card"; return renderCardForm(host); }
+  if (host.dataset.why === "card") { delete host.dataset.force; delete host.dataset.why; formKey = ""; }
+  // Which version: small (a "+ Spend" button), medium (amount, where, Save; the rest guessed and shown in
+  // one line) or large (everything). "+ Spend" and "More options" open a bigger one for now (data-force).
+  const view = host.dataset.force || board.sizeOf("add");
   // Drawn once per shape, so new data from the other phone never wipes what's being typed.
-  const key = [who(), f.type, live().map((x) => x.id + x.name).join(","), people().map((p) => p.id + p.name).join(",")].join("|");
-  if (key !== formKey || !$("lgAmt")) {
+  const key = [view, who(), f.type, live().map((x) => x.id + x.name).join(","), people().map((p) => p.id + p.name).join(",")].join("|");
+  if (key !== formKey || (view !== "s" && !$("lgAmt"))) {
     formKey = key;
     const pay = f.type === "payment";
-    host.innerHTML = `
-      <div class="mhead"><h2 id="ledgerAddTitle">${pay ? "Log a card payment" : f.type === "refund" ? "Log a refund" : "Add spending"}</h2>
+    const title = pay ? "Log a card payment" : f.type === "refund" ? "Log a refund" : "Add spending";
+    const amount = `<label>Amount, RM<input type="text" id="lgAmt" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${esc(f.amount)}"></label>`;
+    const where = pay ? "" : `<label>Where<input type="text" id="lgRaw" list="lgShops" autocomplete="off" placeholder="Shop, e.g. Setel or Econsave" value="${esc(f.raw)}"></label>
+      <datalist id="lgShops"></datalist>`;
+    if (view === "s") host.innerHTML = `<div class="lsq">
+        <span class="lsqt"><h2 id="ledgerAddTitle">Add spending</h2><small id="lgLast"></small></span>
+        <button type="button" class="primary" id="lgOpen">＋ Spend</button>
+      </div><p class="msg" id="lgMsg" aria-live="polite"></p>`;
+    else if (view === "m") host.innerHTML = `
+      <div class="mhead"><h2 id="ledgerAddTitle">${title}</h2>${host.dataset.force ? `<button type="button" class="mini" id="lgFew" data-to="">Close</button>` : ""}</div>
+      <div class="two">${amount}${pay ? "" : `<div>${where}</div>`}</div>
+      <p class="lgquick"><span id="lgQuick"></span> <button type="button" class="mini" id="lgAll">More options</button></p>
+      <div class="lwarn" id="lgWarn" role="status" hidden></div>
+      <div class="actions"><button type="button" class="primary" id="lgSave">Save</button></div>
+      <p class="msg" id="lgMsg" aria-live="polite"></p>`;
+    else host.innerHTML = `
+      <div class="mhead"><h2 id="ledgerAddTitle">${title}</h2>
         <label class="mealdate">Day<input type="date" id="lgDate" value="${esc(f.date)}" max="${today()}"></label></div>
       ${whoSeg(pay ? "Paid by" : "Spent by", who(), "lg")}
       <div class="chips" role="group" aria-label="Kind">${Object.entries(KINDS).map(([k, v]) => `<button type="button" class="chip" data-ltype="${k}" aria-pressed="${k === f.type}">${v}</button>`).join("")}</div>
       <div class="two">
-        <label>Amount, RM<input type="text" id="lgAmt" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${esc(f.amount)}"></label>
+        ${amount}
         <label>${pay ? "Card" : "Paid with"}<select id="lgAcct">${live().filter((x) => !pay || x.type === "credit_card").map((x) => `<option value="${x.id}"${x.id === a?.id ? " selected" : ""}>${esc(x.name)}${x.last4 ? ` ··${esc(x.last4)}` : ""}</option>`).join("")}</select></label>
       </div>
-      ${pay ? "" : `<label>Where<input type="text" id="lgRaw" list="lgShops" autocomplete="off" placeholder="Shop, e.g. Setel or Econsave" value="${esc(f.raw)}"></label>
-      <datalist id="lgShops"></datalist>
+      ${pay ? "" : `${where}
       <label>Category <small id="lgWhy"></small><select id="lgCat">${CATS.map((c) => `<option value="${c.id}"${c.id === f.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>`}
       <div class="lwarn" id="lgWarn" role="status" hidden></div>
-      <div class="actions"><button type="button" class="primary" id="lgSave">Save</button><button type="button" class="mini" id="lgCard">＋ Card or wallet</button></div>
+      <div class="actions"><button type="button" class="primary" id="lgSave">Save</button>${host.dataset.force ? `<button type="button" class="mini" id="lgFew" data-to="${board.sizeOf("add") === "s" ? "m" : ""}">Fewer options</button>` : ""}<button type="button" class="mini" id="lgCard">＋ Card or wallet</button></div>
       <p class="msg" id="lgMsg" aria-live="polite"></p>`;
   }
   if ($("lgShops")) $("lgShops").innerHTML = shopOptions(); // refreshed every time: it never disturbs typing
-  paintWhy(); paintWarn();
-  $("lgMsg").textContent = msg;
+  paintWhy(); paintWarn(); paintQuick();
+  if ($("lgMsg")) $("lgMsg").textContent = msg;
+}
+// The medium card's one line of what it will save with (picked for you), and the small card's last save.
+function paintQuick() {
+  const q = $("lgQuick"), last = $("lgLast");
+  if (q) {
+    const a = acct(), c = cat(f.cat), day = f.date === today() ? "today" : shortDate(f.date);
+    q.textContent = [f.type === "payment" ? KINDS.payment : f.type === "refund" ? `${KINDS.refund} · ${c.icon} ${c.name}` : `${c.icon} ${c.name}`,
+      a?.name, day, people().filter((p) => canEdit(p.id)).length > 1 ? personName(who()) : ""].filter(Boolean).join(" · ");
+  }
+  if (last) {
+    const t = [...txns].filter((x) => x.spentBy === me()).sort((x, y) => (y.at ?? 0) - (x.at ?? 0))[0];
+    last.textContent = t ? `Last: ${rm(Math.abs(t.amountSen))} · ${t.type === "payment" ? "card payment" : t.merchant || t.raw || cat(t.cat).name}, ${t.date === today() ? "today" : shortDate(t.date)}` : "Log a coffee, petrol, groceries…";
+  }
+}
+// Opens a bigger Add spending for now ("+ Spend", "More options"), or back to the chosen size.
+function openAdd(size) {
+  const host = $("ledgerAdd");
+  if (size) host.dataset.force = size; else delete host.dataset.force;
+  formKey = ""; renderAdd();
+  if (size) $("lgAmt")?.focus({ preventScroll: true });
+  host.scrollIntoView({ block: "nearest" });
 }
 // The "Where" suggestions: your own shop names first (the statement name beside), then past shops,
 // most recent first, no repeats, leaving out shops you named.
@@ -161,7 +215,7 @@ function paintWarn() {
   el.hidden = !w;
   el.classList.toggle("calm", !!w?.calm);
   el.innerHTML = w ? (w.calm ? esc(w.text) : `<b>Wait — don't pay yet?</b> ${esc(w.text)}`) : "";
-  save.textContent = w && !w.calm ? "Save anyway" : "Save";
+  if (save) save.textContent = w && !w.calm ? "Save anyway" : "Save";
 }
 function warning() {
   const a = acct(), sen = toSen(f.amount);
@@ -198,6 +252,7 @@ async function save() {
   msg = "";
   Object.assign(f, { amount: "", raw: "", cat: "other", catAuto: true, type: "purchase" });
   formKey = "";
+  delete $("ledgerAdd").dataset.force; // "+ Spend" opened it: back to the small card, the toast says it's saved
   refreshLedger();
 }
 function say(text) { msg = text; const el = $("lgMsg"); if (el) el.textContent = text; }
@@ -265,17 +320,33 @@ function renderCards() {
     const v = cycleView(a, { programs, cycles, txns, day });
     const last = Object.values(cycles).filter((c) => c.account === a.id && c.status === "closed").sort((x, y) => y.statement.localeCompare(x.statement))[0];
     const lastReb = last && rebates[last.id];
-    const head = `<div class="lhead"><h2>${esc(a.name)}</h2>${a.last4 ? `<span class="note">··${esc(a.last4)}</span>` : ""}<span class="lbtnrow"><button type="button" class="mini" data-lrules="${a.id}">⚙️ Rules</button><button type="button" class="mini" data-limport="${a.id}">📄 Import statement</button></span></div>
+    const size = board.sizeOf(`card:${a.id}`), cid = `card:${a.id}`;
+    const days = v.daysLeft === 0 ? "statement today" : `${v.daysLeft} ${v.daysLeft === 1 ? "day" : "days"} to statement`;
+    const open = `<section class="panel lcard" id="lcard-${a.id}" data-card="${cid}" data-title="${esc(a.name)}${v.program ? " rebate" : ""}">`;
+    // Small: one tile (tap to see it all). Medium: the gauge and what's next.
+    if (size === "s") return `${open}${board.tile(cid, v.program
+      ? `<small>Rebate · ${esc(a.name)}</small><b class="bdbig">${rm(v.rebate.totalSen, { whole: true })}</b><small>${v.next ? `${rm(v.next.needSen, { whole: true })} to next tier` : "Top tier"}</small><small class="note">${days}</small>`
+      : `<small>${esc(a.name)} · next statement</small><b class="bdbig">${rm(v.balanceSen, { whole: true })}</b><small class="note">${days}</small>`, a.name)}</section>`;
+    const head = `<div class="lhead"><h2>${esc(a.name)}</h2>${a.last4 ? `<span class="note">··${esc(a.last4)}</span>` : ""}<span class="lbtnrow"><button type="button" class="mini" data-lrules="${a.id}">⚙️ Rules</button><button type="button" class="mini" data-limport="${a.id}">📄 Import statement</button>${board.less(cid)}</span></div>
       <p class="lcycle">${shortDate(v.cycle.start)} – ${shortDate(v.cycle.statement)} · <b>${v.daysLeft === 0 ? "statement today" : `${v.daysLeft} ${v.daysLeft === 1 ? "day" : "days"} to statement`}</b> · due ${shortDate(v.cycle.due)}</p>
       ${last ? `<p class="note llast">Last statement ${shortDate(last.statement)}: <b>${last.balanceSen == null ? "–" : rm(last.balanceSen)}</b>${lastReb ? ` · rebate <b>${rm(lastReb.totalSen)}</b> (${esc(lastReb.tierLabel)} tier)` : ""} ✓</p>` : ""}`;
-    if (!v.program) return `<section class="panel lcard" id="lcard-${a.id}" data-title="${esc(a.name)}">${head}
+    if (!v.program) return `${open}${head}
       <div class="stats"><div class="stat"><small>Next statement so far</small><b>${rm(v.balanceSen)}</b></div></div>
       <p class="note">No rebate rules for this card yet. Tap ⚙️ Rules to add them.</p></section>`;
     const p = v.program, r = v.rebate, top = p.tiers.at(-1).minSen;
     const max = Math.max(top * 1.25, v.balanceSen * 1.05, 1), at = (sen) => Math.max(0, Math.min(100, (sen / max) * 100));
     // At the 0% tier, show what the first paying tier would give, so the gap is real money.
     const gs = withEligible(r.tier > 0 || !p.tiers[1] ? r : computeRebate(p, { txns: v.txns, balanceSen: p.tiers[1].minSen }));
-    return `<section class="panel lcard" id="lcard-${a.id}" data-title="${esc(a.name)} rebate">${head}
+    if (size === "m") return `${open}${head}
+      <div class="stats">
+        <div class="stat"><small>Next statement so far</small><b>${rm(v.balanceSen, { whole: true })}</b></div>
+        <div class="stat"><small>Rebate so far</small><b>${rm(r.totalSen, { whole: true })}</b></div>
+        <span class="pill" style="--c:${tierColor(p, r.tier)}">${r.tierLabel} tier</span>
+      </div>
+      <div class="lbarbg"><i style="width:${at(v.balanceSen)}%;--c:${tierColor(p, r.tier)}"></i></div>
+      <p class="lnext">${v.next ? `<b>${rm(v.next.needSen)}</b> more to reach ${v.next.label}.` : "Top tier. Nice."} ${board.more(cid, "Caps and safe to pay")}</p>
+    </section>`;
+    return `${open}${head}
       <div class="stats">
         <div class="stat"><small>Next statement so far</small><b>${rm(v.balanceSen, { whole: true })}</b><i>.${String(Math.abs(v.balanceSen) % 100).padStart(2, "0")}</i></div>
         <div class="stat"><small>Rebate so far</small><b>${rm(r.totalSen, { whole: true })}</b></div>
@@ -311,7 +382,8 @@ function renderList() {
   if (edit && $("leForm")) { if (txns.some((x) => x.id === edit.id)) return; edit = null; }
   const list = [...txns].sort((a, b) => b.date.localeCompare(a.date) || (b.at ?? 0) - (a.at ?? 0));
   const names = Object.fromEntries(accounts.map((a) => [a.id, a.name])), nicks = nickMap(shopNames);
-  host.innerHTML = `<h2>Recent</h2><div id="lgOffer"></div>${list.length ? `<div class="llist">${list.slice(0, shown).map((t) => {
+  const size = board.sizeOf("recent"), shown = RECENT_BY_SIZE[size] + extra;
+  host.innerHTML = `<div class="lhead"><h2>${size === "s" ? "Last saved" : "Recent"}</h2>${board.less("recent")}</div><div id="lgOffer"></div>${list.length ? `<div class="llist">${list.slice(0, shown).map((t) => {
     const c = cat(t.cat), credit = t.amountSen < 0, open = openRow === t.id, name = t.merchant || t.raw || c.name;
     if (open && edit?.id === t.id) return `<div class="lrow open editing" data-row="${t.id}">${editForm(t)}</div>`;
     const glow = flashed?.id === t.id && Date.now() - flashed.at < FLASH_MS;
@@ -484,7 +556,7 @@ function wire() {
     if (id === "lgRaw") {
       f.raw = ev.target.value;
       if (f.catAuto) { const r = autoCat(); f.cat = r.cat === "payment" ? "other" : r.cat; if ($("lgCat")) $("lgCat").value = f.cat; }
-      paintWhy();
+      paintWhy(); paintQuick();
     }
     if (id === "lcStmt") paintCardForm();
   });
@@ -501,6 +573,9 @@ function wire() {
     const b = ev.target.closest("button"); if (!b) return;
     if (b.dataset.ltype) { f.type = b.dataset.ltype; msg = ""; formKey = ""; renderAdd(); }
     if (b.id === "lgSave") save();
+    if (b.id === "lgOpen") { msg = ""; openAdd("m"); }
+    if (b.id === "lgAll") openAdd("l");
+    if (b.id === "lgFew") openAdd(b.dataset.to || null);
     if (b.id === "lgCard") { cardForm = true; msg = ""; renderAdd(); $("lcName")?.focus(); }
     if (b.id === "lcSave") saveCard();
     if (b.id === "lcCancel") { cardForm = false; add.innerHTML = ""; renderAdd(); }
@@ -536,7 +611,7 @@ function wire() {
   $("ledgerList").addEventListener("click", async (ev) => {
     const b = ev.target.closest("button"); if (!b) return;
     if (b.dataset.lopen) { edit = null; openRow = openRow === b.dataset.lopen ? null : b.dataset.lopen; renderList(); }
-    if (b.id === "lgMore") { shown += RECENT; renderList(); }
+    if (b.id === "lgMore") { extra += RECENT; renderList(); }
     if (b.dataset.ldel) removeTxn(b.dataset.ldel);
     if (b.dataset.ledit) startEdit(b.dataset.ledit);
     if (b.dataset.letype && edit) { edit.type = b.dataset.letype; b.parentElement.querySelectorAll("[data-letype]").forEach((c) => c.setAttribute("aria-pressed", String(c === b))); }
