@@ -247,7 +247,7 @@ function tracker(plan, bucket) {
   const b = bucketsOf(plan).find((x) => x.id === bucket);
   const back = `<button type="button" class="mini" data-ls="unshop">← ${b ? esc(b.name) : "All spending"}</button>`;
   if (!s.n) return `${back}<p class="note">Nothing at ${esc(s.name)}${st.who ? " for this person" : ""}.</p>`;
-  const thisMonth = s.recent.at(-1).sen, big = Math.max(...s.recent.map((m) => m.sen), 1), diff = thisMonth - s.perMonthSen;
+  const nowSen = s.recent.at(-1).sen, big = Math.max(...s.recent.map((m) => m.sen), 1), diff = nowSen - s.perMonthSen;
   return `${back}
     <div class="lsnamerow"><h3 class="lsname">${esc(s.name)}${nickTag(s.key)}</h3><button type="button" class="mini" data-ls="edit">✎ Edit</button></div>
     <div class="stats">
@@ -256,7 +256,7 @@ function tracker(plan, bucket) {
       <div class="stat"><small>a usual visit</small><b class="sm">${rm(s.perVisitSen)}</b></div>
     </div>
     <p class="note">${times(s.n)} since ${shortDate(s.first)} ${esc(s.first.slice(0, 4))} · last ${shortDate(s.last)}${s.n > 1 ? ` · ${rm(s.lowSen)} to ${rm(s.highSen)} a visit` : ""}.</p>
-    ${s.months.length > 1 ? `<p class="note">This month so far: <b>${rm(thisMonth, { whole: true })}</b>, ${diff === 0 ? "the same as" : `${rm(Math.abs(diff), { whole: true })} ${diff > 0 ? "more than" : "less than"}`} a usual month.</p>` : ""}
+    ${s.months.length > 1 ? `<p class="note">This month so far: <b>${rm(nowSen, { whole: true })}</b>, ${diff === 0 ? "the same as" : `${rm(Math.abs(diff), { whole: true })} ${diff > 0 ? "more than" : "less than"}`} a usual month.</p>` : ""}
     <h3 class="lth">Last 12 months</h3>
     <div class="lsbars" role="img" aria-label="${s.recent.map((m) => `${monthName(m.month)} ${rm(m.sen, { whole: true })}`).join(", ")}">${s.recent.map((m) => `<div class="lsbar${m.month === now ? " now" : ""}">
       <i style="height:${m.sen > 0 ? Math.max(3, Math.round((m.sen / big) * 100)) : 0}%"></i><small>${esc(monthName(m.month, { short: true }))}</small>
