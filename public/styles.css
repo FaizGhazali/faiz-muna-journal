@@ -113,7 +113,7 @@ textarea { resize: vertical; min-height: 84px; line-height: 1.5 }
 .seg input:focus-visible + label, button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px }
 input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none }
 button { font: 700 15px var(--body); cursor: pointer; border-radius: 99px; padding: 11px 18px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink);
-  transition: transform .12s, background-color .15s, border-color .15s, box-shadow .15s }
+  transition: transform .15s, background-color .25s, border-color .25s, color .25s, box-shadow .25s }
 button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)) }
 button:active:not(:disabled) { transform: scale(.97) }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); box-shadow: 0 8px 18px -8px var(--accent) }
@@ -724,7 +724,7 @@ input[type=search] { width: 100%; min-width: 0; font: 16px var(--body); color: v
 .gsheet { border: 1px solid var(--line); border-radius: 28px; box-shadow: var(--shadow-lg); padding: 0; width: min(440px, calc(100vw - 32px)); background: var(--surface); color: var(--ink) }
 @media (max-width: 600px) { .gsheet { margin: auto auto max(16px, env(safe-area-inset-bottom, 0px)); max-width: none } }
 .gsheet::backdrop { background: var(--scrim); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px) }
-.gsheet[open] { animation: gup .25s ease-out }
+.gsheet[open] { animation: gup .4s cubic-bezier(.25, .8, .25, 1) }
 .gsin { display: grid; gap: 12px; padding: 20px }
 .gsin p { margin: 0; line-height: 1.5 }
 .gshead { display: flex; gap: 14px; align-items: center }
@@ -1574,7 +1574,7 @@ html.bd-locked { overflow: hidden }
 .lboard [data-card].bd-pop { position: fixed; z-index: 80; inset: 0; margin: auto; height: fit-content; width: min(560px, calc(100vw - 32px));
   max-height: min(86vh, 900px); overflow: auto; overscroll-behavior: contain; border-radius: 28px; box-shadow: var(--shadow-lg); outline: none }
 /* cozyIn stays in the list: a card's page entrance (cozyIn, below) would otherwise replay when bd-popin goes, so it popped out twice. */
-.lboard [data-card].bd-pop.bd-popin { animation: cozyIn .42s cubic-bezier(.2, .8, .3, 1) both, gup .25s ease-out }
+.lboard [data-card].bd-pop.bd-popin { animation: cozyIn .42s cubic-bezier(.2, .8, .3, 1) both, gup .4s cubic-bezier(.25, .8, .25, 1) }
 @media (max-width: 600px) { .lboard [data-card].bd-pop { top: auto; bottom: max(16px, env(safe-area-inset-bottom, 0px)) } }
 .bd-pop > .fold, .bd-pop > .bd-ctl { display: none }
 .bd-less { margin-left: auto }

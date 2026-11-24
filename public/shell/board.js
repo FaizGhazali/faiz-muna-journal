@@ -155,7 +155,7 @@ export function makeBoard({ host, bar, key, defaults, sizes = {}, extra = "", re
       back = b; peek.clear(); peek.add(id); apply(); redraw(); apply();
       const el = find(id); if (el) {
         // Slides up once; later redraws (a bill ticked as paid) don't replay it.
-        el.classList.add("bd-popin"); setTimeout(() => el.classList.remove("bd-popin"), 300); el.scrollTop = 0; (el.querySelector(".bd-less") || el).focus({ preventScroll: true }); }
+        el.classList.add("bd-popin"); setTimeout(() => el.classList.remove("bd-popin"), 450); el.scrollTop = 0; (el.querySelector(".bd-less") || el).focus({ preventScroll: true }); }
     }
     if (a === "less") closePop();
   }
