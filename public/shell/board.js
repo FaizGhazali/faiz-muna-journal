@@ -149,7 +149,9 @@ export function makeBoard({ host, bar, key, defaults, sizes = {}, redraw, sync =
     if (a === "up" || a === "down") { keep(move(layoutNow(), id, a === "up" ? -1 : 1)); settle(id); }
     if (a === "size") { keep(resize(layoutNow(), id, b.dataset.to)); peek.delete(id); redraw(); settle(id); }
     if (a === "peek") {
-      back = b; peek.clear(); peek.add(id); redraw(); apply();
+      // Float it out first, then draw it large: drawn while still in its small slot, a chart (Spending trends)
+      // came out tile-wide and was redrawn once the sheet had its real width, so it seemed to pop twice.
+      back = b; peek.clear(); peek.add(id); apply(); redraw(); apply();
       const el = find(id); if (el) {
         // Slides up once; later redraws (a bill ticked as paid) don't replay it.
         el.classList.add("bd-popin"); setTimeout(() => el.classList.remove("bd-popin"), 300); el.scrollTop = 0; (el.querySelector(".bd-less") || el).focus({ preventScroll: true }); }
