@@ -306,10 +306,20 @@ progress { width: 100%; height: 8px; accent-color: var(--accent) }
 body:has(#loading:not([hidden])) #landing, body:has(#newpass:not([hidden])) #landing, body:has(#setup:not([hidden])) #landing, body:has(#app:not([hidden])) #landing { display: none }
 #login { position: relative }
 .tagline { margin: -6px 0 0; font: 500 17px/1.3 var(--display); color: var(--muted) }
-.scrollhint { position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); border: 0; background: none; color: var(--muted); font-weight: 400; white-space: nowrap }
+/* Under the sign-in form: a quiet "Explore development progress" pill above the "See what it does ↓" hint. */
+.herohints { position: absolute; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: grid; justify-items: center; gap: 4px; width: max-content; max-width: calc(100% - 32px) }
+.scrollhint { border: 0; background: none; color: var(--muted); font-weight: 400; white-space: nowrap }
 .scrollhint span { display: inline-block; animation: nudge 1.8s ease-in-out infinite }
 @keyframes nudge { 50% { transform: translateY(5px) } }
-@media (max-height: 560px) { .scrollhint { position: static; transform: none; justify-self: center } }
+.devgo { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 99px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent); backdrop-filter: blur(6px); color: var(--muted); font-size: 13px; font-weight: 600; box-shadow: none;
+  transition: color .2s, border-color .2s, background .2s }
+.devgo:hover, .devgo:focus-visible { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--surface) }
+.devgo-dots { display: inline-grid; grid-template-columns: repeat(3, 5px); gap: 2px }
+.devgo-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); opacity: .3 }
+.devgo-dots i:nth-child(2) { opacity: .6 }
+.devgo-dots i:nth-child(3) { opacity: 1 }
+@media (max-height: 560px) { .herohints { position: static; transform: none; justify-self: center; margin-top: 8px } }
 
 #landing { max-width: 1040px; margin: 0 auto; padding-bottom: 48px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
@@ -411,6 +421,50 @@ details { border-bottom: 1px solid var(--line); padding: 10px 0 }
 summary { cursor: pointer; font-weight: 700 }
 details p { margin: 8px 0 0; color: var(--muted) }
 .cta { justify-items: start; border-top: 0 }
+
+/* Development progress (#devprog, shell/devprogress.js). Module colours reuse the chart slots --s1…--s5. */
+.devprog { max-width: none }
+.devprog .eyebrow { color: var(--accent); margin-bottom: -6px }
+.devprog h3 { margin-top: 12px }
+.dp-wheel { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 12px 32px; align-items: center }
+@media (max-width: 640px) { .dp-wheel { grid-template-columns: minmax(0, 1fr) } .dw { max-width: 320px; justify-self: center; width: 100% } }
+.dw svg { display: block; width: 100%; height: auto; overflow: visible }
+.dw-seg { cursor: pointer; outline: none }
+.dw-track { fill: color-mix(in srgb, var(--c) 12%, transparent) }
+.dw-fill { fill: var(--c); opacity: .82; transition: opacity .2s }
+.dw-seg text { font: 600 13px var(--body); fill: var(--muted) }
+.dw-seg:hover .dw-fill, .dw-seg.on .dw-fill { opacity: 1 }
+.dw-seg.on text, .dw-seg:focus-visible text { fill: var(--ink); font-weight: 700 }
+.dw-seg:focus-visible .dw-track { stroke: var(--accent); stroke-width: 2 }
+.dw svg:has(.dw-seg.on) .dw-seg:not(.on) .dw-fill { opacity: .35 }
+.dw-big { font: 650 34px var(--display); fill: var(--ink) }
+.dw-small { font: 600 12px var(--body); fill: var(--muted) }
+.dw-info { display: grid; gap: 6px; align-content: center; min-height: 120px }
+.dw-info p { margin: 0 }
+.dw-info h3 { margin: 0; display: flex; align-items: center; gap: 8px; font: 650 22px var(--display) }
+.dp-lead { font-size: 17px }
+.dp-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); display: inline-block }
+.dp-last { font-style: italic }
+.dg { position: relative; display: grid; grid-template-columns: 28px repeat(var(--weeks, 17), minmax(0, 1fr)); grid-template-rows: 18px repeat(7, auto);
+  gap: 3px; max-width: calc(28px + var(--weeks, 17) * 21px); font-size: 11px; color: var(--muted) }
+.dg-m { display: contents }
+.dg-m span { grid-row: 1; white-space: nowrap; overflow: visible }
+.dg > span { grid-column: 1; align-self: center; line-height: 1 }
+.dg-d { display: block; aspect-ratio: 1; border-radius: 50%; margin: 12%; transition: transform .15s }
+.dg-d[data-l="0"] { background: var(--line) }
+.dg-d[data-l="1"] { background: color-mix(in srgb, var(--accent) 35%, var(--surface)) }
+.dg-d[data-l="2"] { background: color-mix(in srgb, var(--accent) 58%, var(--surface)) }
+.dg-d[data-l="3"] { background: color-mix(in srgb, var(--accent) 80%, var(--surface)) }
+.dg-d[data-l="4"] { background: var(--accent) }
+.dg-d.unknown { background: none; border: 1.5px dashed color-mix(in srgb, var(--muted) 45%, transparent) }
+.dg-d.future { visibility: hidden }
+.dg-d.tracked, .dg-d.unknown { cursor: pointer }
+.dg-d.on { transform: scale(1.35); outline: 2px solid var(--ink); outline-offset: 1px }
+.dg-tip { position: absolute; z-index: 2; transform: translate(-50%, calc(-100% - 8px)); display: grid; gap: 1px; padding: 6px 10px; border-radius: 10px;
+  background: var(--ink); color: var(--bg); font-size: 12px; line-height: 1.35; white-space: nowrap; pointer-events: none; box-shadow: var(--shadow) }
+.dg-key { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; max-width: calc(28px + var(--weeks, 17) * 21px); font-size: 12px }
+.dg-key span { display: inline-flex; align-items: center; gap: 3px }
+.dg-key .dg-d { width: 11px; margin: 0; cursor: default }
 
 @media (prefers-reduced-motion: reduce) { .scrollhint span { animation: none } #landing *, #landing *::before { transition: none !important } }
 

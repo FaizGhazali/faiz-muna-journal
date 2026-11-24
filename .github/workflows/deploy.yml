@@ -21,6 +21,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the whole history: the landing page's Development progress is made from it
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Development progress (public/devlog.json from the git history)
+        run: node tools/devlog.js
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}

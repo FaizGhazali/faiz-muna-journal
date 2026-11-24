@@ -4,3 +4,6 @@ node_modules/
 .test/
 __pycache__/
 *.pyc
+
+# Made from the git history by tools/devlog.js on every deploy
+public/devlog.json

@@ -1,6 +1,7 @@
 // Landing story under the sign-in form. Each .scene gets --p from 0 to 1 while its top travels one
 // screen up the page, so every animation starts as it scrolls in and is finished one scroll later.
 // Inside a scene: [data-at] gets .on once --p passes that value; [data-from][data-to] counts a number.
+import { devProgress } from "./devprogress.js";
 const landing = document.getElementById("landing");
 const scenes = [...landing.querySelectorAll(".scene")];
 const still = matchMedia("(prefers-reduced-motion: reduce)");
@@ -44,6 +45,8 @@ queue();
 
 const smooth = () => (still.matches ? "auto" : "smooth");
 document.getElementById("tourGo").addEventListener("click", () => scenes[0].scrollIntoView({ behavior: smooth() }));
+document.getElementById("devGo").addEventListener("click", () => document.getElementById("devprog").scrollIntoView({ behavior: smooth() }));
+devProgress();
 document.getElementById("tourBack").addEventListener("click", () => {
   scrollTo({ top: 0, behavior: smooth() });
   setTimeout(() => document.getElementById("password").focus({ preventScroll: true }), still.matches ? 0 : 500);
