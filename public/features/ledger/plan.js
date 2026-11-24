@@ -21,6 +21,9 @@ const SPARE = [2, 5, 6];
 let ctx, plan = null, commitments = [], paid = {};
 // What's open: "plan" (editing the plan), "bill:<id>" / "bill:new" (a bill form), manage (all bills listed).
 let editing = null, manage = false, sumMsg = "", billMsg = "";
+// The bill row just saved glows (great-ux: stay put and show the change); kept so a live redraw carries it on.
+const GLOW_MS = 1800;
+let glow = null; // { id, at }
 
 const colourOf = (buckets) => {
   const out = {}; let spare = 0;
@@ -173,7 +176,7 @@ function bills(v, size = "l") {
     ${due.length ? `<div class="lpbl">${due.slice(0, BILLS_M).map((r) => billRow(r, people)).join("")}</div>` : `<p class="note">${list.length ? "Every bill this month is paid." : "No bills yet."}</p>`}
     <p class="note">${due.length > BILLS_M ? `And ${due.length - BILLS_M} more to pay. ` : ""}${ctx.board.more("bills", list.length - due.length ? `All bills, ${list.length - due.length} paid` : "All bills")}</p>
     <p class="msg" aria-live="polite">${esc(billMsg)}</p>`;
-  const form = editing?.startsWith("bill:") ? billForm(editing.slice(5)) : "";
+  const form = editing === "bill:new" ? billForm("new") : ""; // editing a bill opens in its own row (manageList)
   return `<div class="lhead"><h2 id="lpbTitle">Bills this month</h2><span class="note">${list.length ? (v.toPaySen ? `${rm(v.toPaySen)} still to pay` : "All paid ✓") : ""}</span>
       <span class="lbtnrow">${commitments.length ? `<button type="button" class="mini" data-lp="manage" aria-pressed="${manage}">All bills</button>` : ""}<button type="button" class="mini" data-lp="new-bill">＋ Add a bill</button>${ctx.board.less("bills")}</span></div>
     ${form}
@@ -202,7 +205,8 @@ function billRow(r, people) {
 function manageList() {
   const pay = payOf(plan), m = monthOf(ctx.today(), pay), cal = ctx.today().slice(0, 7), bs = Object.fromEntries(bucketsOf(plan).map((b) => [b.id, b.name]));
   const sorted = [...commitments].sort((a, b) => Number(liveIn(b, m, pay)) - Number(liveIn(a, m, pay)) || a.name.localeCompare(b.name));
-  return `<div class="lpbl">${sorted.map((c) => `<div class="lpb">
+  const lit = (id) => glow?.id === id && Date.now() - glow.at < GLOW_MS;
+  return `<div class="lpbl">${sorted.map((c) => editing === `bill:${c.id}` ? billForm(c.id) : `<div class="lpb${lit(c.id) ? " lflash" : ""}" data-bill="${c.id}"${lit(c.id) ? ` style="animation-delay:-${Date.now() - glow.at}ms"` : ""}>
     <span class="lpbn"><b>${esc(c.name)}</b><small>${esc(bs[c.bucket] ?? "")} · due ${c.dueDay}${c.endMonth ? ` · final ${esc(monthName(c.endMonth))}` : ""}${!liveIn(c, m, pay) ? (c.endMonth && c.endMonth < cal ? " · finished" : ` · starts ${esc(monthName(c.startMonth))}`) : ""}</small></span>
     <span class="lpba">${rm(c.amountSen)}</span>
     <button type="button" class="mini" data-lp="edit-bill" data-id="${c.id}">Edit</button>
@@ -238,6 +242,7 @@ async function saveBill(id) {
   const old = commitments.find((x) => x.id === id), now = Date.now(), db = ctx.db();
   const ref = old ? doc(db, "ledgerCommitments", id) : doc(collection(db, "ledgerCommitments"));
   editing = null; clearDirty(); billMsg = `${old ? "Saved" : "Added"} ${r.c.name}.`;
+  if (old) glow = { id, at: now };
   await ctx.commit(() => setDoc(ref, { ...r.c, created: old?.created ?? now, updated: now }), billMsg);
   renderPlan();
 }
@@ -286,9 +291,17 @@ function click(b) {
   if (a === "edit-plan") { editing = "plan"; sumMsg = ""; renderPlan(); paintSum(); }
   if (a === "reset-plan") pctInputs().forEach((i, n) => { i.value = DEFAULT_BUCKETS[n]?.pct ?? 0; paintSum(); });
   if (a === "save-plan") savePlan();
-  if (a === "cancel") { editing = null; clearDirty(); renderPlan(); }
+  if (a === "cancel") {
+    const was = editing?.startsWith("bill:") && editing.slice(5);
+    editing = null; clearDirty(); renderPlan();
+    if (was) document.querySelector(`#ledgerPlan [data-bill="${was}"]`)?.scrollIntoView({ block: "nearest" }); // back where it was
+  }
   if (a === "new-bill") { editing = "bill:new"; manage = false; billMsg = ""; clearDirty(); renderPlan(); $("lpbName")?.focus(); }
-  if (a === "edit-bill") { editing = `bill:${id}`; billMsg = ""; clearDirty(); renderPlan(); }
+  if (a === "edit-bill") {
+    editing = `bill:${id}`; billMsg = ""; clearDirty(); renderPlan();
+    const f = document.querySelector('#ledgerPlan [data-form="bill"]');
+    f?.scrollIntoView({ block: "nearest", behavior: "smooth" }); $("lpbName")?.focus({ preventScroll: true });
+  }
   if (a === "manage") { manage = !manage; editing = null; clearDirty(); renderPlan(); }
   if (a === "save-bill") saveBill(id);
   if (a === "del-bill") removeBill(id);

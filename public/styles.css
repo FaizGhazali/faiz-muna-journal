@@ -1528,6 +1528,7 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 .lpbn small { color: var(--muted); font-size: 13px }
 .lpba { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right }
 .lpbform { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg) }
+.lpbl > .lpbform { margin: 8px 0 } /* editing a bill opens in its own row */
 .lpchart { width: 100%; height: auto; display: block }
 .lpchart .axis { stroke: var(--line); stroke-width: 1 }
 .lpchart .bar { fill: var(--s3) }
@@ -1606,9 +1607,9 @@ html.bd-locked { overflow: hidden }
 .ledform { display: grid; gap: 12px }
 .ledform .ledtop { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px }
 .ledform .msg:empty { display: none }
-.lrow.lflash { animation: lflash 1.8s ease-out }
+.lrow.lflash, .lpb.lflash { animation: lflash 1.8s ease-out }
 @keyframes lflash { 0%, 35% { background: var(--good-soft); box-shadow: inset 3px 0 0 var(--good) } 100% { background: transparent; box-shadow: inset 3px 0 0 transparent } }
-@media (prefers-reduced-motion: reduce) { .lrow.lflash { animation: none; background: var(--good-soft) } }
+@media (prefers-reduced-motion: reduce) { .lrow.lflash, .lpb.lflash { animation: none; background: var(--good-soft) } }
 
 /* ---------- Cozy finish ---------- */
 /* Cards drift up softly when a page opens (the view switching from hidden restarts it). */
