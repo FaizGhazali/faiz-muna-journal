@@ -1496,7 +1496,8 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 html.bd-locked { overflow: hidden }
 .lboard [data-card].bd-pop { position: fixed; z-index: 80; inset: 0; margin: auto; height: fit-content; width: min(560px, calc(100vw - 32px));
   max-height: min(86vh, 900px); overflow: auto; overscroll-behavior: contain; border-radius: 28px; box-shadow: var(--shadow-lg); outline: none }
-.lboard [data-card].bd-pop.bd-popin { animation: gup .25s ease-out }
+/* cozyIn stays in the list: a card's page entrance (cozyIn, below) would otherwise replay when bd-popin goes, so it popped out twice. */
+.lboard [data-card].bd-pop.bd-popin { animation: cozyIn .42s cubic-bezier(.2, .8, .3, 1) both, gup .25s ease-out }
 @media (max-width: 600px) { .lboard [data-card].bd-pop { top: auto; bottom: max(16px, env(safe-area-inset-bottom, 0px)) } }
 .bd-pop > .fold, .bd-pop > .bd-ctl { display: none }
 .bd-less { margin-left: auto }
