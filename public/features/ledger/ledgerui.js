@@ -14,10 +14,11 @@ import { initImport, startImport, renderImport } from "./import.js";
 import { initTrends, renderTrends } from "./trends.js";
 import { initRules, startRules, renderRules } from "./rules.js";
 import { ensureSeeds, addAccount, saveCycle } from "./seeds.js";
-import { initPlan, planSubs, renderPlan, planState } from "./plan.js";
+import { initPlan, planSubs, renderPlan, planState, billEntry } from "./plan.js";
 import { payOf, monthOf, monthRange, addMonths } from "../../logic/moneyplan.js";
 import { initSpend, renderSpend } from "./spend.js";
 import { initAnalytics, renderAnalytics, ANALYTICS } from "./analytics.js";
+import { initDocs, openDocs, refreshDocs, resumeDocs, afterSignIn, docsOn } from "./docsui.js";
 import { makeBoard } from "../../shell/board.js";
 import { boardPrefs } from "../../shell/prefs.js";
 
@@ -82,6 +83,8 @@ export function initLedger(opts) {
   initRules(shared);
   initPlan({ ...shared, me, planChanged: () => renderAnalytics() });
   initAnalytics(shared);
+  initDocs({ db: () => db, commit, me });
+  afterSignIn();
   initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases, shops: () => shopNames });
   $("me").addEventListener("change", () => { f.who = null; formKey = ""; refreshLedger(); });
   addEventListener("journalchange", () => refreshLedgerParts());
@@ -109,6 +112,7 @@ export function refreshLedger() {
   renderPlan();
   renderSpend();
   renderAnalytics();
+  refreshDocs(findEntry); resumeDocs(findEntry);
   renderAdd();
   renderImport();
   renderRules();
@@ -420,18 +424,32 @@ function renderList() {
     return `<div class="lrow${open ? " open" : ""}${glow ? " lflash" : ""}" data-row="${t.id}"${glow ? ` style="animation-delay:-${Date.now() - flashed.at}ms"` : ""}>
       <button type="button" class="lopen" data-lopen="${t.id}" aria-expanded="${open}">
         <span class="lic" aria-hidden="true">${c.icon}</span>
-        <span class="lmain"><b>${esc(name)}${t.type !== "payment" && nicks[shopKey(t)] ? ` <span class="lsnick">🏷 ${esc(nicks[shopKey(t)])}</span>` : ""}</b><small>${shortDate(t.date)} · ${esc(personName(t.spentBy))} · ${esc(names[t.account] ?? "")}${t.type === "payment" ? "" : ` · ${esc(c.name)}`}${t.reconciled ? " · ✓ statement" : ""}</small></span>
+        <span class="lmain"><b>${esc(name)}${t.type !== "payment" && nicks[shopKey(t)] ? ` <span class="lsnick">🏷 ${esc(nicks[shopKey(t)])}</span>` : ""}</b><small>${shortDate(t.date)} · ${esc(personName(t.spentBy))} · ${esc(names[t.account] ?? "")}${t.type === "payment" ? "" : ` · ${esc(c.name)}`}${t.reconciled ? " · ✓ statement" : ""}${t.docs?.length ? ` · 📎${t.docs.length > 1 ? ` ${t.docs.length}` : ""}` : ""}</small></span>
         <span class="lamt${credit ? " cr" : ""}">${rm(Math.abs(t.amountSen))}${credit ? " CR" : ""}</span>
       </button>
-      ${open && !own(t) ? `<div class="ledit">${t.raw && t.raw !== norm(name) ? `<p class="note">On the statement: ${esc(t.raw)}</p>` : ""}${viewOnly(t.spentBy, "spending")}</div>` : open ? `<div class="ledit">
+      ${open && !own(t) ? `<div class="ledit">${t.raw && t.raw !== norm(name) ? `<p class="note">On the statement: ${esc(t.raw)}</p>` : ""}${viewOnly(t.spentBy, "spending")}${docsOn() && t.docs?.length ? `<div class="actions">${docsBtn(t)}</div>` : ""}</div>` : open ? `<div class="ledit">
         ${t.type === "payment" ? "" : `<label>Category<select data-lcat="${t.id}">${CATS.map((x) => `<option value="${x.id}"${x.id === t.cat ? " selected" : ""}>${x.icon} ${esc(x.name)}</option>`).join("")}</select></label>`}
         ${t.raw && t.raw !== norm(name) ? `<p class="note">On the statement: ${esc(t.raw)}</p>` : ""}
-        <div class="actions"><button type="button" class="mini" data-ledit="${t.id}">✏️ Edit</button><button type="button" class="mini" data-ldel="${t.id}">Delete</button></div>
+        <div class="actions"><button type="button" class="mini" data-ledit="${t.id}">✏️ Edit</button>${docsOn() ? docsBtn(t) : ""}<button type="button" class="mini" data-ldel="${t.id}">Delete</button></div>
       </div>` : ""}
     </div>`;
   }).join("")}</div>${list.length > shown ? `<button type="button" class="mini" id="lgMore">Show more</button>` : ""}`
     : `<p class="note">Nothing yet. What you add shows here.</p>`}`;
   paintOffer("lgOffer");
+}
+
+// ---------- receipts and documents (docsui.js) ----------
+const docsBtn = (t) => `<button type="button" class="mini" data-ldocs="${t.id}">📎 ${t.docs?.length ? `${t.docs.length} ${t.docs.length === 1 ? "file" : "files"}` : t.type === "payment" ? "Add proof" : "Add receipt"}</button>`;
+function txnEntry(t) {
+  const name = t.type === "payment" ? `Card payment ${accounts.find((a) => a.id === t.account)?.name ?? ""}`.trim() : t.merchant || t.raw || cat(t.cat).name;
+  return { coll: "ledgerTxns", id: t.id, kind: t.type, date: t.date, what: name, amountSen: Math.abs(t.amountSen), person: personName(t.spentBy),
+    docs: t.docs, canEdit: own(t), title: `${name} · ${rm(Math.abs(t.amountSen))} · ${shortDate(t.date)}` };
+}
+// The entry behind a 📎 sheet, from the live data (null when it's gone).
+function findEntry(coll, id) {
+  if (coll === "ledgerTxns") { const t = txns.find((x) => x.id === id); return t ? txnEntry(t) : null; }
+  if (coll === "ledgerPaid") { const { paid, commitments } = planState(), p = paid[id], c = p && commitments.find((x) => x.id === p.commitment); return c ? billEntry(p, c) : null; }
+  return null;
 }
 
 // ---------- fix an item in place ----------
@@ -652,6 +670,7 @@ function wireRest() {
   });
   $("ledgerList").addEventListener("click", async (ev) => {
     const b = ev.target.closest("button"); if (!b) return;
+    if (b.dataset.ldocs) { const t = txns.find((x) => x.id === b.dataset.ldocs); if (t) openDocs(txnEntry(t)); }
     if (b.dataset.lopen) { edit = null; openRow = openRow === b.dataset.lopen ? null : b.dataset.lopen; renderList(); }
     if (b.id === "lgMore") { extra += RECENT; renderList(); }
     if (b.dataset.ldel) removeTxn(b.dataset.ldel);

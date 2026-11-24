@@ -6,6 +6,7 @@
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "../../core/fs.js";
 import { $, esc, lastUsed } from "../../core/util.js";
 import { confirmDelete } from "../../core/confirm.js";
+import { openDocs, docsOn } from "./docsui.js";
 import { rm, toSen, shortDate } from "../../logic/ledger.js";
 import {
   DEFAULT_BUCKETS, DEFAULT_PAY_DAY, PAY_DAY_MAX, bucketsOf, checkPlan, planView, checkCommitment, paidRecord, paidKey,
@@ -177,6 +178,7 @@ function billRow(r, people) {
     <span class="lpdue ok">✓ ${shortDate(p.date)}</span>
     <span class="lpbn"><b>${esc(c.name)}</b><small>${p.source === "statement" ? `<span class="lptag ok">On statement</span>` : `<span class="lptag">Typed</span>`}${people[p.by] ? ` by ${esc(people[p.by])}` : ""}${left ? ` · ${left}` : ""}</small></span>
     <span class="lpba">${rm(r.amountSen)}</span>
+    ${docsOn() ? `<button type="button" class="mini" data-lp="docs" data-id="${c.id}" aria-label="Receipts for ${esc(c.name)}">📎${p.docs?.length ? ` ${p.docs.length}` : ""}</button>` : ""}
     <button type="button" class="mini" data-lp="unpay" data-id="${c.id}" aria-label="Untick ${esc(c.name)}">Undo</button>
   </div>`;
 }
@@ -254,6 +256,13 @@ async function removeBill(id) {
   renderPlan();
 }
 
+// The 📎 sheet's entry for a paid bill (docsui.js). Bills are shared, so either of you can add the receipt.
+export function billEntry(p, c) {
+  const by = ctx.people().find((x) => x.id === p.by)?.name ?? "";
+  return { coll: "ledgerPaid", id: p.id, kind: "bill", date: p.date, what: c.name, amountSen: p.amountSen, person: by,
+    docs: p.docs, canEdit: true, title: `${c.name} · ${rm(p.amountSen)} · paid ${shortDate(p.date)}` };
+}
+
 // ---------- events ----------
 function click(b) {
   const a = b.dataset.lp, id = b.dataset.id;
@@ -269,5 +278,6 @@ function click(b) {
   if (a === "del-bill") removeBill(id);
   if (a === "pay") pay(id);
   if (a === "unpay") unpay(id);
+  if (a === "docs") { const p = paid[paidKey(id, monthOf(ctx.today(), payOf(plan)))], c = commitments.find((x) => x.id === id); if (p && c) openDocs(billEntry(p, c)); }
 }
 const clearDirty = () => document.querySelectorAll("#ledgerPlan [data-form]").forEach((f) => delete f.dataset.dirty);

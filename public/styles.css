@@ -1423,7 +1423,16 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 .lsname .lsnick { font-size: 13px }
 .lsmsg { margin: 0; padding: 10px 12px; border-radius: 14px; background: var(--good-soft) }
 #lsSheet .mhead { align-items: center }
-#lsSheet .lsx, #lgSheet .lsx { margin-left: auto }
+#lsSheet .lsx, #lgSheet .lsx, #ldSheet .lsx { margin-left: auto }
+/* Receipts and documents on an entry (docsui.js) */
+.ldlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px }
+.ldlist li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm) }
+.ldlist a { flex: 1; min-width: 0; display: flex; gap: 10px; align-items: center; color: inherit; text-decoration: none }
+.ldlist a span:last-child { display: grid; min-width: 0 }
+.ldlist b { font-weight: 600; overflow-wrap: anywhere }
+.ldlist small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere }
+.ldadd label.btn { cursor: pointer }
+.ldadd label.disabled { opacity: .5; pointer-events: none }
 #lgSheet .mhead .mealdate { flex-basis: 100% } /* the pop-out: title and ✕ on top, the day under them */
 #lsSheet .lbl { display: grid; gap: 6px }
 .lpleft { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 20px; border-top: 1px solid var(--line); padding-top: 12px }
