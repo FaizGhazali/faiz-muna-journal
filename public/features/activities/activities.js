@@ -15,6 +15,7 @@ import { confirmDelete } from "../../core/confirm.js";
 import { canEdit, viewOnly } from "../../core/owner.js";
 import { $, esc, iso, parse, dayNum, addDays, today, lastUsed } from "../../core/util.js";
 import { rm } from "../../logic/ledger.js";
+import { DUMP_KINDS, pageName } from "../../logic/braindump.js";
 
 const fmt = (s) => parse(s).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "";
@@ -346,6 +347,10 @@ function metaOf(a) {
       if (s) out.push(s === "done" ? "Done today" : "Skipped today");
     }
   }
+  if (a.dump && DUMP_KINDS[a.dump]) { // jotted down with ✎ (shell/braindump.js), and where it came up
+    const k = DUMP_KINDS[a.dump], where = pageName(a.from);
+    out.push(`✎ ${k.icon} ${k.label}${where ? ` · from ${esc(where)}` : ""}`);
+  }
   if (a.location) out.push(esc(a.location));
   if (a.minutes && a.type !== "habit" && !a.bill) out.push(`About ${a.minutes} min`);
   if (a.favourite) out.push("★ Favourite");
@@ -432,7 +437,7 @@ async function saveEditor() {
   if (draft.type === "habit" && draft.days && !draft.days.length) { msg.textContent = "Pick at least one day, or pause the habit instead."; return; }
   // Keep only fields that mean something for this type, and drop empty ones.
   const keepFor = { task: ["due", "minutes"], skill: ["steps", "minutes", "lastDone"], explore: ["location", "minutes"], cook: ["url", "favourite", "minutes"], habit: ["days"] }[draft.type];
-  const base = ["owner", "title", "type", "status", "note", "created", "doneOn", "lastDone", "snoozed"];
+  const base = ["owner", "title", "type", "status", "note", "created", "doneOn", "lastDone", "snoozed", "dump", "from", "started"];
   const body = {};
   for (const k of [...base, ...keepFor]) {
     const val = draft[k];

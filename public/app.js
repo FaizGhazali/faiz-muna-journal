@@ -33,6 +33,7 @@ import { initDiary, startDiary, stopDiary, refreshDiary, diaryList } from "./fea
 import { initLedger, startLedger, stopLedger, refreshLedger, refreshLedgerParts, billsDue, payBill, undoPayBill, ledgerShops } from "./features/ledger/ledgerui.js";
 import { setSelf, selfId } from "./core/owner.js";
 import { initPrefs, startPrefs, stopPrefs } from "./shell/prefs.js";
+import { initBrainDump } from "./shell/braindump.js";
 import { $, today } from "./core/util.js";
 import { toast } from "./core/toast.js";
 
@@ -91,6 +92,7 @@ initWeight({ people, entries: allEntries });
 initEntryForm({ entriesCol, people, entries: allEntries, commit });
 initSetup({ db, entriesCol });
 initActivities({ db, people, commit, exercisedToday, onChange: () => refreshMood(), bills: { due: billsDue, pay: payBill, undo: undoPayBill } });
+initBrainDump({ db, commit }); // ✎ above the wheel: a bug or idea straight into your Ideas, from any page
 initBackup({ db });
 initMeals({ db, people, me: currentPerson, entries: allEntries, commit, stock: { of: stockOf, list: listFood, items: priceItems, cost: costOf, changed: () => refreshStocky() } });
 // Shared journals stamp who did it (a buy, a bill ticked, new spending): the one signed in, not who "For" shows.

@@ -672,6 +672,16 @@ button.mface[aria-pressed="true"] { border-color: var(--ink) }
   width: 62px; height: 62px; border-radius: 50%; padding: 0; background: var(--accent); border: 3px solid var(--surface); color: var(--on-accent);
   font-size: 26px; line-height: 1; box-shadow: var(--shadow-lg); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none }
 .wheelbtn span { display: block; transition: transform .2s }
+/* Brain dump (shell/braindump.js): a small ✎ sitting on top of the wheel button */
+.dumpbtn { position: fixed; z-index: 30; right: calc(max(18px, env(safe-area-inset-right, 0px)) + 10px); bottom: calc(max(18px, env(safe-area-inset-bottom, 0px)) + 74px);
+  width: 42px; height: 42px; border-radius: 50%; padding: 0; background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+  font-size: 19px; line-height: 1; box-shadow: var(--shadow-lg) }
+.dumpbtn span { display: block; transition: transform .2s var(--ease) }
+.dumpbtn:active span { transform: scale(.88) }
+.dump textarea { width: 100%; min-height: 84px; resize: vertical; font: inherit }
+.dump .dhint { margin: -4px 0 0; font-size: 13px }
+.dump .msg:empty { display: none }
+html.touring .dumpbtn { display: none }
 .wheelbtn:active span { transform: scale(.9) }
 .wheel { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgb(10 14 30 / 0); transition: background .2s; touch-action: none; user-select: none; -webkit-user-select: none }
 .wheel.open { background: var(--scrim) }
