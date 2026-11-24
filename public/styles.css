@@ -1419,6 +1419,7 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 .lsmsg { margin: 0; padding: 10px 12px; border-radius: 14px; background: var(--good-soft) }
 #lsSheet .mhead { align-items: center }
 #lsSheet .lsx, #lgSheet .lsx { margin-left: auto }
+#lgSheet .mhead .mealdate { flex-basis: 100% } /* the pop-out: title and ✕ on top, the day under them */
 #lsSheet .lbl { display: grid; gap: 6px }
 .lpleft { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 20px; border-top: 1px solid var(--line); padding-top: 12px }
 .lpleft div { display: grid }

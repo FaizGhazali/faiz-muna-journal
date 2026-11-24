@@ -112,8 +112,8 @@ export function refreshLedger() {
 }
 
 // ---------- add spending ----------
-// The small card is just "+ Spend": its form pops out in a sheet (#lgSheet) and the card stays put.
-// sheetView = "m" | "l" while that sheet is open.
+// The small card is just "+ Spend": the full form pops out in a sheet (#lgSheet) and the card stays put.
+// sheetView = "l" while that sheet is open.
 let sheetView = null;
 function renderAdd() {
   const card = $("ledgerAdd"), a = acct();
@@ -139,7 +139,7 @@ function renderAdd() {
     const where = pay ? "" : `<label>Where<input type="text" id="lgRaw" list="lgShops" autocomplete="off" placeholder="Shop, e.g. Setel or Econsave" value="${esc(f.raw)}"></label>
       <datalist id="lgShops"></datalist>`;
     const close = small ? `<button type="button" class="mini lsx" id="lgFew" data-to="" aria-label="Close">✕</button>` : "";
-    const fewer = small ? "m" : card.dataset.force ? "" : null;
+    const fewer = !small && card.dataset.force ? "" : null; // the pop-out is always the full form
     const html = view === "m" ? `
       <div class="mhead"><h2 id="${tid}">${title}</h2>${close}</div>
       <div class="two">${amount}${pay ? "" : `<div>${where}</div>`}</div>
@@ -147,8 +147,8 @@ function renderAdd() {
       <div class="lwarn" id="lgWarn" role="status" hidden></div>
       <div class="actions"><button type="button" class="primary" id="lgSave">Save</button></div>
       <p class="msg" id="lgMsg" aria-live="polite"></p>` : `
-      <div class="mhead"><h2 id="${tid}">${title}</h2>
-        <label class="mealdate">Day<input type="date" id="lgDate" value="${esc(f.date)}" max="${today()}"></label>${close}</div>
+      <div class="mhead"><h2 id="${tid}">${title}</h2>${close}
+        <label class="mealdate">Day<input type="date" id="lgDate" value="${esc(f.date)}" max="${today()}"></label></div>
       ${whoSeg(pay ? "Paid by" : "Spent by", who(), "lg")}
       <div class="chips" role="group" aria-label="Kind">${Object.entries(KINDS).map(([k, v]) => `<button type="button" class="chip" data-ltype="${k}" aria-pressed="${k === f.type}">${v}</button>`).join("")}</div>
       <div class="two">
@@ -604,7 +604,7 @@ function wireAdd(add) {
     const b = ev.target.closest("button"); if (!b) return;
     if (b.dataset.ltype) { f.type = b.dataset.ltype; msg = ""; formKey = ""; renderAdd(); }
     if (b.id === "lgSave") save();
-    if (b.id === "lgOpen") { msg = ""; openAdd("m"); }
+    if (b.id === "lgOpen") { msg = ""; openAdd("l"); } // the pop-out has the screen to itself: the full form
     if (b.id === "lgAll") openAdd("l");
     if (b.id === "lgFew") openAdd(b.dataset.to || null);
     if (b.id === "lgCard") { if (sheetView) closeSheet(); cardForm = true; msg = ""; renderAdd(); $("lcName")?.focus(); }
