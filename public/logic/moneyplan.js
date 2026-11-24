@@ -145,6 +145,12 @@ export function txnBucket(t, plan) {
   const ids = bucketIds(plan), shop = plan?.shopBuckets?.[shopKey(t)];
   return t.bucket && ids.includes(t.bucket) ? t.bucket : shop && ids.includes(shop) ? shop : catBucket(t.cat, plan);
 }
+// The item's own `bucket` to save after "Counts in" was picked on it (Fix this item): null when the shop rule or
+// category puts it there anyway, so a later shop or category change still moves it.
+export function ownBucket(t, plan, picked) {
+  if (!inBuckets(t) || !bucketIds(plan).includes(picked)) return null;
+  return picked === txnBucket({ ...t, bucket: null }, plan) ? null : picked;
+}
 // The plan's shop rules after putting shop `key` in `bucket`. No rule is kept when that's where its category puts it anyway.
 export function shopBucketsWith(plan, key, bucket, cat) {
   const out = { ...(plan?.shopBuckets ?? {}) };

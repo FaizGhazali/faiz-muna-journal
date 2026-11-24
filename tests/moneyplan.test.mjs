@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  DEFAULT_BUCKETS, addMonths, monthsBetween, dueDate, monthName, checkPlan, liveIn, paymentsLeft, monthBills,
+  DEFAULT_BUCKETS, ownBucket, addMonths, monthsBetween, dueDate, monthName, checkPlan, liveIn, paymentsLeft, monthBills,
   spentByBucket, planView, outlook, countdown, checkCommitment, paidKey, bucketFor, monthOf, monthRange, payLabel, payOf, billTasks,
 } from "../public/logic/moneyplan.js";
 
@@ -193,4 +193,16 @@ test("billTasks: unpaid debt bills from 3 days before due, overdue this pay mont
   const pd = billTasks([D("car", 26)], car, "2026-11-23", 25);
   assert.deepEqual(pd.map((r) => [r.month, r.due, r.who]), [["2026-12", "2026-11-26", "p1"]]);
   assert.deepEqual(billTasks([D("car", 26)], car, "2026-11-22", 25), []);
+});
+
+test("ownBucket: an item's own bucket is kept only when it differs from the shop rule or category", () => {
+  const plan = { incomeSen: 100000, buckets: DEFAULT_BUCKETS, shopBuckets: { "NAK NAK": "fun" } };
+  const t = { type: "purchase", cat: "groceries", merchant: "Mr.Diy", amountSen: 1770 };
+  assert.equal(ownBucket(t, plan, "fun"), "fun");
+  assert.equal(ownBucket(t, plan, "essentials"), null); // groceries counts there anyway
+  assert.equal(ownBucket({ ...t, cat: "dining" }, plan, "fun"), null);
+  assert.equal(ownBucket({ ...t, merchant: "Nak Nak" }, plan, "fun"), null); // the shop rule says so
+  assert.equal(ownBucket({ ...t, bucket: "savings" }, plan, "essentials"), null); // its old pick is ignored
+  assert.equal(ownBucket(t, plan, "gone"), null);
+  assert.equal(ownBucket({ ...t, type: "payment" }, plan, "fun"), null);
 });

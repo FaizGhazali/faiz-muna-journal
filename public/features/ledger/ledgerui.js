@@ -15,7 +15,7 @@ import { initTrends, renderTrends } from "./trends.js";
 import { initRules, startRules, renderRules } from "./rules.js";
 import { ensureSeeds, addAccount, saveCycle } from "./seeds.js";
 import { initPlan, planSubs, renderPlan, planState, billEntry } from "./plan.js";
-import { payOf, monthOf, monthRange, addMonths } from "../../logic/moneyplan.js";
+import { payOf, monthOf, monthRange, addMonths, bucketsOf, txnBucket, ownBucket } from "../../logic/moneyplan.js";
 import { initSpend, renderSpend } from "./spend.js";
 import { initAnalytics, renderAnalytics, ANALYTICS } from "./analytics.js";
 import { initDocs, openDocs, refreshDocs, resumeDocs, afterSignIn, docsOn } from "./docsui.js";
@@ -465,6 +465,7 @@ function startEdit(id) {
   const where = t.type === "payment" ? "" : t.merchant || t.raw || "";
   edit = { id, where, who: t.spentBy || who(), type: t.type, amount: (Math.abs(t.amountSen) / 100).toFixed(2), raw: where,
     cat: t.cat === "payment" ? "other" : t.cat || "other", account: t.account, date: t.date, msg: "" };
+  edit.bucketPicked = false; // "Counts in" follows the category until a chip is tapped
   openRow = id;
   renderList();
   rowEl(id)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -485,10 +486,24 @@ function editForm(t) {
     </div>
     <label>${pay ? "Card" : "Paid with"}<select id="leAcct">${cards.map((x) => `<option value="${x.id}"${x.id === e.account ? " selected" : ""}>${esc(x.name)}${x.last4 ? ` ··${esc(x.last4)}` : ""}</option>`).join("")}</select></label>
     ${pay ? "" : `<label>Where<input type="text" id="leRaw" list="lgShops" autocomplete="off" value="${esc(e.raw)}"></label>
-    <label>Category<select id="leCat">${CATS.map((c) => `<option value="${c.id}"${c.id === e.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>`}
+    <label>Category<select id="leCat">${CATS.map((c) => `<option value="${c.id}"${c.id === e.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>
+    <div id="leBucket">${bucketChips(t)}</div>`}
     <p class="msg" id="leMsg" aria-live="polite">${esc(e.msg)}</p>
     <div class="actions"><button type="submit" class="primary" id="leSave">Save changes</button><button type="button" id="leCancel">Cancel</button></div>
   </form>`;
+}
+// "Counts in": which money-plan bucket this one item counts in. Until a chip is tapped it follows the
+// category (or the shop's rule); hidden when the item isn't day-to-day spending (PayLater, no plan yet).
+function editedItem(t) { return { ...t, type: edit.type, cat: edit.cat, merchant: edit.raw.trim() || t.merchant, raw: edit.raw.trim() || t.raw, bucket: null }; }
+function bucketChips(t) {
+  const plan = planState().plan, x = editedItem(t);
+  if (!plan || !txnBucket(x, plan)) return "";
+  if (!edit.bucketPicked) edit.bucket = txnBucket({ ...x, bucket: t.bucket }, plan);
+  return `<div class="lbl"><span>Counts in</span><div class="chips" role="group" aria-label="Counts in which bucket">${bucketsOf(plan).map((b) => `<button type="button" class="chip" data-lebucket="${b.id}" aria-pressed="${b.id === edit.bucket}">${esc(b.name)}</button>`).join("")}</div></div>`;
+}
+function paintBucket() {
+  const t = txns.find((x) => x.id === edit?.id), el = $("leBucket");
+  if (t && el) el.innerHTML = bucketChips(t);
 }
 function cancelEdit() {
   const id = edit?.id; edit = null; openRow = null;
@@ -513,6 +528,8 @@ async function saveEdit() {
   const raw = byNick(e.raw, shopNames)?.name ?? e.raw, r = categorise(raw, aliases);
   const t = manualTxn(a, { spentBy: e.who, date: e.date, amount: e.amount, type: e.type, raw: pay ? "Card payment" : raw, cat: e.cat, merchant: r.merchant || raw.trim() }, old.at ?? Date.now());
   const body = editedTxn(old, t, e.raw.trim() === e.where);
+  // A picked bucket is kept on the item only when its shop rule or category wouldn't put it there anyway.
+  if (!pay && e.bucketPicked) body.bucket = ownBucket(body, planState().plan, e.bucket);
   const what = pay ? `${rm(sen)} paid to ${a.name}` : `${rm(sen)} at ${e.raw.trim()}`;
   const btn = $("leSave"); if (btn) btn.disabled = true;
   try {
@@ -652,8 +669,8 @@ function wireRest() {
     if (el.id === "leAmt") edit.amount = el.value;
     if (el.id === "leDate") edit.date = el.value;
     if (el.id === "leAcct") edit.account = el.value;
-    if (el.id === "leRaw") edit.raw = el.value;
-    if (el.id === "leCat") edit.cat = el.value;
+    if (el.id === "leRaw") { edit.raw = el.value; paintBucket(); }
+    if (el.id === "leCat") { edit.cat = el.value; paintBucket(); }
     if (el.name === "leWho") edit.who = el.value;
   };
   list.addEventListener("input", (ev) => readEdit(ev.target));
@@ -682,6 +699,7 @@ function wireRest() {
     if (b.dataset.ldel) removeTxn(b.dataset.ldel);
     if (b.dataset.ledit) startEdit(b.dataset.ledit);
     if (b.dataset.letype && edit) { edit.type = b.dataset.letype; b.parentElement.querySelectorAll("[data-letype]").forEach((c) => c.setAttribute("aria-pressed", String(c === b))); }
+    if (b.dataset.lebucket && edit) { edit.bucket = b.dataset.lebucket; edit.bucketPicked = true; paintBucket(); }
     if (b.id === "leCancel") cancelEdit();
   });
 }
