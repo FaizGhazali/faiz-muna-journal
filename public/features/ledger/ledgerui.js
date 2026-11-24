@@ -112,36 +112,43 @@ export function refreshLedger() {
 }
 
 // ---------- add spending ----------
+// The small card is just "+ Spend": its form pops out in a sheet (#lgSheet) and the card stays put.
+// sheetView = "m" | "l" while that sheet is open.
+let sheetView = null;
 function renderAdd() {
-  const host = $("ledgerAdd"), a = acct();
-  if (cardForm || !live().length) { host.dataset.force = "l"; host.dataset.why = "card"; return renderCardForm(host); }
-  if (host.dataset.why === "card") { delete host.dataset.force; delete host.dataset.why; formKey = ""; }
-  // Which version: small (a "+ Spend" button), medium (amount, where, Save; the rest guessed and shown in
-  // one line) or large (everything). "+ Spend" and "More options" open a bigger one for now (data-force).
-  const view = host.dataset.force || board.sizeOf("add");
+  const card = $("ledgerAdd"), a = acct();
+  if (cardForm || !live().length) { if (sheetView) closeSheet(); card.dataset.force = "l"; card.dataset.why = "card"; return renderCardForm(card); }
+  if (card.dataset.why === "card") { delete card.dataset.force; delete card.dataset.why; formKey = ""; }
+  const small = board.sizeOf("add") === "s" && !card.dataset.force;
+  if (!small && sheetView) closeSheet();
+  if (small && !card.querySelector(".lsq")) card.innerHTML = `<div class="lsq">
+      <span class="lsqt"><h2 id="ledgerAddTitle">Add spending</h2><small id="lgLast"></small></span>
+      <button type="button" class="primary" id="lgOpen" aria-haspopup="dialog">＋ Spend</button>
+    </div>`;
+  // Medium: amount, where, Save, the rest guessed and shown in one line. Large: everything.
+  // On the card, "More options" opens large for now (data-force).
+  const host = small ? (sheetView ? $("lgSheet") : null) : card;
+  const view = small ? sheetView : card.dataset.force || board.sizeOf("add");
   // Drawn once per shape, so new data from the other phone never wipes what's being typed.
-  const key = [view, who(), f.type, live().map((x) => x.id + x.name).join(","), people().map((p) => p.id + p.name).join(",")].join("|");
-  if (key !== formKey || (view !== "s" && !$("lgAmt"))) {
+  const key = [small ? "sheet" : "card", view, who(), f.type, live().map((x) => x.id + x.name).join(","), people().map((p) => p.id + p.name).join(",")].join("|");
+  if (host && (key !== formKey || !host.querySelector("#lgAmt"))) {
     formKey = key;
-    const pay = f.type === "payment";
+    const pay = f.type === "payment", tid = small ? "lgSheetTitle" : "ledgerAddTitle";
     const title = pay ? "Log a card payment" : f.type === "refund" ? "Log a refund" : "Add spending";
     const amount = `<label>Amount, RM<input type="text" id="lgAmt" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${esc(f.amount)}"></label>`;
     const where = pay ? "" : `<label>Where<input type="text" id="lgRaw" list="lgShops" autocomplete="off" placeholder="Shop, e.g. Setel or Econsave" value="${esc(f.raw)}"></label>
       <datalist id="lgShops"></datalist>`;
-    if (view === "s") host.innerHTML = `<div class="lsq">
-        <span class="lsqt"><h2 id="ledgerAddTitle">Add spending</h2><small id="lgLast"></small></span>
-        <button type="button" class="primary" id="lgOpen">＋ Spend</button>
-      </div><p class="msg" id="lgMsg" aria-live="polite"></p>`;
-    else if (view === "m") host.innerHTML = `
-      <div class="mhead"><h2 id="ledgerAddTitle">${title}</h2>${host.dataset.force ? `<button type="button" class="mini" id="lgFew" data-to="">Close</button>` : ""}</div>
+    const close = small ? `<button type="button" class="mini lsx" id="lgFew" data-to="" aria-label="Close">✕</button>` : "";
+    const fewer = small ? "m" : card.dataset.force ? "" : null;
+    const html = view === "m" ? `
+      <div class="mhead"><h2 id="${tid}">${title}</h2>${close}</div>
       <div class="two">${amount}${pay ? "" : `<div>${where}</div>`}</div>
       <p class="lgquick"><span id="lgQuick"></span> <button type="button" class="mini" id="lgAll">More options</button></p>
       <div class="lwarn" id="lgWarn" role="status" hidden></div>
       <div class="actions"><button type="button" class="primary" id="lgSave">Save</button></div>
-      <p class="msg" id="lgMsg" aria-live="polite"></p>`;
-    else host.innerHTML = `
-      <div class="mhead"><h2 id="ledgerAddTitle">${title}</h2>
-        <label class="mealdate">Day<input type="date" id="lgDate" value="${esc(f.date)}" max="${today()}"></label></div>
+      <p class="msg" id="lgMsg" aria-live="polite"></p>` : `
+      <div class="mhead"><h2 id="${tid}">${title}</h2>
+        <label class="mealdate">Day<input type="date" id="lgDate" value="${esc(f.date)}" max="${today()}"></label>${close}</div>
       ${whoSeg(pay ? "Paid by" : "Spent by", who(), "lg")}
       <div class="chips" role="group" aria-label="Kind">${Object.entries(KINDS).map(([k, v]) => `<button type="button" class="chip" data-ltype="${k}" aria-pressed="${k === f.type}">${v}</button>`).join("")}</div>
       <div class="two">
@@ -151,8 +158,9 @@ function renderAdd() {
       ${pay ? "" : `${where}
       <label>Category <small id="lgWhy"></small><select id="lgCat">${CATS.map((c) => `<option value="${c.id}"${c.id === f.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>`}
       <div class="lwarn" id="lgWarn" role="status" hidden></div>
-      <div class="actions"><button type="button" class="primary" id="lgSave">Save</button>${host.dataset.force ? `<button type="button" class="mini" id="lgFew" data-to="${board.sizeOf("add") === "s" ? "m" : ""}">Fewer options</button>` : ""}<button type="button" class="mini" id="lgCard">＋ Card or wallet</button></div>
+      <div class="actions"><button type="button" class="primary" id="lgSave">Save</button>${fewer != null ? `<button type="button" class="mini" id="lgFew" data-to="${fewer}">Fewer options</button>` : ""}<button type="button" class="mini" id="lgCard">＋ Card or wallet</button></div>
       <p class="msg" id="lgMsg" aria-live="polite"></p>`;
+    host.innerHTML = small ? `<div class="gsin ladd">${html}</div>` : html;
   }
   if ($("lgShops")) $("lgShops").innerHTML = shopOptions(); // refreshed every time: it never disturbs typing
   paintWhy(); paintWarn(); paintQuick();
@@ -171,13 +179,27 @@ function paintQuick() {
     last.textContent = t ? `Last: ${rm(Math.abs(t.amountSen))} · ${t.type === "payment" ? "card payment" : t.merchant || t.raw || cat(t.cat).name}, ${t.date === today() ? "today" : shortDate(t.date)}` : "Log a coffee, petrol, groceries…";
   }
 }
-// Opens a bigger Add spending for now ("+ Spend", "More options"), or back to the chosen size.
+// Opens a bigger Add spending for now ("+ Spend", "More options"), or back to the chosen size. On the
+// small card that's the pop-out sheet (size null closes it).
 function openAdd(size) {
   const host = $("ledgerAdd");
+  if (board.sizeOf("add") === "s" && !host.dataset.force) {
+    if (!size) return closeSheet();
+    sheetView = size; formKey = ""; renderAdd();
+    const d = $("lgSheet"); if (!d.open) d.showModal();
+    $("lgAmt")?.focus();
+    return;
+  }
   if (size) host.dataset.force = size; else delete host.dataset.force;
   formKey = ""; renderAdd();
   if (size) $("lgAmt")?.focus({ preventScroll: true });
   host.scrollIntoView({ block: "nearest" });
+}
+function closeSheet() {
+  const d = $("lgSheet");
+  sheetView = null; formKey = "";
+  if (d.open) d.close();
+  d.innerHTML = "";
 }
 // The "Where" suggestions: your own shop names first (the statement name beside), then past shops,
 // most recent first, no repeats, leaving out shops you named.
@@ -252,7 +274,8 @@ async function save() {
   msg = "";
   Object.assign(f, { amount: "", raw: "", cat: "other", catAuto: true, type: "purchase" });
   formKey = "";
-  delete $("ledgerAdd").dataset.force; // "+ Spend" opened it: back to the small card, the toast says it's saved
+  delete $("ledgerAdd").dataset.force; // "More options" opened it: back to the chosen size, the toast says it's saved
+  if (sheetView) closeSheet(); // the pop-out from the small card closes; the toast says it's saved
   refreshLedger();
 }
 function say(text) { msg = text; const el = $("lgMsg"); if (el) el.textContent = text; }
@@ -549,7 +572,15 @@ export function refreshLedgerParts() {
 
 // ---------- events ----------
 function wire() {
-  const add = $("ledgerAdd");
+  // The form lives on the card, or in the pop-out sheet when the card is small: same handlers for both.
+  const sheet = $("lgSheet");
+  sheet.addEventListener("close", () => { if (sheetView) closeSheet(); });
+  // Tapping outside closes it, unless something's been typed (Escape or ✕ still close; typing is kept in `f`).
+  sheet.addEventListener("click", (ev) => { if (ev.target === sheet && !f.amount.trim() && !f.raw.trim()) closeSheet(); });
+  for (const add of [$("ledgerAdd"), sheet]) wireAdd(add);
+  wireRest();
+}
+function wireAdd(add) {
   add.addEventListener("input", (ev) => {
     const id = ev.target.id;
     if (id === "lgAmt") { f.amount = ev.target.value; paintWarn(); }
@@ -576,10 +607,12 @@ function wire() {
     if (b.id === "lgOpen") { msg = ""; openAdd("m"); }
     if (b.id === "lgAll") openAdd("l");
     if (b.id === "lgFew") openAdd(b.dataset.to || null);
-    if (b.id === "lgCard") { cardForm = true; msg = ""; renderAdd(); $("lcName")?.focus(); }
+    if (b.id === "lgCard") { if (sheetView) closeSheet(); cardForm = true; msg = ""; renderAdd(); $("lcName")?.focus(); }
     if (b.id === "lcSave") saveCard();
-    if (b.id === "lcCancel") { cardForm = false; add.innerHTML = ""; renderAdd(); }
+    if (b.id === "lcCancel") { cardForm = false; $("ledgerAdd").innerHTML = ""; renderAdd(); }
   });
+}
+function wireRest() {
   // The in-row fix form: every field goes straight into `edit`.
   const list = $("ledgerList");
   const readEdit = (el) => {
@@ -603,8 +636,9 @@ function wire() {
   });
   $("ledger").addEventListener("click", (ev) => {
     const b = ev.target.closest("button"); if (!b) return;
-    if (b.dataset.limport) startImport(b.dataset.limport);
-    if (b.dataset.lrules) startRules(b.dataset.lrules);
+    // These open their own panel on the page, so a popped-out card closes first.
+    if (b.dataset.limport) { board.close(); startImport(b.dataset.limport); }
+    if (b.dataset.lrules) { board.close(); startRules(b.dataset.lrules); }
     if (b.dataset.offer === "yes") acceptOffer(b.dataset.host);
     if (b.dataset.offer === "no") { const h = b.dataset.host; offer = null; paintOffer(h); }
   });

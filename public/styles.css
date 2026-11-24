@@ -1418,7 +1418,7 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 .lsname .lsnick { font-size: 13px }
 .lsmsg { margin: 0; padding: 10px 12px; border-radius: 14px; background: var(--good-soft) }
 #lsSheet .mhead { align-items: center }
-#lsSheet .lsx { margin-left: auto }
+#lsSheet .lsx, #lgSheet .lsx { margin-left: auto }
 #lsSheet .lbl { display: grid; gap: 6px }
 .lpleft { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 20px; border-top: 1px solid var(--line); padding-top: 12px }
 .lpleft div { display: grid }
@@ -1489,6 +1489,17 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 .bd-ctl button[disabled] { opacity: .35 }
 .bd-ctl .note { font-size: 13px }
 .lboard.arranging [data-card] { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: var(--r) }
+/* A popped-out card: a sheet over the blurred page (bottom of the screen on a phone, centred on a computer). */
+.bd-scrim { position: fixed; inset: 0; z-index: 79; background: var(--scrim); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px) }
+.bd-scrim[hidden] { display: none }
+html.bd-locked { overflow: hidden }
+.lboard [data-card].bd-pop { position: fixed; z-index: 80; inset: 0; margin: auto; height: fit-content; width: min(560px, calc(100vw - 32px));
+  max-height: min(86vh, 900px); overflow: auto; overscroll-behavior: contain; border-radius: 28px; box-shadow: var(--shadow-lg); outline: none }
+.lboard [data-card].bd-pop.bd-popin { animation: gup .25s ease-out }
+@media (max-width: 600px) { .lboard [data-card].bd-pop { top: auto; bottom: max(16px, env(safe-area-inset-bottom, 0px)) } }
+.bd-pop > .fold, .bd-pop > .bd-ctl { display: none }
+.bd-less { margin-left: auto }
+@media (prefers-reduced-motion: reduce) { .lboard [data-card].bd-pop { animation: none } }
 @keyframes bdglow { from { box-shadow: 0 0 0 4px var(--accent) } to { box-shadow: 0 0 0 4px transparent } }
 .bd-moved { animation: bdglow 1.2s ease-out }
 @media (prefers-reduced-motion: reduce) { .bd-moved { animation: none } }
