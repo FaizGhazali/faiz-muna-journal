@@ -12,10 +12,10 @@ export const selfId = () => self;
 export const canEdit = (pid) => !self || pid === self;
 
 // The field that says whose a doc is, per collection. firestore.rules enforces the same list: keep them in step.
-// Docs keyed by person id (diaryStyle, nextMove, accounts) are theirs by id. Ledger items with no spentBy are anyone's.
+// Docs keyed by person id (diaryStyle, nextMove, accounts, prefs) are theirs by id. Ledger items with no spentBy are anyone's.
 export const OWNED = { entries: "person", activities: "owner", habitDays: "owner", moves: "owner", meals: "person", burns: "person",
   diary: "person", diaryPhotos: "person", ledgerTxns: "spentBy" };
-const BY_ID = ["diaryStyle", "nextMove", "accounts"];
+const BY_ID = ["diaryStyle", "nextMove", "accounts", "prefs"];
 export function mayWrite(col, id, body) {
   if (BY_ID.includes(col)) return canEdit(id);
   const f = OWNED[col], v = f && body?.[f];

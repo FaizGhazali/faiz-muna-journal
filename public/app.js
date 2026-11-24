@@ -31,6 +31,7 @@ import { initWidget } from "./shell/widget.js";
 import { initDiary, startDiary, stopDiary, refreshDiary, diaryList } from "./features/diary/diaryui.js";
 import { initLedger, startLedger, stopLedger, refreshLedger, refreshLedgerParts } from "./features/ledger/ledgerui.js";
 import { setSelf, selfId } from "./core/owner.js";
+import { initPrefs, startPrefs, stopPrefs } from "./shell/prefs.js";
 import { $, today } from "./core/util.js";
 import { toast } from "./core/toast.js";
 
@@ -94,6 +95,7 @@ initMeals({ db, people, me: currentPerson, entries: allEntries, commit, stock: {
 // Shared journals stamp who did it (a buy, a bill ticked, new spending): the one signed in, not who "For" shows.
 const doer = () => selfId() ?? currentPerson();
 initStocky({ db, people, me: doer, commit, mealData, pricesChanged: refreshMealCost });
+initPrefs({ db, commit, demo: DEMO }); // card layouts that follow each person (before the Ledger board uses it)
 initLedger({ db, people, me: doer, commit });
 initWheel();
 initCollapse();
@@ -118,6 +120,7 @@ function startApp() {
     }
     PEOPLE = snap.data().people;
     if (DEMO) setSelf(PEOPLE[0]?.id, nameOf); // the demo plays the first person, so the other one shows view-only
+    startPrefs(selfId()); // the signed-in person's own settings (shell/prefs.js)
     $("heading").textContent = `${PEOPLE.map((p) => p.name).join(" & ")}'s Journal`;
     document.title = DEMO ? "Demo – Our Journal" : $("heading").textContent;
     setPeople(PEOPLE);
@@ -140,7 +143,7 @@ function startApp() {
   startStocky();
   startLedger();
 }
-function stop() { unsubs.forEach((u) => u()); unsubs = []; stopActivities(); stopMeals(); stopDiary(); stopStocky(); stopLedger(); }
+function stop() { unsubs.forEach((u) => u()); unsubs = []; stopPrefs(); stopActivities(); stopMeals(); stopDiary(); stopStocky(); stopLedger(); }
 
 initDemo();
 if (DEMO) {

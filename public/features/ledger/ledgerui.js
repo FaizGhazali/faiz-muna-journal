@@ -17,6 +17,7 @@ import { ensureSeeds, addAccount, saveCycle } from "./seeds.js";
 import { initPlan, planSubs, renderPlan } from "./plan.js";
 import { initSpend, renderSpend } from "./spend.js";
 import { makeBoard } from "../../shell/board.js";
+import { boardPrefs } from "../../shell/prefs.js";
 
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (_) { return d; } },
@@ -66,7 +67,7 @@ const personName = (id) => people().find((p) => p.id === id)?.name ?? "";
 
 export function initLedger(opts) {
   ({ db, commit, people, me } = opts);
-  board = makeBoard({ host: $("ledger"), bar: $("ledgerBar"), key: "ledger", ...BOARD, redraw: () => refreshLedger() });
+  board = makeBoard({ host: $("ledger"), bar: $("ledgerBar"), key: "ledger", ...BOARD, redraw: () => refreshLedger(), sync: boardPrefs("ledger") });
   wire();
   initImport({
     db: () => db, commit, people, me, today, accounts: () => accounts, programs: () => programs, aliases: () => aliases, txns: () => txns,

@@ -76,3 +76,22 @@ export function spans(sizes, cols) {
   if (x) out[out.length - 1] += cols - x;
   return out;
 }
+
+// A layout read back from storage or another phone: only well-formed { id, size } entries, no repeats.
+export function clean(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  return list.filter((x) => x && typeof x.id === "string" && SIZES.includes(x.size) && !seen.has(x.id) && seen.add(x.id))
+    .map(({ id, size }) => ({ id, size }));
+}
+
+// Someone's layout as the family's starting layout: cards that come one per thing ("card:<account id>") become
+// one "card:*" slot where the first of them was, with its size, so it fits any phone and new cards too.
+export function asDefaults(layout) {
+  const out = [];
+  for (const x of clean(layout)) {
+    const i = x.id.indexOf(":"), id = i > 0 ? `${x.id.slice(0, i)}:*` : x.id;
+    if (!out.some((d) => d.id === id)) out.push({ id, size: x.size });
+  }
+  return out;
+}

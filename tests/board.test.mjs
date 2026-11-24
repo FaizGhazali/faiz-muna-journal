@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { allowed, sizeOf, resolve, move, resize, merge, spans } from "../public/logic/board.js";
+import { allowed, sizeOf, resolve, move, resize, merge, spans, clean, asDefaults } from "../public/logic/board.js";
 
 const defaults = [{ id: "add", size: "m" }, { id: "recent", size: "m" }, { id: "sum", size: "s" }, { id: "card:*", size: "s" }, { id: "people", size: "l" }];
 const sizes = { people: "l", "card:*": "sml" };
@@ -56,4 +56,16 @@ test("spans fill every row", () => {
   assert.deepEqual(spans(["m", "s", "s", "l"], 4), [2, 1, 1, 4]);
   assert.deepEqual(spans(["s", "m", "l"], 4), [1, 3, 4]);
   assert.deepEqual(spans([], 2), []);
+});
+
+test("clean keeps only good entries", () => {
+  assert.deepEqual(clean([{ id: "a", size: "s", x: 1 }, { id: "a", size: "m" }, { id: "b", size: "xl" }, null, { id: 3, size: "s" }]), [{ id: "a", size: "s" }]);
+  assert.deepEqual(clean("nope"), []);
+});
+
+test("asDefaults folds each card into one slot", () => {
+  const mine = [{ id: "sum", size: "m" }, { id: "card:x", size: "s" }, { id: "add", size: "s" }, { id: "card:y", size: "l" }];
+  assert.deepEqual(asDefaults(mine), [{ id: "sum", size: "m" }, { id: "card:*", size: "s" }, { id: "add", size: "s" }]);
+  // and a new card on another phone lands in that slot
+  assert.deepEqual(resolve(["add", "card:z", "sum"], { defaults: asDefaults(mine) }).map((x) => x.id), ["sum", "card:z", "add"]);
 });

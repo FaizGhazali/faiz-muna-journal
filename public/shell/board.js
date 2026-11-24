@@ -6,14 +6,17 @@
 // sheet over a blurred page (class bd-pop), still in its own place in the DOM, so all its buttons keep working
 // and live redraws keep it current. ✕, Escape or tapping outside puts it back (outside not while a form there
 // has been typed in, data-dirty). One at a time.
-// "Arrange cards" in `bar` shows ↑ ↓ and S / M / L on every card. The layout is kept per device in
-// localStorage "journal-board-<key>". Order is CSS `order`, so cards are never moved in the DOM and
+// "Arrange cards" in `bar` shows ↑ ↓ and S / M / L on every card. The layout follows the person: it's saved to
+// their account (`sync`, shell/prefs.js) on Done, and the phone keeps a copy in localStorage
+// "journal-board-<key>-<person id>" so it opens instantly and offline. "Make this the starting layout" saves it
+// for the family (new phones, the other person until they arrange theirs, Start over); with none saved, the
+// code's `defaults` are used (the demo always uses those). Order is CSS `order`, so cards are never moved in the DOM and
 // redraws (innerHTML) never fight it; a MutationObserver puts the controls back after a redraw.
 // A card can say data-force="l" while it shows a form, so the form always gets the full width.
 // Order and row-filling rules are pure, in logic/board.js.
 import { esc } from "../core/util.js";
 import { toast } from "../core/toast.js";
-import { resolve, move, resize, merge, spans, sizeOf as sizeFor, allowed } from "../logic/board.js";
+import { resolve, move, resize, merge, spans, sizeOf as sizeFor, allowed, clean, asDefaults } from "../logic/board.js";
 
 const NAMES = { s: "Small", m: "Medium", l: "Large" };
 const store = {
@@ -22,14 +25,18 @@ const store = {
 };
 const titleOf = (el) => (el.dataset.title || el.querySelector("h2, h3")?.textContent || "card").replace(/\s+/g, " ").trim();
 
-export function makeBoard({ host, bar, key, defaults, sizes = {}, redraw }) {
-  const KEY = `journal-board-${key}`;
-  let saved = store.get(KEY, []);
-  if (!Array.isArray(saved)) saved = [];
-  let arranging = false, queued = false;
+export function makeBoard({ host, bar, key, defaults, sizes = {}, redraw, sync = null }) {
+  // The phone's copy, per person (an older copy from before layouts followed the person is used once).
+  const OLD = `journal-board-${key}`, local = () => (sync?.who() ? `${OLD}-${sync.who()}` : OLD);
+  const readLocal = () => clean(store.get(local(), null) ?? store.get(OLD, []));
+  let saved = readLocal(), who = sync?.who() ?? null, seen = "";
+  // dirty: arranged on this phone but not yet saved to the account (saved on Done or when the app is put away).
+  let arranging = false, queued = false, dirty = false;
   const peek = new Set();
   let scrim = null, back = null; // the blur behind a popped-out card; where focus goes back to
-  const cfg = () => ({ defaults, saved, sizes });
+  // The family's starting layout, then any card it doesn't mention as the code has it.
+  const defs = () => { const f = clean(sync?.family()); return f.length ? [...f, ...defaults.filter((d) => !f.some((x) => x.id === d.id))] : defaults; };
+  const cfg = () => ({ defaults: defs(), saved, sizes });
 
   const sizeOf = (id) => (peek.has(id) ? "l" : sizeFor(id, cfg()));
   const cards = () => [...host.querySelectorAll("[data-card]")].filter((el) => !el.hidden && !el.parentElement?.closest("[hidden]"));
@@ -96,8 +103,8 @@ export function makeBoard({ host, bar, key, defaults, sizes = {}, redraw }) {
   function paintBar() {
     bar.classList.toggle("on", arranging);
     bar.innerHTML = arranging
-      ? `<p class="note">Move cards with ↑ ↓ and pick a size: S, M or L. It's kept on this phone.</p>
-         <span class="bd-acts"><button type="button" class="mini" data-bd="reset">Start over</button><button type="button" class="primary" data-bd="done">Done</button></span>`
+      ? `<p class="note">Move cards with ↑ ↓ and pick a size: S, M or L. ${sync?.who() ? "It's saved to your account, so every phone you sign in on looks the same." : "It's kept on this phone."}</p>
+         <span class="bd-acts">${sync?.canShare() ? `<button type="button" class="mini" data-bd="share">Make this the starting layout</button>` : ""}<button type="button" class="mini" data-bd="reset">Start over</button><button type="button" class="primary" data-bd="done">Done</button></span>`
       : `<button type="button" class="mini" data-bd="arrange" aria-label="Arrange cards: move them and pick their sizes">⇅ Arrange cards</button>`;
   }
 
@@ -111,14 +118,34 @@ export function makeBoard({ host, bar, key, defaults, sizes = {}, redraw }) {
     el.classList.remove("bd-moved"); void el.offsetWidth; el.classList.add("bd-moved");
     setTimeout(() => el.classList.remove("bd-moved"), 1200);
   }
-  const keep = (layout) => { saved = merge(saved, layout); store.set(KEY, saved); };
+  const keep = (layout) => { saved = merge(saved, layout); store.set(local(), saved); dirty = true; };
+  // Sends this phone's arranging to the person's account (`ok` = the toast).
+  function flush(ok) {
+    if (dirty && sync?.who()) { dirty = false; sync.save(saved, ok); } else if (ok) toast(ok);
+  }
+  // News from the account (or a different person signed in on this phone): take it unless mid-arranging.
+  function synced() {
+    if (sync.who() !== who) { who = sync.who(); saved = readLocal(); dirty = false; }
+    const r = sync.mine();
+    if (r !== undefined && !arranging && !dirty) {
+      if (r === null) { if (saved.length) sync.save(saved); } // first time: this phone's layout goes into the account
+      else { const c = clean(r); if (JSON.stringify(c) !== JSON.stringify(saved)) { saved = c; store.set(local(), saved); } }
+    }
+    const sig = JSON.stringify([saved, defs()]);
+    if (sig !== seen) { seen = sig; redraw(); apply(); }
+  }
 
   function click(ev) {
     const b = ev.target.closest("[data-bd]"); if (!b || !host.contains(b)) return;
     const a = b.dataset.bd, id = b.dataset.id;
     if (a === "arrange") { arranging = true; host.classList.add("arranging"); paintBar(); apply(); }
-    if (a === "done") { arranging = false; host.classList.remove("arranging"); paintBar(); apply(); toast("Cards arranged. Kept on this phone."); }
-    if (a === "reset") { saved = []; store.set(KEY, saved); peek.clear(); redraw(); apply(); toast("Back to the starting layout."); }
+    if (a === "done") { arranging = false; host.classList.remove("arranging"); paintBar(); apply(); flush(sync?.who() ? "Cards arranged. Any phone you sign in on looks the same." : "Cards arranged."); }
+    if (a === "reset") { saved = []; store.set(local(), saved); dirty = true; peek.clear(); redraw(); apply(); flush("Back to the starting layout."); }
+    if (a === "share" && sync?.canShare()) {
+      const layout = layoutNow();
+      flush();
+      sync.share(asDefaults(layout), "Saved as the starting layout: new phones and Start over begin from it.");
+    }
     if (a === "up" || a === "down") { keep(move(layoutNow(), id, a === "up" ? -1 : 1)); settle(id); }
     if (a === "size") { keep(resize(layoutNow(), id, b.dataset.to)); peek.delete(id); redraw(); settle(id); }
     if (a === "peek") {
@@ -143,6 +170,9 @@ export function makeBoard({ host, bar, key, defaults, sizes = {}, redraw }) {
     // Straight away (before the browser paints), so a redrawn popped-out card never flashes back into the page.
     new MutationObserver(() => apply()).observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "data-force"] });
     addEventListener("resize", later);
+    // Put away mid-arranging: still save it to the account.
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
+    sync?.changed(synced);
     apply();
   }
 

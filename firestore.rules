@@ -30,7 +30,7 @@ service cloud.firestore {
     match /{coll}/{rest=**} {
       allow read: if family();
       allow write: if person() && !(coll in ['entries', 'activities', 'habitDays', 'moves', 'meals', 'burns', 'diary',
-        'diaryPhotos', 'diaryStyle', 'nextMove', 'accounts', 'ledgerTxns']);
+        'diaryPhotos', 'diaryStyle', 'nextMove', 'accounts', 'ledgerTxns', 'prefs']);
     }
 
     // ---------- one person's own ----------
@@ -46,6 +46,8 @@ service cloud.firestore {
     match /diaryStyle/{pid} { allow write: if person() && pid == me(); }
     match /nextMove/{pid}   { allow write: if person() && pid == me(); }
     match /accounts/{pid}   { allow write: if person() && pid == me(); }
+    // Their own settings that follow them to any phone (card layouts, shell/prefs.js); must say whose they are.
+    match /prefs/{pid}      { allow write: if person() && pid == me() && (request.resource == null || request.resource.data.get('person', null) == me()); }
 
     // Ledger spending: yours to add, change or delete (items with no spentBy are anyone's). Two household jobs
     // touch the other person's items too, so either may: a statement or spreadsheet import adds rows for whoever
