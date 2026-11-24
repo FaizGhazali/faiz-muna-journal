@@ -9,14 +9,15 @@ import {
   manualTxn, payWarning, warningText, tierLabel, spendByCat, spendTotal, ruleMatches,
 } from "../../logic/ledger.js";
 import { suggestPattern } from "../../logic/ledgerimport.js";
-import { shopKey, nickMap, byNick, usualCat } from "../../logic/bucketspend.js";
+import { shopKey, byNick, usualCat } from "../../logic/bucketspend.js";
+import { shopId } from "../../logic/shops.js";
 import { initImport, startImport, renderImport } from "./import.js";
 import { initTrends, renderTrends } from "./trends.js";
 import { initRules, startRules, renderRules } from "./rules.js";
 import { ensureSeeds, addAccount, saveCycle } from "./seeds.js";
 import { initPlan, planSubs, renderPlan, planState, billEntry } from "./plan.js";
 import { payOf, monthOf, monthRange, addMonths, bucketsOf, txnBucket, ownBucket } from "../../logic/moneyplan.js";
-import { initSpend, renderSpend } from "./spend.js";
+import { initSpend, renderSpend, shopHtml } from "./spend.js";
 import { initAnalytics, renderAnalytics, ANALYTICS } from "./analytics.js";
 import { initDocs, openDocs, refreshDocs, resumeDocs, afterSignIn, docsOn } from "./docsui.js";
 import { initIncome, renderIncome, incomeEntry } from "./income.js";
@@ -73,8 +74,11 @@ const acct = () => live().find((a) => a.id === f.account) ?? live().find((a) => 
 const personName = (id) => people().find((p) => p.id === id)?.name ?? "";
 
 export { billsDue, payBill, undoPayBill } from "./plan.js";
+// Stocky's side of the one shop list (from app.js): its shop names, what it bought at a shop, renaming its rows.
+let stocky = { shops: () => [], at: () => null, since: () => null, rename: async () => 0 };
 export function initLedger(opts) {
   ({ db, commit, people, me } = opts);
+  if (opts.stocky) stocky = opts.stocky;
   board = makeBoard({ host: $("ledger"), bar: $("ledgerBar"), key: "ledger", ...BOARD, redraw: () => refreshLedger(), sync: boardPrefs("ledger") });
   wire();
   initImport({
@@ -89,7 +93,7 @@ export function initLedger(opts) {
   initDocs({ db: () => db, commit, me });
   initIncome({ ...shared, me });
   afterSignIn();
-  initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases, shops: () => shopNames });
+  initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases, shops: () => shopNames, stocky });
   $("me").addEventListener("change", () => { f.who = null; formKey = ""; refreshLedger(); });
   addEventListener("journalchange", () => refreshLedgerParts());
   board.start();
@@ -223,7 +227,11 @@ function closeSheet() {
 // most recent first, no repeats, leaving out shops you named.
 function shopOptions() {
   const named = shopNames.filter((s) => s.nick && s.name).sort((a, b) => a.nick.localeCompare(b.nick));
-  return [...named.map((s) => `<option value="${esc(s.nick)}" label="${esc(s.name)}"></option>`), ...shops(new Set(named.map((s) => s.key))).map((s) => `<option value="${esc(s)}"></option>`)].join("");
+  const past = shops(new Set(named.map((s) => s.key)));
+  // Then the shops Stocky knows (one shop list for both journals), unless they're already here.
+  const seen = new Set([...named.flatMap((s) => [s.nick, s.name]), ...past].map(shopId));
+  const fromStocky = stocky.shops().filter((s) => { const k = shopId(s); return k && !seen.has(k) && seen.add(k); });
+  return [...named.map((s) => `<option value="${esc(s.nick)}" label="${esc(s.name)}"></option>`), ...past.map((s) => `<option value="${esc(s)}"></option>`), ...fromStocky.map((s) => `<option value="${esc(s)}" label="Stocky"></option>`)].join("");
 }
 // The shop name to save: a typed nickname gives its shop's statement name, so it groups with the rest.
 const whereRaw = () => byNick(f.raw, shopNames)?.name ?? f.raw;
@@ -436,7 +444,7 @@ function renderList() {
   // A row being fixed keeps what's typed: no redraw until it's saved or cancelled (unless it was deleted elsewhere).
   if (edit && $("leForm")) { if (txns.some((x) => x.id === edit.id)) return; edit = null; }
   const list = [...txns].sort((a, b) => b.date.localeCompare(a.date) || (b.at ?? 0) - (a.at ?? 0));
-  const names = Object.fromEntries(accounts.map((a) => [a.id, a.name])), nicks = nickMap(shopNames);
+  const names = Object.fromEntries(accounts.map((a) => [a.id, a.name])), shopDocs = Object.fromEntries(shopNames.filter((x) => x.key).map((x) => [x.key, x]));
   const size = board.sizeOf("recent"), shown = RECENT_BY_SIZE[size] + extra;
   host.innerHTML = `<div class="lhead"><h2>${size === "s" ? "Last saved" : "Recent"}</h2>${board.less("recent")}</div><div id="lgOffer"></div>${list.length ? `<div class="llist">${list.slice(0, shown).map((t) => {
     const c = cat(t.cat), credit = t.amountSen < 0, open = openRow === t.id, name = t.merchant || t.raw || c.name;
@@ -445,7 +453,7 @@ function renderList() {
     return `<div class="lrow${open ? " open" : ""}${glow ? " lflash" : ""}" data-row="${t.id}"${glow ? ` style="animation-delay:-${Date.now() - flashed.at}ms"` : ""}>
       <button type="button" class="lopen" data-lopen="${t.id}" aria-expanded="${open}">
         <span class="lic" aria-hidden="true">${c.icon}</span>
-        <span class="lmain"><b>${esc(name)}${t.type !== "payment" && nicks[shopKey(t)] ? ` <span class="lsnick">🏷 ${esc(nicks[shopKey(t)])}</span>` : ""}</b><small>${shortDate(t.date)} · ${esc(personName(t.spentBy))} · ${esc(names[t.account] ?? "")}${t.type === "payment" ? "" : ` · ${esc(c.name)}`}${t.reconciled ? " · ✓ statement" : ""}${t.docs?.length ? ` · 📎${t.docs.length > 1 ? ` ${t.docs.length}` : ""}` : ""}</small></span>
+        <span class="lmain"><b>${t.type === "payment" ? esc(name) : shopHtml(shopDocs[shopKey(t)], name)}</b><small>${shortDate(t.date)} · ${esc(personName(t.spentBy))} · ${esc(names[t.account] ?? "")}${t.type === "payment" ? "" : ` · ${esc(c.name)}`}${t.reconciled ? " · ✓ statement" : ""}${t.docs?.length ? ` · 📎${t.docs.length > 1 ? ` ${t.docs.length}` : ""}` : ""}</small></span>
         <span class="lamt${credit ? " cr" : ""}">${rm(Math.abs(t.amountSen))}${credit ? " CR" : ""}</span>
       </button>
       ${open && !own(t) ? `<div class="ledit">${t.raw && t.raw !== norm(name) ? `<p class="note">On the statement: ${esc(t.raw)}</p>` : ""}${viewOnly(t.spentBy, "spending")}${docsOn() && t.docs?.length ? `<div class="actions">${docsBtn(t)}</div>` : ""}</div>` : open ? `<div class="ledit">

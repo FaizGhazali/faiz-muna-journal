@@ -13,6 +13,7 @@ import { suggestPattern } from "../../logic/ledgerimport.js";
 import { bucketsOf, bucketFor, monthOf, monthName, monthBills, txnBucket, catBucket, shopBucketsWith, payOf, payLabel } from "../../logic/moneyplan.js";
 import { ALL, bucketItems, byMonth, byShop, byCat, totals, shopTrack, monthsWith, shopKey, shopName, usualCat, nickMap, cleanNick, NICK_MAX } from "../../logic/bucketspend.js";
 import { planState, bucketColours } from "./plan.js";
+import { namesOf, shopLabel, whichFirst } from "../../logic/shops.js";
 
 const ROUTE = /^#ledger\/spend\/([\w-]+)$/;
 export const spendRoute = () => location.hash.match(ROUTE)?.[1] ?? null;
@@ -23,7 +24,13 @@ const cat = (id) => SYSTEM_CATEGORIES.find((c) => c.id === id) ?? SYSTEM_CATEGOR
 const money = (sen) => `${rm(Math.abs(sen))}${sen < 0 ? " CR" : ""}`;
 // Your own name for a shop, as a small tag after the statement name.
 const nicks = () => nickMap(ctx.shops());
-const nickTag = (key, n = nicks()) => (n[key] ? ` <span class="lsnick">🏷 ${esc(n[key])}</span>` : "");
+// A shop's two names (statement name and your name for it): the one that came first, the other as a
+// remark tag (🏷 your name, 🧾 the statement's). shopLabel() in logic/shops.js.
+const shopDocs = () => Object.fromEntries(ctx.shops().filter((x) => x.key).map((x) => [x.key, x]));
+export function shopHtml(shopDoc, name) {
+  const l = shopLabel(shopDoc, name);
+  return `${esc(l.main)}${l.remark ? ` <span class="lsnick">${l.mainIsNick ? "🧾" : "🏷"} ${esc(l.remark)}</span>` : ""}`;
+}
 const times = (n) => `${n} ${n === 1 ? "time" : "times"}`;
 // Months here are pay months (the plan's payday): "25 Oct – 24 Nov", with the year when it isn't this year's.
 const pay = () => payOf(planState().plan);
@@ -46,10 +53,11 @@ export function initSpend(c) {
   sheet.addEventListener("click", (ev) => {
     const b = ev.target.closest("button"); if (!b) return;
     if (b.dataset.lsebucket) { ed.bucket = b.dataset.lsebucket; ed.touched = true; paintSheet(); }
+    if (b.dataset.lsefirst) { ed.first = b.dataset.lsefirst; paintFirst(); }
     if (b.dataset.lse === "close") closeEdit();
     if (b.dataset.lse === "save") saveEdit();
   });
-  sheet.addEventListener("input", (ev) => { if (ev.target.id === "lseNick") ed.nick = ev.target.value; });
+  sheet.addEventListener("input", (ev) => { if (ev.target.id === "lseNick") { ed.nick = ev.target.value; paintFirst(); } });
   sheet.addEventListener("change", (ev) => {
     if (ev.target.id !== "lseCat") return;
     ed.cat = ev.target.value;
@@ -123,7 +131,7 @@ function paintBody() {
 // ---------- the bucket ----------
 function body(plan, bucket) {
   const now = thisMonth(), month = st.month === ALL ? null : st.month, q = st.q.trim();
-  const nk = nicks(), items = bucketItems(all(), plan, bucket, { month, person: st.who || null, q, nicks: nk });
+  const nk = nicks(), sd = shopDocs(), items = bucketItems(all(), plan, bucket, { month, person: st.who || null, q, nicks: nk });
   const t = totals(items, now, pay()), b = bucketsOf(plan).find((x) => x.id === bucket);
   const { commitments, paid } = planState();
   const bills = month && b && !q ? monthBills(commitments, paid, month, pay()).filter((r) => bucketFor(plan, r.c.bucket) === bucket) : [];
@@ -149,7 +157,7 @@ function body(plan, bucket) {
     ${bills.length ? billsHtml(bills) : ""}
     <h3 class="lth">Where it went <span class="note">tap a shop to follow it</span></h3>
     <div class="lsshops">${shopList.map((s) => `<button type="button" class="lsshop" data-lshop="${esc(s.key)}">
-      <span class="lmain"><b>${esc(s.name)}${nickTag(s.key, nk)}</b><small>${times(s.n)} · last ${shortDate(s.last)}</small></span>
+      <span class="lmain"><b>${shopHtml(sd[s.key], s.name)}</b><small>${times(s.n)} · last ${shortDate(s.last)}</small></span>
       <span class="lamt">${money(s.sen)}</span>
       <span class="lbarbg thin"><i style="width:${Math.max(2, Math.round((Math.max(0, s.sen) / big) * 100))}%"></i></span>
     </button>`).join("")}</div>
@@ -168,13 +176,13 @@ function billsHtml(bills) {
 }
 // Items grouped by month (newest first), a page at a time. Tapping one follows its shop.
 function itemsHtml(items) {
-  const names = Object.fromEntries(ctx.people().map((p) => [p.id, p.name])), nk = nicks();
+  const names = Object.fromEntries(ctx.people().map((p) => [p.id, p.name])), sd = shopDocs();
   const whole = Object.fromEntries(byMonth(items, pay()).map((g) => [g.month, g]));
   return `${byMonth(items.slice(0, st.shown), pay()).map((g) => `<div class="lsmonth">
       <h4>${esc(mLabel(g.month))} <span>${rm(whole[g.month].sen)} · ${times(whole[g.month].n)}</span></h4>
       <div class="llist">${g.items.map((t) => `<div class="lrow"><button type="button" class="lopen" data-lshop="${esc(shopKey(t))}">
         <span class="lic" aria-hidden="true">${cat(t.cat).icon}</span>
-        <span class="lmain"><b>${esc(t.merchant || t.raw || cat(t.cat).name)}${nickTag(shopKey(t), nk)}</b><small>${shortDate(t.date)} · ${esc(names[t.spentBy] ?? "")} · ${esc(cat(t.cat).name)}</small></span>
+        <span class="lmain"><b>${shopHtml(sd[shopKey(t)], t.merchant || t.raw || cat(t.cat).name)}</b><small>${shortDate(t.date)} · ${esc(names[t.spentBy] ?? "")} · ${esc(cat(t.cat).name)}</small></span>
         <span class="lamt${t.amountSen < 0 ? " cr" : ""}">${money(t.amountSen)}</span>
       </button></div>`).join("")}</div>
     </div>`).join("")}
@@ -187,7 +195,7 @@ const shopItems = (key) => all().filter((t) => t.type !== "payment" && shopKey(t
 function openEdit() {
   const items = shopItems(st.shop); if (!items.length) return;
   const c = usualCat(items), plan = planState().plan;
-  ed = { key: st.shop, name: shopName(items[0]), nick: nicks()[st.shop] ?? "", cat: c, bucket: txnBucket({ ...items[0], cat: c, bucket: null }, plan) ?? catBucket(c, plan), touched: false, from: c };
+  ed = { key: st.shop, name: shopName(items[0]), nick: nicks()[st.shop] ?? "", first: shopDocs()[st.shop]?.first ?? null, cat: c, bucket: txnBucket({ ...items[0], cat: c, bucket: null }, plan) ?? catBucket(c, plan), touched: false, from: c };
   paintSheet();
   const d = $("lsSheet"); if (!d.open) d.showModal();
 }
@@ -199,8 +207,10 @@ function paintSheet() {
   $("lsSheet").innerHTML = `<div class="gsin">
     <div class="mhead"><h3 id="lsSheetTitle">Edit ${esc(ed.name)}</h3><button type="button" class="mini lsx" data-lse="close" aria-label="Close">✕</button></div>
     <p class="note">For all ${items.length} ${items.length === 1 ? "purchase" : "purchases"} here, and new ones.</p>
-    <label>Your name for it <small>optional</small><input type="text" id="lseNick" maxlength="${NICK_MAX}" autocomplete="off" placeholder="e.g. Morning donuts" value="${esc(ed.nick)}"></label>
-    <p class="note">Shown next to ${esc(ed.name)}, found by the search, and offered under Where when you add spending.</p>
+    <label>Your name for it <small>optional</small><input type="text" id="lseNick" list="lseShops" maxlength="${NICK_MAX}" autocomplete="off" placeholder="e.g. Morning donuts" value="${esc(ed.nick)}"></label>
+    <datalist id="lseShops">${ctx.stocky.shops().map((x) => `<option value="${esc(x)}"></option>`).join("")}</datalist>
+    <p class="note">Both names find this shop, here and in Stocky. Use the name you type in Stocky and its groceries show on this page.</p>
+    <div id="lseFirst">${firstHtml()}</div>
     ${plan ? `<div class="lbl"><span>Counts in</span><div class="chips" role="group" aria-label="Counts in which bucket">${bucketsOf(plan).map((b) => `<button type="button" class="chip" data-lsebucket="${b.id}" aria-pressed="${b.id === ed.bucket}">${esc(b.name)}</button>`).join("")}</div></div>`
       : `<p class="note">Save your money plan first to pick a bucket.</p>`}
     <label>Category<select id="lseCat">${CATS.map((c) => `<option value="${c.id}"${c.id === ed.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>
@@ -209,6 +219,18 @@ function paintSheet() {
     <p class="msg" id="lseMsg" aria-live="polite"></p>
   </div>`;
 }
+// Which of the two names shows first (the other is the remark). Until picked: the one used first.
+const autoFirst = (nick) => whichFirst(ctx.stocky.since([nick]), shopItems(ed.key).map((t) => t.date).sort()[0] ?? null);
+function firstHtml() {
+  const nick = cleanNick(ed.nick);
+  if (!nick || norm(nick) === norm(ed.name)) return "";
+  const f = ed.first ?? autoFirst(nick);
+  return `<div class="lbl"><span>Show first</span><div class="chips" role="group" aria-label="Which name shows first">
+    <button type="button" class="chip" data-lsefirst="nick" aria-pressed="${f === "nick"}">${esc(nick)}</button>
+    <button type="button" class="chip" data-lsefirst="name" aria-pressed="${f === "name"}">${esc(ed.name)}</button></div></div>
+    <p class="note">The other one shows beside it as a remark.</p>`;
+}
+const paintFirst = () => { const el = $("lseFirst"); if (el) el.innerHTML = firstHtml(); };
 // Saves the popup: every item gets the category (and loses an older per-item bucket, so the shop rule leads),
 // a merchant rule gives new purchases the category, and the plan's shopBuckets gives them the bucket.
 async function saveEdit() {
@@ -220,7 +242,8 @@ async function saveEdit() {
   const shops = plan ? shopBucketsWith(plan, e.key, e.bucket, e.cat) : null;
   const planChanged = plan && JSON.stringify(shops) !== JSON.stringify(plan.shopBuckets ?? {});
   const nick = cleanNick(e.nick), shopDoc = ctx.shops().find((x) => x.key === e.key);
-  const nickChanged = nick !== (shopDoc?.nick ?? "");
+  const first = nick ? (ed.first ?? autoFirst(nick)) : (shopDoc?.first ?? "name");
+  const nickChanged = nick !== (shopDoc?.nick ?? "") || first !== (shopDoc?.first ?? "name");
   $("lsSheet").querySelector("[data-lse=save]").disabled = true;
   await ctx.commit(async () => {
     for (let i = 0; i < patches.length || (i === 0 && rule); i += BATCH) {
@@ -231,12 +254,14 @@ async function saveEdit() {
     }
     if (planChanged) await updateDoc(doc(db, "ledgerPlan", "main"), { shopBuckets: shops, updated: now });
     // Clearing the name keeps the doc with nick "" (an edit, not a delete).
-    if (nickChanged) await setDoc(shopDoc ? doc(db, "ledgerShops", shopDoc.id) : doc(collection(db, "ledgerShops")), shopDoc ? { nick, name: e.name, updated: now } : { key: e.key, name: e.name, nick, created: now, updated: now }, { merge: true });
+    if (nickChanged) await setDoc(shopDoc ? doc(db, "ledgerShops", shopDoc.id) : doc(collection(db, "ledgerShops")), shopDoc ? { nick, first, name: e.name, updated: now } : { key: e.key, name: e.name, nick, first, created: now, updated: now }, { merge: true });
+    // Stocky rows that used the old name follow the shop to its new one (one shop list for both journals).
+    if (shopDoc?.nick && nick && nick !== shopDoc.nick) await ctx.stocky.rename(shopDoc.nick, nick);
   }, `Saved ${nick || e.name}.`);
   // Older items (not in the live list) are patched in the fetched history too, so they move at once.
   const byId = Object.fromEntries(patches);
   history?.forEach((t) => { if (byId[t.id]) Object.assign(t, byId[t.id]); });
-  st.msg = `Saved: ${e.name}${nick ? ` (${nick})` : ""} is ${cat(e.cat).name}${plan ? `, counted in ${bucketName(e.bucket)}` : ""}.`;
+  st.msg = `Saved: ${first === "nick" && nick ? `${nick} (${e.name})` : `${e.name}${nick ? ` (${nick})` : ""}`} is ${cat(e.cat).name}${plan ? `, counted in ${bucketName(e.bucket)}` : ""}.`;
   closeEdit();
   renderSpend();
 }
@@ -249,7 +274,7 @@ function tracker(plan, bucket) {
   if (!s.n) return `${back}<p class="note">Nothing at ${esc(s.name)}${st.who ? " for this person" : ""}.</p>`;
   const nowSen = s.recent.at(-1).sen, big = Math.max(...s.recent.map((m) => m.sen), 1), diff = nowSen - s.perMonthSen;
   return `${back}
-    <div class="lsnamerow"><h3 class="lsname">${esc(s.name)}${nickTag(s.key)}</h3><button type="button" class="mini" data-ls="edit">✎ Edit</button></div>
+    <div class="lsnamerow"><h3 class="lsname">${shopHtml(shopDocs()[s.key], s.name)}</h3><button type="button" class="mini" data-ls="edit">✎ Edit</button></div>
     <div class="stats">
       <div class="stat"><small>All time</small><b>${rm(s.sen, { whole: true })}</b></div>
       <div class="stat"><small>a month on average</small><b class="sm">${rm(s.perMonthSen, { whole: true })}</b></div>
@@ -263,8 +288,18 @@ function tracker(plan, bucket) {
     </div>`).join("")}</div>
     <h3 class="lth">Each month</h3>
     <div class="lpbl">${s.months.map((g) => `<div class="lpb lsrow"><span class="lpbn"><b>${esc(mLabel(g.month))}</b><small>${times(g.n)}</small></span><span class="lpba">${rm(g.sen)}</span></div>`).join("")}</div>
+    ${stockyHtml(s.key, s.name)}
     <h3 class="lth">Every visit</h3>
     ${itemsHtml(s.items)}`;
+}
+// What Stocky bought at this shop: Stocky buys whose shop is this shop's name or your name for it.
+const STOCKY_ITEMS = 6;
+function stockyHtml(key, name) {
+  const doc0 = ctx.shops().find((x) => x.key === key), r = ctx.stocky.at(namesOf(doc0 ?? { name }));
+  if (!r?.n) return doc0?.nick ? "" : `<p class="note">Bought groceries here? Give it the name you use in Stocky (✎ Edit) and its Stocky buys show here.</p>`;
+  return `<h3 class="lth">Bought here in Stocky</h3>
+    <p class="note">${times(r.n)}${r.spent ? ` · RM${r.spent.toFixed(2)} with a price` : ""} · last ${shortDate(r.last)}.</p>
+    ${r.items.length ? `<div class="chips">${r.items.slice(0, STOCKY_ITEMS).map((i) => `<a class="chip" href="#stocky/item/${esc(i.id)}">${esc(i.name)}${i.n > 1 ? ` ×${i.n}` : ""}</a>`).join("")}${r.items.length > STOCKY_ITEMS ? `<span class="note">+${r.items.length - STOCKY_ITEMS} more</span>` : ""}</div>` : ""}`;
 }
 
 function click(b) {

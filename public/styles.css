@@ -1634,3 +1634,6 @@ html.bd-locked { overflow: hidden }
 .panel > .eyebrow:first-child, .jhead.eyebrow { color: var(--accent) }
 /* Scrollbars that match the paper on computers. */
 html { scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent }
+
+/* A shop's other name (from Ledger) beside the one shown first */
+.sk-aka { display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font: 600 11px/1.6 var(--body); vertical-align: middle; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis }

@@ -23,7 +23,7 @@ import { initBackup } from "./shell/backup.js";
 import { initFitDetail, refreshFitDetail } from "./features/weight/fitdetail.js";
 import { initMood, refreshMood } from "./features/mood/moodui.js";
 import { initMeals, startMeals, stopMeals, refreshMeals, refreshCalories, refreshMealCost, initWheel, mealData } from "./features/meals/mealsui.js";
-import { initStocky, startStocky, stopStocky, refreshStocky, stockOf, listFood, priceItems, costOf } from "./features/stocky/stockyui.js";
+import { initStocky, startStocky, stopStocky, refreshStocky, stockOf, listFood, priceItems, costOf, stockyShops, stockyAtShop, stockySince, renameStockyShop } from "./features/stocky/stockyui.js";
 import { initCollapse } from "./core/collapse.js";
 import { initZoom } from "./core/zoom.js";
 import { initMotion } from "./core/motion.js";
@@ -97,7 +97,7 @@ initMeals({ db, people, me: currentPerson, entries: allEntries, commit, stock: {
 const doer = () => selfId() ?? currentPerson();
 initStocky({ db, people, me: doer, commit, mealData, pricesChanged: refreshMealCost });
 initPrefs({ db, commit, demo: DEMO }); // card layouts that follow each person (before the Ledger board uses it)
-initLedger({ db, people, me: doer, commit, billsChanged: refreshActivities });
+initLedger({ db, people, me: doer, commit, billsChanged: refreshActivities, stocky: { shops: stockyShops, at: stockyAtShop, since: stockySince, rename: renameStockyShop } });
 initWheel();
 initCollapse();
 initZoom();

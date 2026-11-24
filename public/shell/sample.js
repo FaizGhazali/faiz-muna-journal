@@ -231,6 +231,8 @@ export function sampleData(now = new Date()) {
     if (owed > 0) ledgerTxns[`d-ltx-${ln++}`] = manualTxn(acc, { spentBy: "p1", date: payDay, amount: (owed / 100).toFixed(2), type: "payment", raw: "Card payment" }, parse(payDay).getTime() + 20 * 36e5);
   }
   const ledgerAccounts = { "d-card": card };
+  // One shop list for Stocky and Ledger: the statement's "Pasar Raya Segar" is the "Pasar" Stocky buys at.
+  const ledgerShops = { "d-shop-pasar": { key: "PASAR RAYA SEGAR", name: "Pasar Raya Segar", nick: "Pasar", created: stamp(30), updated: stamp(30) } };
   const ledgerPrograms = { "d-prog": { ...structuredClone(CIMB_PETRONAS), account: "d-card", preset: "cimb-petronas", created: 1, updated: 1 } };
 
   // Money plan: a made-up income, the default split, and a few bills and instalments; the ones due by today are ticked.
@@ -260,5 +262,5 @@ export function sampleData(now = new Date()) {
   income("d-i-side", "p1", ago(9), "side", "Sold old phone", 35000);
   income("d-i-pt", "p2", ago(4), "parttime", "Weekend tuition", 20000);
 
-  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns, diary, pantry, buys, prices, shopList, kinds, ledgerAccounts, ledgerPrograms, ledgerTxns, ledgerPlan, ledgerCommitments, ledgerPaid, ledgerIncome };
+  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns, diary, pantry, buys, prices, shopList, kinds, ledgerAccounts, ledgerPrograms, ledgerTxns, ledgerPlan, ledgerCommitments, ledgerPaid, ledgerIncome, ledgerShops };
 }

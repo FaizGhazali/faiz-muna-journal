@@ -6,12 +6,14 @@ import { confirmDelete } from "../../core/confirm.js";
 import { UNITS, LEVELS, allKinds, kindOf, shelves, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice, setCost, linksTo, linkRows, LINKS_MAX } from "../../logic/stocky.js";
 import { readFood } from "../../logic/meals.js";
 import { findByName, SEARCH_MIN } from "../../logic/search.js";
+import { shopChoices, stockyAt, renames, firstUsed, ledgerShopOf, shopLabel } from "../../logic/shops.js";
 import { $, esc, iso, parse, today, lastUsed } from "../../core/util.js";
 
 const day = (d) => parse(d).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
 let commit, me, people, mealData, cols = {}, unsubs = [];
 let pantry = [], buys = [], prices = [], list = [], kinds = allKinds(), ests = {}, boards = {};
+let ledgerShops = []; // Ledger's shop names: one shop list for both journals (logic/shops.js)
 // Page state: which row's "Bought" form is open, the item in the quick sheet, folded shelves, the meal plan, messages.
 let buying = null, pricing = false, editing = false, byShop = false, peek = null, msg = "", plan = {}, pending = false;
 let shut = new Set(), opened = new Set(), unfolded = new Set(); // folded shelves (kept per device), shelves showing every tile, open parts of the item page
@@ -25,7 +27,7 @@ let pricesChanged = () => {}; // the meal sets show what they cost from the Pric
 export function initStocky(opts) {
   ({ commit, me, people, mealData } = opts);
   if (opts.pricesChanged) pricesChanged = opts.pricesChanged;
-  for (const c of ["pantry", "buys", "prices", "shopList", "foods", "kinds"]) cols[c] = collection(opts.db, c);
+  for (const c of ["pantry", "buys", "prices", "shopList", "foods", "kinds", "ledgerShops"]) cols[c] = collection(opts.db, c);
   byShop = store.get("journal-stocky-byshop", "") === "1";
   try { shut = new Set(JSON.parse(store.get("journal-stocky-shut", "[]"))); } catch (_) { shut = new Set(); }
   addEventListener("hashchange", () => { if (route().page !== "add") newName = ""; closePeek(); pricing = false; editing = false; unfolded.clear(); refreshStocky(true); });
@@ -38,6 +40,7 @@ export function startStocky() {
   on("prices", (v) => { prices = v; pricesChanged(); });
   on("shopList", (v) => { list = v.sort((a, b) => (a.created || 0) - (b.created || 0)); });
   on("kinds", (v) => { kinds = allKinds(v); repaintMenus(); });
+  on("ledgerShops", (v) => { ledgerShops = v; });
 }
 export function stopStocky() { unsubs.forEach((u) => u()); unsubs = []; }
 
@@ -70,6 +73,23 @@ export async function listFood(foodId) {
   const p = linkedItem(foodId);
   if (!p || onList(p.id)) return;
   await addRow({ name: p.name, item: p.id, qty: p.pack, unit: p.unit, from: "manual" });
+}
+// For Ledger (through app.js): the shop names Stocky uses, what Stocky bought at a shop, and renaming a
+// shop's rows when Ledger gives it a new name (so they stay with it).
+export const stockyShops = () => shopNames(buys, prices);
+export const stockyAtShop = (names) => stockyAt(names, buys, pantry);
+export const stockySince = (names) => firstUsed(names, [...buys, ...prices]);
+// A shop as typed, shown by the name that came first, the other (from Ledger) as a small remark.
+function shopHtml(name) {
+  const sh = ledgerShopOf(name, ledgerShops);
+  if (!sh) return esc(name);
+  const l = shopLabel(sh);
+  return `${esc(l.main)}${l.remark ? ` <span class="sk-aka">${esc(l.remark)}</span>` : ""}`;
+}
+export async function renameStockyShop(from, to) {
+  const rows = [...renames(from, to, buys).map((r) => [cols.buys, r]), ...renames(from, to, prices).map((r) => [cols.prices, r])];
+  if (rows.length) await Promise.all(rows.map(([c, r]) => updateDoc(doc(c, r.id), { shop: r.shop })));
+  return rows.length;
 }
 const onList = (itemId) => list.some((r) => r.item === itemId);
 const addRow = (row) => commit(() => setDoc(doc(cols.shopList), { ...row, created: Date.now() }), `${row.name} is on the list.`);
@@ -110,7 +130,7 @@ function leftText(p, e) {
 function bestText(itemId, unit) {
   const b = boards[itemId]?.[0];
   if (!b) return "";
-  return `<span class="sk-best">Cheapest: <b>${esc(b.shop)}</b> ${money(shown(b.now, unit))} ${unitLabel(unit)}${b.onSale ? ` <i class="sk-sale">Sale</i>` : ""}</span>`;
+  return `<span class="sk-best">Cheapest: <b>${shopHtml(b.shop)}</b> ${money(shown(b.now, unit))} ${unitLabel(unit)}${b.onSale ? ` <i class="sk-sale">Sale</i>` : ""}</span>`;
 }
 
 // The list: rows typed or planned, then everything running low that isn't on it yet.
@@ -129,7 +149,8 @@ function rowHtml(r) {
     ${buying === r.key ? buyForm(r, p) : ""}
   </div>`;
 }
-const shopList = () => shopNames(buys, prices);
+// Every shop: Ledger's named shops first (so both journals spell them the same), then Stocky's own.
+const shopList = () => shopChoices(ledgerShops, shopNames(buys, prices));
 const datalist = () => `<datalist id="skShops">${shopList().map((s) => `<option value="${esc(s)}">`).join("")}</datalist>`;
 // The Kind field: type a name (the keyboard opens), or tap ▾ for the list. A name that isn't a kind yet
 // becomes a new kind when the item is saved. Your own kinds have ✕ in the list. Only Food links to Meals.
@@ -318,7 +339,7 @@ function itemPage(id) {
   ${part("prices", "Prices by shop", board.length ? `${esc(board[0].shop)} cheapest` : "None yet", pricing, `
     ${pricing ? "" : `<div class="actions"><button type="button" class="mini" data-sk="price">+ Price I saw</button></div>`}
     ${board.length ? `<div class="sk-board">${board.map((s, i) => `<div class="sk-shoprow${i === 0 ? " best" : ""}">
-        <b>${esc(s.shop)}${i === 0 ? ` <i class="sk-tag">Cheapest</i>` : ""}</b>
+        <b>${shopHtml(s.shop)}${i === 0 ? ` <i class="sk-tag">Cheapest</i>` : ""}</b>
         <span>${money(shown(s.now, p.unit))} <small>${unitLabel(p.unit)}</small></span>
         <small>${s.onSale ? `<i class="sk-sale">Sale${s.until ? ` till ${esc(day(s.until))}` : ""}</i> normal ${s.normal == null ? "not known" : money(shown(s.normal, p.unit))}` : "Normal price"} · seen ${esc(day(s.date))}</small></div>`).join("")}</div>
       ${board.length > 1 ? `<p class="note">${esc(board[0].shop)} saves you about ${money(shown(board.at(-1).now - board[0].now, p.unit))} ${unitLabel(p.unit)} over ${esc(board.at(-1).shop)}.</p>` : ""}`
@@ -389,12 +410,12 @@ function pricesPage() {
   return `${nav("prices")}
   <section class="panel" aria-labelledby="skSaleTitle" data-title="On sale now">
     <h2 id="skSaleTitle">On sale now</h2>
-    ${sales.length ? `<div class="mlist">${sales.map((p) => boards[p.id].filter((s) => s.onSale).map((s) => `<a class="mitem sk-link" href="#stocky/item/${esc(p.id)}"><div><b>${esc(p.name)}</b><small>${esc(s.shop)}${s.until ? ` · till ${esc(day(s.until))}` : ""}${s.normal ? ` · normal ${money(shown(s.normal, p.unit))}` : ""}</small></div><span><i class="sk-sale">${money(shown(s.sale, p.unit))}</i> <small>${unitLabel(p.unit)}</small></span></a>`).join("")).join("")}</div>`
+    ${sales.length ? `<div class="mlist">${sales.map((p) => boards[p.id].filter((s) => s.onSale).map((s) => `<a class="mitem sk-link" href="#stocky/item/${esc(p.id)}"><div><b>${esc(p.name)}</b><small>${shopHtml(s.shop)}${s.until ? ` · till ${esc(day(s.until))}` : ""}${s.normal ? ` · normal ${money(shown(s.normal, p.unit))}` : ""}</small></div><span><i class="sk-sale">${money(shown(s.sale, p.unit))}</i> <small>${unitLabel(p.unit)}</small></span></a>`).join("")).join("")}</div>`
       : `<p class="note">No sales noted. Tick "On sale" when you add a price and it shows here.</p>`}
   </section>
   <section class="panel" aria-labelledby="skCheapTitle" data-title="Cheapest shop">
     <h2 id="skCheapTitle">Cheapest shop for each</h2>
-    ${withP.length ? `<div class="mlist">${withP.map((p) => { const b = boards[p.id], s = b[0]; return `<a class="mitem sk-link" href="#stocky/item/${esc(p.id)}"><div><b>${esc(p.name)}</b><small>${esc(s.shop)}${s.onSale ? " (sale)" : ""}${b.length > 1 ? ` · ${b.length} shops compared` : " · only one shop so far"}</small></div><span>${money(shown(s.now, p.unit))} <small>${unitLabel(p.unit)}</small></span></a>`; }).join("")}</div>`
+    ${withP.length ? `<div class="mlist">${withP.map((p) => { const b = boards[p.id], s = b[0]; return `<a class="mitem sk-link" href="#stocky/item/${esc(p.id)}"><div><b>${esc(p.name)}</b><small>${shopHtml(s.shop)}${s.onSale ? " (sale)" : ""}${b.length > 1 ? ` · ${b.length} shops compared` : " · only one shop so far"}</small></div><span>${money(shown(s.now, p.unit))} <small>${unitLabel(p.unit)}</small></span></a>`; }).join("")}</div>`
       : `<p class="note">Add prices when you buy, or tap an item and add a price you saw. Stocky compares the price per kg, per litre or per piece, so different pack sizes are fair.</p>`}
     ${shops.length ? `<p class="note">Your shops: ${shops.map(esc).join(", ")}.</p>` : ""}
   </section>`;
