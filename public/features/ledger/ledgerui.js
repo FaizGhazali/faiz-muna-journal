@@ -10,7 +10,7 @@ import {
 } from "../../logic/ledger.js";
 import { suggestPattern } from "../../logic/ledgerimport.js";
 import { shopKey, byNick, usualCat } from "../../logic/bucketspend.js";
-import { shopId } from "../../logic/shops.js";
+import { shopId, ledgerShopNames } from "../../logic/shops.js";
 import { initImport, startImport, renderImport } from "./import.js";
 import { initTrends, renderTrends } from "./trends.js";
 import { initRules, startRules, renderRules } from "./rules.js";
@@ -76,9 +76,15 @@ const personName = (id) => people().find((p) => p.id === id)?.name ?? "";
 export { billsDue, payBill, undoPayBill } from "./plan.js";
 // Stocky's side of the one shop list (from app.js): its shop names, what it bought at a shop, renaming its rows.
 let stocky = { shops: () => [], at: () => null, since: () => null, rename: async () => 0 };
+// For Stocky (through app.js): every shop Ledger has spending at, so one shop list serves both journals.
+export const ledgerShops = () => ledgerShopNames(txns, shopNames);
+// Tells Stocky (opts.shopsChanged) when that list changes, so its shop picker never misses a shop.
+let shopsChanged = () => {}, shopsSeen = "";
+function checkShops() { const k = ledgerShops().join("|"); if (k !== shopsSeen) { shopsSeen = k; shopsChanged(); } }
 export function initLedger(opts) {
   ({ db, commit, people, me } = opts);
   if (opts.stocky) stocky = opts.stocky;
+  if (opts.shopsChanged) shopsChanged = opts.shopsChanged;
   board = makeBoard({ host: $("ledger"), bar: $("ledgerBar"), key: "ledger", ...BOARD, redraw: () => refreshLedger(), sync: boardPrefs("ledger") });
   wire();
   initImport({
@@ -105,11 +111,12 @@ export function startLedger() {
   sub("ledgerAliases", (x) => { aliases = x; });
   sub("ledgerCycles", (x) => { cycles = Object.fromEntries(x.map((c) => [c.id, c])); });
   sub("ledgerRebates", (x) => { rebates = Object.fromEntries(x.map((r) => [r.id, r])); });
-  sub("ledgerShops", (x) => { shopNames = x; });
+  sub("ledgerShops", (x) => { shopNames = x; checkShops(); });
   sub("ledgerIncome", (x) => { incomes = x.filter((i) => /^\d{4}-\d{2}-\d{2}$/.test(i.date || "") && Number.isInteger(i.amountSen)); });
   unsubs.push(onSnapshot(query(collection(db, "ledgerTxns"), where("date", ">=", addDays(today(), -LOAD_DAYS))), (s) => {
     txns = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((t) => /^\d{4}-\d{2}-\d{2}$/.test(t.date || "") && Number.isInteger(t.amountSen));
     refreshLedger();
+    checkShops();
   }));
   unsubs.push(...planSubs(db));
   if (!seeded) { seeded = true; ensureSeeds(db).catch(() => { seeded = false; }); }

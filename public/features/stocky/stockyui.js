@@ -24,9 +24,11 @@ const store = {
 };
 
 let pricesChanged = () => {}; // the meal sets show what they cost from the Price book
+let ledgerNames = () => []; // every shop Ledger has spending at (from app.js), for the shop picker
 export function initStocky(opts) {
   ({ commit, me, people, mealData } = opts);
   if (opts.pricesChanged) pricesChanged = opts.pricesChanged;
+  if (opts.ledgerShops) ledgerNames = opts.ledgerShops;
   for (const c of ["pantry", "buys", "prices", "shopList", "foods", "kinds", "ledgerShops"]) cols[c] = collection(opts.db, c);
   byShop = store.get("journal-stocky-byshop", "") === "1";
   try { shut = new Set(JSON.parse(store.get("journal-stocky-shut", "[]"))); } catch (_) { shut = new Set(); }
@@ -149,8 +151,12 @@ function rowHtml(r) {
     ${buying === r.key ? buyForm(r, p) : ""}
   </div>`;
 }
-// Every shop: Ledger's named shops first (so both journals spell them the same), then Stocky's own.
-const shopList = () => shopChoices(ledgerShops, shopNames(buys, prices));
+// Every shop: Ledger's named shops first (so both journals spell them the same), then Stocky's own,
+// then the rest of Ledger's shops (ones only Ledger has spending at so far).
+const shopList = () => shopChoices(ledgerShops, [...shopNames(buys, prices), ...ledgerNames()]);
+// Only the shops Stocky itself has used, for "Your shops" in the Price book.
+const ownShops = () => shopChoices(ledgerShops.filter((s) => namesUsed(s)), shopNames(buys, prices));
+const namesUsed = (s) => [...buys, ...prices].some((r) => ledgerShopOf(r.shop, [s]));
 const datalist = () => `<datalist id="skShops">${shopList().map((s) => `<option value="${esc(s)}">`).join("")}</datalist>`;
 // The Kind field: type a name (the keyboard opens), or tap ▾ for the list. A name that isn't a kind yet
 // becomes a new kind when the item is saved. Your own kinds have ✕ in the list. Only Food links to Meals.
@@ -406,7 +412,7 @@ const addPage = () => `<div class="fdtop"><a class="btn" href="#stocky">← Back
 function pricesPage() {
   const withP = pantry.filter((p) => boards[p.id].length);
   const sales = withP.filter((p) => boards[p.id].some((s) => s.onSale));
-  const shops = shopList();
+  const shops = ownShops(), more = shopList().filter((s) => !shops.includes(s));
   return `${nav("prices")}
   <section class="panel" aria-labelledby="skSaleTitle" data-title="On sale now">
     <h2 id="skSaleTitle">On sale now</h2>
@@ -418,6 +424,7 @@ function pricesPage() {
     ${withP.length ? `<div class="mlist">${withP.map((p) => { const b = boards[p.id], s = b[0]; return `<a class="mitem sk-link" href="#stocky/item/${esc(p.id)}"><div><b>${esc(p.name)}</b><small>${shopHtml(s.shop)}${s.onSale ? " (sale)" : ""}${b.length > 1 ? ` · ${b.length} shops compared` : " · only one shop so far"}</small></div><span>${money(shown(s.now, p.unit))} <small>${unitLabel(p.unit)}</small></span></a>`; }).join("")}</div>`
       : `<p class="note">Add prices when you buy, or tap an item and add a price you saw. Stocky compares the price per kg, per litre or per piece, so different pack sizes are fair.</p>`}
     ${shops.length ? `<p class="note">Your shops: ${shops.map(esc).join(", ")}.</p>` : ""}
+    ${more.length ? `<p class="note">Also in Ledger, ready to pick as the shop: ${more.map(esc).join(", ")}.</p>` : ""}
   </section>`;
 }
 

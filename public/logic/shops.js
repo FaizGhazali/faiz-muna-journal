@@ -5,6 +5,8 @@
 // shop's nick or statement name, ignoring case, spaces and punctuation. Nothing is copied: the link is
 // worked out when drawing, and renaming a shop in Ledger renames the Stocky rows that used the old name.
 
+import { shopName, shopKey } from "./moneyplan.js";
+
 // "Lotus's", "LOTUS'S " and "lotuss" are one shop.
 export const shopId = (s) => String(s ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 export const sameShop = (a, b) => !!shopId(a) && shopId(a) === shopId(b);
@@ -19,14 +21,27 @@ export function ledgerShopOf(name, ledgerShops = []) {
 // The names a shop goes by in Stocky: its nick and its statement name.
 export const namesOf = (shop) => [shop?.nick, shop?.name].filter((s) => shopId(s));
 
-// One list of shop names for a picker: Ledger's named shops (their nick), then the other names,
-// in order, with no two meaning the same shop. A Stocky "Lotus's" is left out when Ledger calls it that.
+// One list of shop names for a picker: Ledger's named shops (by the name shown first), then the other
+// names, in order, with no two meaning the same shop: a Stocky "Lotus's" is left out when a Ledger shop
+// goes by it, under either of its names.
 export function shopChoices(ledgerShops = [], others = []) {
   const seen = new Set(), out = [];
   const add = (s) => { const k = shopId(s); if (!k || seen.has(k)) return; seen.add(k); out.push(String(s).trim()); };
-  const named = ledgerShops.filter((s) => s.nick).sort((a, b) => a.nick.localeCompare(b.nick));
-  for (const s of named) { add(s.nick); seen.add(shopId(s.name)); }
+  const named = ledgerShops.filter((s) => s.nick).map((s) => ({ s, main: shopLabel(s).main })).sort((a, b) => a.main.localeCompare(b.main));
+  for (const { s, main } of named) { add(main); seen.add(shopId(s.nick)); seen.add(shopId(s.name)); }
   others.forEach(add);
+  return out;
+}
+
+// Every shop Ledger has spending at (not card payments), most recent first, each once, by the name
+// shown first (shopLabel), so Stocky can pick a shop that so far only Ledger knows.
+export function ledgerShopNames(txns = [], ledgerShops = []) {
+  const docs = new Map(ledgerShops.filter((s) => s.key).map((s) => [s.key, s])), seen = new Set(), out = [];
+  for (const t of [...txns].filter((x) => x.type !== "payment" && (x.merchant || x.raw)).sort((a, b) => String(b.date).localeCompare(String(a.date)))) {
+    const k = shopKey(t);
+    if (seen.has(k)) continue;
+    seen.add(k); out.push(shopLabel(docs.get(k), shopName(t)).main);
+  }
   return out;
 }
 

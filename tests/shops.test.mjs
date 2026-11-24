@@ -28,7 +28,8 @@ test("namesOf gives nick and statement name", () => {
 });
 
 test("shopChoices puts named shops first and drops repeats", () => {
-  assert.deepEqual(shopChoices([lotus, mydin], ["LOTUS'S", "Pasar", "pasar ", "Lotus's Stores Sdn Bhd"]), ["Lotus's", "Pasar"]);
+  assert.deepEqual(shopChoices([lotus, mydin], ["LOTUS'S", "Pasar", "pasar ", "Lotus's Stores Sdn Bhd"]), ["LOTUS'S STORES SDN BHD", "Pasar"]);
+  assert.deepEqual(shopChoices([{ ...lotus, first: "nick" }], ["Lotus's Stores Sdn Bhd", "Pasar"]), ["Lotus's", "Pasar"]);
   assert.deepEqual(shopChoices([], ["Mydin"]), ["Mydin"]);
 });
 
@@ -70,4 +71,18 @@ test("shopLabel shows the first name, the other as a remark", async () => {
   assert.equal(whichFirst("2026-11-01", null), "nick");
   assert.equal(firstUsed(["Lotus's"], [{ shop: "lotus's", date: "2026-11-02" }, { shop: "LOTUS'S", date: "2026-10-30" }, { shop: "Mydin", date: "2026-01-01" }]), "2026-10-30");
   assert.equal(firstUsed([], [{ shop: "x", date: "2026-01-01" }]), null);
+});
+
+test("ledgerShopNames lists every Ledger shop once, newest first, by its first name", async () => {
+  const { ledgerShopNames } = await import("../public/logic/shops.js");
+  const txns = [
+    { merchant: "NakNak", date: "2026-11-20", type: "purchase", cat: "dining" },
+    { merchant: "naknak ", date: "2026-11-01", type: "purchase", cat: "dining" },
+    { merchant: "LOTUS'S STORES SDN BHD", date: "2026-11-10", type: "purchase", cat: "groceries" },
+    { raw: "Card payment", date: "2026-11-22", type: "payment", cat: "payment" },
+    { raw: "SETEL", date: "2026-11-21", type: "purchase", cat: "fuel" },
+  ];
+  assert.deepEqual(ledgerShopNames(txns, []), ["SETEL", "NakNak", "LOTUS'S STORES SDN BHD"]);
+  assert.deepEqual(ledgerShopNames(txns, [{ ...lotus, first: "nick" }]), ["SETEL", "NakNak", "Lotus's"]);
+  assert.deepEqual(ledgerShopNames([], []), []);
 });
