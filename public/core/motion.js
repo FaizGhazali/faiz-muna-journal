@@ -4,7 +4,7 @@
 // this watches the DOM; only changes within WINDOW_MS of a tap or key press move, so live updates from the
 // other phone never animate. Cards folding (core/collapse.js) have their own animation and are left alone.
 // Calm, not rushed (24 Nov 2026: 280 ms felt too quick): sizes ease over DUR, forms slide in over FORM_MS.
-const WINDOW_MS = 900, DUR = 460, FORM_MS = 420, FADE_MS = 380, EASE = "cubic-bezier(.25, .8, .25, 1)";
+const WINDOW_MS = 900, DUR = 460, FORM_MS = 420, FADE_MS = 380, EASE = "cubic-bezier(.16, 1, .3, 1)";
 const CARDS = "#app .view .panel, #app .person, dialog[open]";
 const ENTER = "[data-form], form, .lpbform, .editor"; // things that open
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
