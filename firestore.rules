@@ -30,7 +30,7 @@ service cloud.firestore {
     match /{coll}/{rest=**} {
       allow read: if family();
       allow write: if person() && !(coll in ['entries', 'activities', 'habitDays', 'moves', 'meals', 'burns', 'diary',
-        'diaryPhotos', 'diaryStyle', 'nextMove', 'accounts', 'ledgerTxns', 'prefs']);
+        'diaryPhotos', 'diaryStyle', 'nextMove', 'accounts', 'ledgerTxns', 'ledgerIncome', 'prefs']);
     }
 
     // ---------- one person's own ----------
@@ -42,6 +42,8 @@ service cloud.firestore {
     match /burns/{id}       { allow write: if ownDay('person', id); }
     match /diary/{id}       { allow write: if own('person'); }
     match /diaryPhotos/{id} { allow write: if own('person'); }
+    // Ledger income (salary, part-time, side money): each person logs and changes only their own.
+    match /ledgerIncome/{id} { allow write: if own('person'); }
     // Keyed by person id.
     match /diaryStyle/{pid} { allow write: if person() && pid == me(); }
     match /nextMove/{pid}   { allow write: if person() && pid == me(); }
