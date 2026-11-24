@@ -5,7 +5,7 @@
 import { $, esc } from "../../core/util.js";
 import { rm } from "../../logic/ledger.js";
 import { outlook, countdown, planView, monthName, addMonths } from "../../logic/moneyplan.js";
-import { planState } from "./plan.js";
+import { planState, realIncome } from "./plan.js";
 
 export const ANALYTICS = "#ledger/analytics";
 const COUNTDOWN_SHOWN = 6; // instalments listed before "and N more"
@@ -26,13 +26,15 @@ export function renderAnalytics() {
     host.innerHTML = `${head}<p class="note">Nothing to show yet. Set up your money plan and add your bills on the Ledger page, and the next 12 months shows up here.</p>`;
     return;
   }
-  const v = planView({ plan, commitments, paid, txns: ctx.txns(), day: ctx.today() });
-  host.innerHTML = `${head}${ahead(v, commitments)}`;
+  const inc = realIncome(), v = planView({ plan, commitments, paid, txns: ctx.txns(), day: ctx.today(), incomeSen: inc.totalSen });
+  host.innerHTML = `${head}${ahead(v, commitments, inc.regularSen)}`;
 }
 
 // The next 12 months: income less bills each month, with a "+N" over each month where an instalment ends.
-function ahead(v, commitments) {
-  const o = outlook(commitments, v.incomeSen, v.month, { pay: v.pay }), cd = countdown(commitments, v.month, v.pay);
+// The months ahead count only salaries (regularSen); part-time and side money aren't promised.
+function ahead(v, commitments, regularSen) {
+  const o = outlook(commitments, regularSen, v.month, { pay: v.pay }).map((x, i) => (i ? x : { ...x, freeSen: v.incomeSen - x.committedSen }));
+  const cd = countdown(commitments, v.month, v.pay);
   const W = 300, H = 112, L = 24, B = 92, top = 22, bw = (W - L - 4) / o.length;
   const max = Math.max(...o.map((x) => Math.abs(x.freeSen)), 1), y = (sen) => B - (Math.max(0, sen) / max) * (B - top);
   const steps = o.map((x, i) => (i && x.freeSen > o[i - 1].freeSen ? x.freeSen - o[i - 1].freeSen : 0));
@@ -48,7 +50,7 @@ function ahead(v, commitments) {
       ${[0, Math.floor(o.length / 2), o.length - 1].map((i) => `<text x="${(L + i * bw + bw / 2).toFixed(1)}" y="${H - 6}" class="lab">${monthName(o[i].month, { short: true })}</text>`).join("")}
       <text x="${L - 4}" y="${B + 3}" class="lab end">0</text>
     </svg>
-    <p class="note">Income less bills: ${rm(o[0].freeSen, { whole: true })} this month${o.at(-1).freeSen !== o[0].freeSen ? `, ${rm(o.at(-1).freeSen, { whole: true })} by ${esc(monthName(o.at(-1).month))}` : ""}. Day-to-day spending comes out of this.</p>
+    <p class="note">Income less bills: ${rm(o[0].freeSen, { whole: true })} this month${o.at(-1).freeSen !== o[0].freeSen ? `, ${rm(o.at(-1).freeSen, { whole: true })} by ${esc(monthName(o.at(-1).month))}` : ""}. Day-to-day spending comes out of this. Months ahead count salaries only.</p>
     ${cd.ending.length ? `<h3 class="lph">Debt-free countdown</h3>
     <div class="lpbl">${shown.map((c) => `<div class="lpb">
       <span class="lpdue ok">${esc(monthName(c.endMonth, { short: true }))}${c.endMonth.slice(0, 4) !== v.month.slice(0, 4) ? ` ’${c.endMonth.slice(2, 4)}` : ""}</span>

@@ -6,7 +6,7 @@ import { $, today } from "../core/util.js";
 
 const APP = "our-journal";
 const VERSION = 1;
-export const COLS = ["config", "entries", "activities", "habitDays", "moves", "foods", "mealSets", "meals", "burns", "diary", "diaryPhotos", "diaryStyle", "pantry", "buys", "prices", "shopList", "kinds", "ledgerAccounts", "ledgerAliases", "ledgerCycles", "ledgerTxns", "ledgerPrograms", "ledgerRebates", "ledgerPlan", "ledgerCommitments", "ledgerPaid", "ledgerShops", "prefs"];
+export const COLS = ["config", "entries", "activities", "habitDays", "moves", "foods", "mealSets", "meals", "burns", "diary", "diaryPhotos", "diaryStyle", "pantry", "buys", "prices", "shopList", "kinds", "ledgerAccounts", "ledgerAliases", "ledgerCycles", "ledgerTxns", "ledgerPrograms", "ledgerRebates", "ledgerPlan", "ledgerCommitments", "ledgerPaid", "ledgerShops", "ledgerIncome", "prefs"];
 // Not backed up on purpose: nextMove (rebuilt by the app), visits (public visitor count) and accounts (who has
 // chosen their own password; restoring it could skip that step).
 export const COLS_SKIPPED = ["nextMove", "visits", "accounts"];
@@ -15,7 +15,7 @@ const LABELS = {
   diary: "diary entries", diaryPhotos: "diary photos", diaryStyle: "diary settings",
   activities: "activities", habitDays: "habit days", moves: "history items",
   pantry: "Stocky items", buys: "buys", prices: "prices", shopList: "shopping list items", kinds: "kinds",
-  ledgerTxns: "spending items", ledgerAccounts: "cards and wallets", ledgerCommitments: "bills", ledgerShops: "shop names",
+  ledgerTxns: "spending items", ledgerAccounts: "cards and wallets", ledgerCommitments: "bills", ledgerShops: "shop names", ledgerIncome: "income",
 };
 const summary = (counts) => Object.keys(LABELS).filter((k) => counts[k]).map((k) => `${counts[k]} ${counts[k] === 1 ? one(LABELS[k]) : LABELS[k]}`);
 function one(label) { return label.replace(/ies$/, "y").replace(/s$/, ""); } // "diary entries" → "diary entry"

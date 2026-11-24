@@ -19,6 +19,7 @@ import { payOf, monthOf, monthRange, addMonths } from "../../logic/moneyplan.js"
 import { initSpend, renderSpend } from "./spend.js";
 import { initAnalytics, renderAnalytics, ANALYTICS } from "./analytics.js";
 import { initDocs, openDocs, refreshDocs, resumeDocs, afterSignIn, docsOn } from "./docsui.js";
+import { initIncome, renderIncome, incomeEntry } from "./income.js";
 import { makeBoard } from "../../shell/board.js";
 import { boardPrefs } from "../../shell/prefs.js";
 
@@ -36,7 +37,7 @@ const RECENT_BY_SIZE = { s: 1, m: 3, l: RECENT };
 const BOARD = {
   defaults: [
     { id: "add", size: "m" }, { id: "recent", size: "m" },
-    { id: "sum", size: "m" }, { id: "bills", size: "s" }, { id: "card:*", size: "s" },
+    { id: "sum", size: "m" }, { id: "income", size: "s" }, { id: "bills", size: "s" }, { id: "card:*", size: "s" },
     { id: "people", size: "l" }, { id: "trends", size: "m" },
   ],
   sizes: { people: "l" },
@@ -49,7 +50,7 @@ const CATS = SYSTEM_CATEGORIES.filter((c) => !c.hidden);
 const cat = (id) => SYSTEM_CATEGORIES.find((c) => c.id === id) ?? SYSTEM_CATEGORIES.find((c) => c.id === "other");
 
 let db, commit, people, me, unsubs = [], seeded = false;
-let accounts = [], programs = [], aliases = [], cycles = {}, txns = [], rebates = {}, shopNames = [];
+let accounts = [], programs = [], aliases = [], cycles = {}, txns = [], rebates = {}, shopNames = [], incomes = [];
 // "Always categorise" offer after a category is changed by hand: { raw, cat, pattern, host, msg }.
 let offer = null, openRow = null;
 // The add form. catAuto: the category came from a merchant rule (it follows the shop until picked by hand).
@@ -78,12 +79,13 @@ export function initLedger(opts) {
     db: () => db, commit, people, me, today, accounts: () => accounts, programs: () => programs, aliases: () => aliases, txns: () => txns,
     refresh: () => refreshLedger(), offer: makeOffer, paintOffer,
   });
-  const shared = { db: () => db, commit, people, today, accounts: () => live(), programs: () => programs, cycles: () => cycles, txns: () => txns, refresh: () => refreshLedger(), board };
+  const shared = { db: () => db, commit, people, today, accounts: () => live(), programs: () => programs, cycles: () => cycles, txns: () => txns, incomes: () => incomes, refresh: () => refreshLedger(), board };
   initTrends(shared);
   initRules(shared);
   initPlan({ ...shared, me, planChanged: () => renderAnalytics() });
   initAnalytics(shared);
   initDocs({ db: () => db, commit, me });
+  initIncome({ ...shared, me });
   afterSignIn();
   initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases, shops: () => shopNames });
   $("me").addEventListener("change", () => { f.who = null; formKey = ""; refreshLedger(); });
@@ -98,6 +100,7 @@ export function startLedger() {
   sub("ledgerCycles", (x) => { cycles = Object.fromEntries(x.map((c) => [c.id, c])); });
   sub("ledgerRebates", (x) => { rebates = Object.fromEntries(x.map((r) => [r.id, r])); });
   sub("ledgerShops", (x) => { shopNames = x; });
+  sub("ledgerIncome", (x) => { incomes = x.filter((i) => /^\d{4}-\d{2}-\d{2}$/.test(i.date || "") && Number.isInteger(i.amountSen)); });
   unsubs.push(onSnapshot(query(collection(db, "ledgerTxns"), where("date", ">=", addDays(today(), -LOAD_DAYS))), (s) => {
     txns = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((t) => /^\d{4}-\d{2}-\d{2}$/.test(t.date || "") && Number.isInteger(t.amountSen));
     refreshLedger();
@@ -112,6 +115,7 @@ export function refreshLedger() {
   renderPlan();
   renderSpend();
   renderAnalytics();
+  renderIncome();
   refreshDocs(findEntry); resumeDocs(findEntry);
   renderAdd();
   renderImport();
@@ -448,6 +452,7 @@ function txnEntry(t) {
 // The entry behind a 📎 sheet, from the live data (null when it's gone).
 function findEntry(coll, id) {
   if (coll === "ledgerTxns") { const t = txns.find((x) => x.id === id); return t ? txnEntry(t) : null; }
+  if (coll === "ledgerIncome") { const x = incomes.find((y) => y.id === id); return x ? incomeEntry(x) : null; }
   if (coll === "ledgerPaid") { const { paid, commitments } = planState(), p = paid[id], c = p && commitments.find((x) => x.id === p.commitment); return c ? billEntry(p, c) : null; }
   return null;
 }

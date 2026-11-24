@@ -12,7 +12,7 @@
 
 export const FOLDERS = {
   purchase: "Receipts", refund: "Receipts", payment: "Card payments",
-  bill: "Bills", salary: "Payslips", statement: "Statements",
+  bill: "Bills", salary: "Payslips", income: "Income", statement: "Statements",
 };
 export const ROOT = "Ledger";
 export const NAME_MAX = 60; // characters of the "what" part

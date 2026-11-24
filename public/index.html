@@ -303,7 +303,7 @@ try {
       <p class="eyebrow">Ledger · money plan</p>
       <h2 id="l-plan">Know what's left after the bills</h2>
       <p>Split your monthly income into buckets, like 55% essentials, 5% fun, 10% debt, 15% savings and 15% investing, and change the split any time. Add what you pay every month: house, car, loans, PayLater. Your money month starts on payday (the 25th, or any day you pick), so Ledger shows where this month's salary goes, what you can still spend, and how much that is a day until the next payday. Your day-to-day spending counts too. Tick each bill when it's paid. Give an instalment its final payment month and Ledger counts down the payments left. Tap "Analytics" for the next 12 months: what's free after bills each month, and the month each instalment ends and frees up money. A bucket that goes over its share turns red. Tap a bucket to see what it went on, month by month, and tap a shop to see everything you've ever spent there, so you know where cutting back or waiting for a sale would help. Adding spending comes first, so a coffee or some petrol takes seconds, and the month sits below as small tiles: what you can still spend, bills to pay and your card rebate. Tap a tile and it pops up over the page with everything in it. Tap "Arrange cards" to move any card up or down and make it small, medium or large, each size showing what fits. Your layout follows you to any phone you sign in on. Tap 📎 on anything you logged or paid to add the receipt, now or weeks later: a photo or any file goes straight to your own OneDrive, named by date, shop and amount and filed by month.</p>
-      <ul><li>Your own split, adding up to 100%</li><li>Can still spend, and per day to month end</li><li>Bills this month, ticked when paid</li><li>Instalments counting down to their last payment</li><li>Analytics: the next 12 months, and when each instalment ends</li><li>Card rebate in one small tile</li><li>Receipts, bills and payslips kept in your OneDrive, named and filed for you</li></ul>
+      <ul><li>Your own split, adding up to 100%</li><li>Can still spend, and per day to month end</li><li>Bills this month, ticked when paid</li><li>Instalments counting down to their last payment</li><li>Analytics: the next 12 months, and when each instalment ends</li><li>Card rebate in one small tile</li><li>Income as it comes in: salaries, part-time and side money</li><li>Receipts, bills and payslips kept in your OneDrive, named and filed for you</li></ul>
     </div>
     <div class="demo panel mealdemo" aria-hidden="true">
       <div class="dhead"><span class="note">Sample · can still spend</span><b>RM<span data-from="1200" data-to="640" data-dp="0">640</span></b></div>
@@ -351,6 +351,7 @@ try {
   <section class="info" aria-labelledby="l-new">
     <h2 id="l-new">What's new</h2>
     <ol class="changes">
+      <li><time datetime="2026-11-24">24 Nov 2026</time> Ledger Income: log each salary, part-time pay and side money (selling, flipping) as it comes in, with 📎 for the payslip. What you can still spend now uses what really came in.</li>
       <li><time datetime="2026-11-24">24 Nov 2026</time> Receipts in OneDrive: tap 📎 on spending or a paid bill to add a photo, PDF or any file, any time. It's named and filed for you in your own OneDrive.</li>
       <li><time datetime="2026-11-24">24 Nov 2026</time> Development progress on this page: a wheel of how much work each journal has had, and a dotted calendar of each day's work, kept up to date by every release.</li>
       <li><time datetime="2026-11-24">24 Nov 2026</time> Ledger's month now starts on payday (the 25th to start, change it in Edit plan), and the money plan card shows its ring at medium size.</li>
@@ -514,6 +515,7 @@ try {
     <div class="lplan" id="ledgerPlan"></div>
     <section class="panel lanalytics" id="ledgerAnalytics" aria-labelledby="laTitle" data-title="Analytics"></section>
     <section class="panel lspend" id="ledgerSpend" aria-labelledby="lsTitle" data-title="Spending by bucket"></section>
+    <section class="panel lincome" id="ledgerIncome" data-card="income" aria-labelledby="lnTitle" data-title="Income"></section>
     <section class="panel ladd" id="ledgerAdd" data-card="add" aria-labelledby="ledgerAddTitle" data-title="Add spending"></section>
     <div class="jslot" data-slot="ledger" data-card="people" data-title="This month, each of you"><p class="eyebrow jhead">This month, each of you</p></div>
     <section class="panel limport" id="ledgerImport" aria-labelledby="liTitle" data-title="Import statement" hidden></section>

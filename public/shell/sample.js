@@ -249,5 +249,16 @@ export function sampleData(now = new Date()) {
     if (due <= T) ledgerPaid[paidKey(id, pm)] = { commitment: id, month: pm, date: due, amountSen, by: "p1", source: "typed", at: parse(due).getTime() + 9 * 36e5 };
   }
 
-  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns, diary, pantry, buys, prices, shopList, kinds, ledgerAccounts, ledgerPrograms, ledgerTxns, ledgerPlan, ledgerCommitments, ledgerPaid };
+  // Income: both salaries on payday for the last few months (made-up employers), plus part-time and side money.
+  const ledgerIncome = {};
+  const income = (id, person, date, kind, from, amountSen) => { if (date <= T) ledgerIncome[id] = { person, date, kind, from, amountSen, docs: [], at: parse(date).getTime() + 10 * 36e5, created: 1, updated: 1 }; };
+  for (let k = 0; k < 4; k++) {
+    const d = `${addMonths(mo, -k)}-${String(DEFAULT_PAY_DAY).padStart(2, "0")}`;
+    income(`d-i-a${k}`, "p1", d, "salary", "Syarikat Maju", 280000);
+    income(`d-i-l${k}`, "p2", d, "salary", "Klinik Sihat", 170000);
+  }
+  income("d-i-side", "p1", ago(9), "side", "Sold old phone", 35000);
+  income("d-i-pt", "p2", ago(4), "parttime", "Weekend tuition", 20000);
+
+  return { config: { people: { people } }, entries, activities, habitDays, moves, foods, mealSets, meals, burns, diary, pantry, buys, prices, shopList, kinds, ledgerAccounts, ledgerPrograms, ledgerTxns, ledgerPlan, ledgerCommitments, ledgerPaid, ledgerIncome };
 }

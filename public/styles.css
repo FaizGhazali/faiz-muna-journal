@@ -1515,6 +1515,12 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 .lpb:first-child { border-top: 0 }
 .lpbills .lpbl .lpb:not(:has(.lpdue)) { grid-template-columns: minmax(0, 1fr) auto auto }
 .lpb.paid { color: var(--muted) }
+.lpbills .lpb.paid:has([data-lp=docs]) { grid-template-columns: 4.6em minmax(0, 1fr) auto auto auto }
+/* Income (income.js) */
+.lincome { display: grid; gap: 12px; align-content: start }
+.lpb.lnrow { grid-template-columns: 4.6em minmax(0, 1fr) auto }
+.lpb.lnrow > .lbtnrow { grid-column: 2 / -1; justify-content: flex-end }
+.lpba.ok { color: var(--good) }
 .lpb.paid b { color: var(--ink); font-weight: 400 }
 .lpdue { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap }
 .lpbn { display: grid; min-width: 0 }

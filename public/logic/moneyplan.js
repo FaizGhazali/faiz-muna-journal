@@ -138,9 +138,10 @@ export function shopBucketsWith(plan, key, bucket, cat) {
   return out;
 }
 
-// Everything the plan dashboard shows for the month of `day`.
-export function planView({ plan, commitments = [], paid = {}, txns = [], day }) {
-  const pay = payOf(plan), m = monthOf(day, pay), range = monthRange(m, pay), incomeSen = plan?.incomeSen ?? 0;
+// Everything the plan dashboard shows for the month of `day`. incomeSen: the month's real income
+// (logic/income.js monthIncome); missing = the plan's.
+export function planView({ plan, commitments = [], paid = {}, txns = [], day, incomeSen = plan?.incomeSen ?? 0 }) {
+  const pay = payOf(plan), m = monthOf(day, pay), range = monthRange(m, pay);
   const bills = monthBills(commitments, paid, m, pay);
   const committed = {}, spent = spentByBucket(txns, plan, m);
   for (const r of bills) { const b = bucketFor(plan, r.c.bucket); committed[b] = (committed[b] ?? 0) + r.amountSen; }

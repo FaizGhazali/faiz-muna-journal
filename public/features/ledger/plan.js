@@ -7,6 +7,7 @@ import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "../.
 import { $, esc, lastUsed } from "../../core/util.js";
 import { confirmDelete } from "../../core/confirm.js";
 import { openDocs, docsOn } from "./docsui.js";
+import { monthIncome } from "../../logic/income.js";
 import { rm, toSen, shortDate } from "../../logic/ledger.js";
 import {
   DEFAULT_BUCKETS, DEFAULT_PAY_DAY, PAY_DAY_MAX, bucketsOf, checkPlan, planView, checkCommitment, paidRecord, paidKey,
@@ -51,12 +52,18 @@ export function renderPlan() {
   const host = $("ledgerPlan"); if (!host || !ctx.people().length) return;
   // A form someone has started typing in isn't redrawn by the other phone's changes.
   if (host.querySelector("[data-form][data-dirty]")) return;
-  const day = ctx.today(), v = planView({ plan, commitments, paid, txns: ctx.txns(), day });
+  const day = ctx.today(), v = planView({ plan, commitments, paid, txns: ctx.txns(), day, incomeSen: realIncome(day).totalSen });
   const size = (id) => ctx.board.sizeOf(id);
   const sumForm = !plan || editing === "plan", billOpen = editing?.startsWith("bill:") || manage;
   host.innerHTML = `
     <section class="panel lpsum" data-card="sum" data-title="Money plan" aria-labelledby="lpTitle"${sumForm ? ` data-force="l"` : ""}>${sumForm ? planForm() : summary(v, size("sum"))}</section>
     ${plan ? `<section class="panel lpbills" data-card="bills" data-title="Bills this month" aria-labelledby="lpbTitle"${billOpen ? ` data-force="l"` : ""}>${bills(v, billOpen ? "l" : size("bills"))}</section>` : ""}`;
+}
+
+// The month's real income (logged salaries and extras; the plan's until a salary is logged), logic/income.js.
+export function realIncome(day = ctx.today()) {
+  const pay = payOf(plan);
+  return monthIncome(ctx.incomes(), plan?.incomeSen ?? 0, monthOf(day, pay), pay);
 }
 
 // ---------- where the money goes ----------
@@ -78,7 +85,7 @@ function summary(v, size = "l") {
       <div><small>${over ? "Over your income by" : "Can still spend"}</small><b class="${over ? "over" : ""}">${rm(Math.abs(v.freeSen), { whole: true })}</b></div>
       ${over ? "" : `<div><small>a day, to ${end}</small><b class="sm">${rm(v.perDaySen, { whole: true })}</b></div>`}
     </div>
-    <p class="note">Bills ${rm(v.committedSen, { whole: true })} (${v.sharePct}% of income) · spent day to day ${rm(v.spentSen, { whole: true })}</p>
+    <p class="note">${realIncome().fromPlan ? `Income from your plan until a salary is logged in Income.` : `Income is what you logged this month${realIncome().salaries.some((s) => s.expected) ? " (last month's salary until this month's is in)" : ""}.`} Bills ${rm(v.committedSen, { whole: true })} (${v.sharePct}% of income) · spent day to day ${rm(v.spentSen, { whole: true })}</p>
     <h3 class="lph">Your plan <span class="note">tap one to see what it went on</span></h3>
     <div class="lprows">${v.buckets.map((b) => `<a class="lprow" href="#ledger/spend/${b.id}" aria-label="${esc(b.name)}: see what it went on">
       <span class="dot" style="--c:${col[b.id]}"></span>
@@ -116,10 +123,10 @@ function planForm() {
     <h2 id="lpTitle">${first ? "Plan your month" : "Edit your plan"}</h2>
     ${first ? `<p class="note">Split your monthly income into buckets, then add your bills. Ledger shows what's left to spend each month and when each instalment ends.</p>` : ""}
     <div class="two">
-      <label>Monthly income (take-home), RM<input type="text" id="lpIncome" inputmode="decimal" autocomplete="off" placeholder="4000" value="${plan ? (plan.incomeSen / 100).toFixed(2).replace(/\.00$/, "") : ""}"></label>
+      <label>Usual monthly income, RM<input type="text" id="lpIncome" inputmode="decimal" autocomplete="off" placeholder="4000" value="${plan ? (plan.incomeSen / 100).toFixed(2).replace(/\.00$/, "") : ""}"></label>
       <label>Payday <small>your month starts here</small><input type="number" id="lpPayDay" min="1" max="${PAY_DAY_MAX}" step="1" inputmode="numeric" value="${payOf(plan)}"></label>
     </div>
-    <p class="note">Your money month runs from payday to the day before the next one. Use 1 for calendar months.</p>
+    <p class="note">Your money month runs from payday to the day before the next one (use 1 for calendar months). Once you log salaries in Income, the real amounts are used instead of this one.</p>
     <div class="lpform">${bs.map((b, i) => `<div class="lpfrow">
       <input type="text" data-name="${i}" value="${esc(b.name)}" aria-label="Bucket name" maxlength="30">
       <label class="lppct"><input type="number" data-pct="${i}" min="0" max="100" step="1" inputmode="numeric" value="${b.pct}" aria-label="${esc(b.name)} percent">%</label>
