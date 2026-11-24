@@ -54,7 +54,8 @@ let accounts = [], programs = [], aliases = [], cycles = {}, txns = [], rebates 
 // "Always categorise" offer after a category is changed by hand: { raw, cat, pattern, host, msg }.
 let offer = null, openRow = null;
 // The add form. catAuto: the category came from a merchant rule (it follows the shop until picked by hand).
-const f = { who: null, type: "purchase", amount: "", raw: "", cat: "other", catAuto: true, account: null, date: today() };
+// bucket / bucketPicked: "Counts in", which follows the category and shop until a chip is tapped.
+const f = { who: null, type: "purchase", amount: "", raw: "", cat: "other", catAuto: true, bucket: null, bucketPicked: false, account: null, date: today() };
 let msg = "", cardForm = false, cardMsg = "", formKey = "", extra = 0, board;
 // The Recent item being fixed in place (its own row turns into the form): { id, where, who, type, amount, raw,
 // cat, account, date, msg }. where = the Where text it opened with. While it's open the list isn't redrawn.
@@ -172,7 +173,8 @@ function renderAdd() {
         <label>${pay ? "Card" : "Paid with"}<select id="lgAcct">${live().filter((x) => !pay || x.type === "credit_card").map((x) => `<option value="${x.id}"${x.id === a?.id ? " selected" : ""}>${esc(x.name)}${x.last4 ? ` ··${esc(x.last4)}` : ""}</option>`).join("")}</select></label>
       </div>
       ${pay ? "" : `${where}
-      <label>Category <small id="lgWhy"></small><select id="lgCat">${CATS.map((c) => `<option value="${c.id}"${c.id === f.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>`}
+      <label>Category <small id="lgWhy"></small><select id="lgCat">${CATS.map((c) => `<option value="${c.id}"${c.id === f.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>
+      <div id="lgBucket"></div>`}
       <div class="lwarn" id="lgWarn" role="status" hidden></div>
       <div class="actions"><button type="button" class="primary" id="lgSave">Save</button>${fewer != null ? `<button type="button" class="mini" id="lgFew" data-to="${fewer}">Fewer options</button>` : ""}<button type="button" class="mini" id="lgCard">＋ Card or wallet</button></div>
       <p class="msg" id="lgMsg" aria-live="polite"></p>`;
@@ -242,9 +244,21 @@ function shops(skip = new Set()) {
   return out;
 }
 function paintWhy() {
+  paintAddBucket();
   const el = $("lgWhy"); if (!el) return;
   const r = f.raw.trim() ? autoCat() : null, named = byNick(f.raw, shopNames);
   el.textContent = [named ? `· your name for ${named.name}` : "", f.catAuto && r?.rule ? "· picked from the shop name" : f.catAuto && r?.usual ? "· what it usually is" : ""].filter(Boolean).join(" ");
+}
+// The item as Add spending would save it, for working out its bucket.
+function addItem() {
+  const raw = whereRaw(), r = categorise(raw, aliases);
+  return { type: f.type, cat: f.cat, raw, merchant: r.merchant || raw.trim() };
+}
+function paintAddBucket() {
+  const el = $("lgBucket"); if (!el) return;
+  const x = addItem();
+  if (!f.bucketPicked) f.bucket = txnBucket(x, planState().plan);
+  el.innerHTML = bucketPicker(x, f.bucket, "lgbucket");
 }
 // The live "don't pay yet" check while a card payment is being typed.
 function paintWarn() {
@@ -276,6 +290,8 @@ async function save() {
   const raw = whereRaw(), r = categorise(raw, aliases);
   // `at` (ms) is required: Firestore refuses a field that is undefined, and the save used to fail silently.
   const t = manualTxn(a, { spentBy: who(), date: f.date, amount: f.amount, type: f.type, raw: f.type === "payment" ? "Card payment" : raw, cat: f.cat, merchant: r.merchant || raw.trim() }, Date.now());
+  const own = f.bucketPicked ? ownBucket(t, planState().plan, f.bucket) : null;
+  if (own) t.bucket = own; // only when the shop or category wouldn't put it there anyway
   store.set(ACCT_KEY, a.id);
   const cyc = cycleOf(a, t.posted);
   const what = f.type === "payment" ? `${rm(sen)} paid to ${a.name}` : `${f.type === "refund" ? "Refund of " : ""}${rm(sen)} at ${f.raw.trim()}`;
@@ -288,7 +304,7 @@ async function save() {
     return say("Not saved yet. Your numbers are still here: try again.");
   }
   msg = "";
-  Object.assign(f, { amount: "", raw: "", cat: "other", catAuto: true, type: "purchase" });
+  Object.assign(f, { amount: "", raw: "", cat: "other", catAuto: true, bucket: null, bucketPicked: false, type: "purchase" });
   formKey = "";
   delete $("ledgerAdd").dataset.force; // "More options" opened it: back to the chosen size, the toast says it's saved
   if (sheetView) closeSheet(); // the pop-out from the small card closes; the toast says it's saved
@@ -496,10 +512,16 @@ function editForm(t) {
 // category (or the shop's rule); hidden when the item isn't day-to-day spending (PayLater, no plan yet).
 function editedItem(t) { return { ...t, type: edit.type, cat: edit.cat, merchant: edit.raw.trim() || t.merchant, raw: edit.raw.trim() || t.raw, bucket: null }; }
 function bucketChips(t) {
-  const plan = planState().plan, x = editedItem(t);
-  if (!plan || !txnBucket(x, plan)) return "";
-  if (!edit.bucketPicked) edit.bucket = txnBucket({ ...x, bucket: t.bucket }, plan);
-  return `<div class="lbl"><span>Counts in</span><div class="chips" role="group" aria-label="Counts in which bucket">${bucketsOf(plan).map((b) => `<button type="button" class="chip" data-lebucket="${b.id}" aria-pressed="${b.id === edit.bucket}">${esc(b.name)}</button>`).join("")}</div></div>`;
+  const x = editedItem(t);
+  if (!edit.bucketPicked) edit.bucket = txnBucket({ ...x, bucket: t.bucket }, planState().plan);
+  return bucketPicker(x, edit.bucket, "lebucket");
+}
+// The "Counts in" chips (Add spending and Fix this item); data-<attr> = bucket id. Empty when there's no plan
+// yet or the item isn't day-to-day spending (a card payment, PayLater).
+function bucketPicker(x, chosen, attr) {
+  const plan = planState().plan;
+  if (!plan || !txnBucket({ ...x, bucket: null }, plan)) return "";
+  return `<div class="lbl"><span>Counts in</span><div class="chips" role="group" aria-label="Counts in which bucket">${bucketsOf(plan).map((b) => `<button type="button" class="chip" data-${attr}="${b.id}" aria-pressed="${b.id === chosen}">${esc(b.name)}</button>`).join("")}</div></div>`;
 }
 function paintBucket() {
   const t = txns.find((x) => x.id === edit?.id), el = $("leBucket");
@@ -652,6 +674,7 @@ function wireAdd(add) {
   add.addEventListener("click", (ev) => {
     const b = ev.target.closest("button"); if (!b) return;
     if (b.dataset.ltype) { f.type = b.dataset.ltype; msg = ""; formKey = ""; renderAdd(); }
+    if (b.dataset.lgbucket) { f.bucket = b.dataset.lgbucket; f.bucketPicked = true; paintAddBucket(); }
     if (b.id === "lgSave") save();
     if (b.id === "lgOpen") { msg = ""; openAdd("l"); } // the pop-out has the screen to itself: the full form
     if (b.id === "lgAll") openAdd("l");
