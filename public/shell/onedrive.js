@@ -9,7 +9,7 @@
 import { DEMO } from "./demo.js";
 import { SIMPLE_MAX, fitSize } from "../logic/docs.js";
 
-export const CLIENT_ID = ""; // the app's "Application (client) ID" from Microsoft Entra (docs/onedrive-setup.md)
+export const CLIENT_ID = "74f1dd19-aec4-4814-a0a6-3122cd8dd330"; // the app's "Application (client) ID" from Microsoft Entra (docs/onedrive-setup.md)
 const AUTH = "https://login.microsoftonline.com/common/oauth2/v2.0";
 const GRAPH = "https://graph.microsoft.com/v1.0/me/drive/special/approot";
 const SCOPE = "Files.ReadWrite.AppFolder offline_access";
