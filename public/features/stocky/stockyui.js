@@ -8,6 +8,7 @@ import { readFood } from "../../logic/meals.js";
 import { findByName, SEARCH_MIN } from "../../logic/search.js";
 import { shopChoices, stockyAt, renames, firstUsed, ledgerShopOf, shopLabel } from "../../logic/shops.js";
 import { $, esc, iso, parse, today, lastUsed } from "../../core/util.js";
+import { ico } from "../../core/icons.js";
 
 const day = (d) => parse(d).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
@@ -117,7 +118,7 @@ export function refreshStocky(force) {
   syncForms();
 }
 
-const nav = (on) => `<nav class="chips sk-nav" aria-label="Stocky pages">${[["", "🛒 List"], ["prices", "🏷️ Price book"], ["plan", "🍽️ Plan meals"]]
+const nav = (on) => `<nav class="chips sk-nav" aria-label="Stocky pages">${[["", `${ico("cart")} List`], ["prices", `${ico("tag")} Price book`], ["plan", `${ico("plate")} Plan meals`]]
   .map(([k, v]) => `<a class="chip" href="#stocky${k ? "/" + k : ""}" aria-pressed="${on === (k || "home")}">${v}</a>`).join("")}</nav>`;
 const say = () => `<p class="note sk-msg" role="status">${esc(msg)}</p>`;
 const PILL = { out: ["--obese", "Out"], low: ["--over", "Low"], soon: ["--under", "Buy soon"], ok: ["--good", "Fine"], unknown: ["--line", "Not sure"] };

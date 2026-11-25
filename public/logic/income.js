@@ -12,11 +12,11 @@
 import { monthOf, addMonths } from "./moneyplan.js";
 
 export const INCOME_KINDS = [
-  { id: "salary", name: "Salary", icon: "💼", folder: "salary" },
-  { id: "parttime", name: "Part-time", icon: "🕒", folder: "salary" },
-  { id: "side", name: "Side income", icon: "🔁", folder: "income", hint: "Flipping, selling, small jobs" },
-  { id: "bonus", name: "Bonus", icon: "🎁", folder: "income" },
-  { id: "other", name: "Other", icon: "💰", folder: "income" },
+  { id: "salary", name: "Salary", icon: "work", folder: "salary" },
+  { id: "parttime", name: "Part-time", icon: "clock", folder: "salary" },
+  { id: "side", name: "Side income", icon: "repeat", folder: "income", hint: "Flipping, selling, small jobs" },
+  { id: "bonus", name: "Bonus", icon: "gift", folder: "income" },
+  { id: "other", name: "Other", icon: "wallet", folder: "income" },
 ];
 export const FROM_MAX = 40;
 export const NOTE_MAX = 120;

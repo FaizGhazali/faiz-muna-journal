@@ -6,6 +6,7 @@
 // saves themselves; the walkthrough only watches the page.
 import { unfold } from "../core/collapse.js";
 import { $ } from "../core/util.js";
+import { ico } from "../core/icons.js";
 
 const LOST_MS = 600;
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -36,17 +37,17 @@ const WEIGH = [
 
 // The how-to list. Ones with steps get a "Show me" button; the rest are quick tips for now.
 const GUIDES = [
-  { id: "weigh", icon: "⚖️", title: "Log your weight", blurb: "Write today's weight in the Weight journal.", time: "1 min", steps: WEIGH,
+  { id: "weigh", icon: "scale", title: "Log your weight", blurb: "Write today's weight in the Weight journal.", time: "1 min", steps: WEIGH,
     about: "We'll open the Weight journal together, find the entry card and fill it in. Your weight is saved for real, so have today's number ready. You can stop any time.",
     learn: ["Switch journals with the round button", "Find the entry card", "Pick who, the day and the weight", "Save it"],
     words: "weigh weigh-in scale kg kilo bmi entry log record today" },
-  { id: "meal", icon: "🍽️", title: "Log a meal", blurb: "Pick the meal, add foods or a meal set, save.", words: "food eat calories kcal breakfast lunch dinner snack set plate" },
-  { id: "run", icon: "🏃", title: "Add a run", blurb: "In the Weight journal's entry card, add a picture of your COROS run and check the numbers.", words: "exercise coros watch running picture photo pace heart fitness" },
-  { id: "mood", icon: "🙂", title: "Rate your day", blurb: "Tap a face on the Yesterday card.", words: "mood face feeling yesterday happy" },
-  { id: "diary", icon: "📔", title: "Write in your diary", blurb: "Round button, then Dearly, then Write today's diary. Jot a few words and tap Write it for me, or write it yourself.", words: "dearly diary journal write entry ai writer notes malay manglish dear" },
-  { id: "stocky", icon: "🛒", title: "Track your groceries", blurb: "Round button, then Stocky. Add the things you buy often and tap Bought each time you shop. Stocky tells you what's running low, puts it on the list and shows the cheapest shop.", words: "groceries grocery stocky shopping list pantry stock buy bought price shop cheap sale barang dapur running out" },
-  { id: "fold", icon: "✋", title: "Fold a card", blurb: "Hold the knob on a card's top edge to tuck it away. Tap it to open again.", words: "hide collapse tidy close card" },
-  { id: "zoom", icon: "🔍", title: "Zoom a graph", blurb: "Pinch with two fingers. Double-tap to see it all again.", words: "chart graph pinch closer detail" },
+  { id: "meal", icon: "plate", title: "Log a meal", blurb: "Pick the meal, add foods or a meal set, save.", words: "food eat calories kcal breakfast lunch dinner snack set plate" },
+  { id: "run", icon: "pulse", title: "Add a run", blurb: "In the Weight journal's entry card, add a picture of your COROS run and check the numbers.", words: "exercise coros watch running picture photo pace heart fitness" },
+  { id: "mood", icon: "smile", title: "Rate your day", blurb: "Tap a face on the Yesterday card.", words: "mood face feeling yesterday happy" },
+  { id: "diary", icon: "book", title: "Write in your diary", blurb: "Round button, then Dearly, then Write today's diary. Jot a few words and tap Write it for me, or write it yourself.", words: "dearly diary journal write entry ai writer notes malay manglish dear" },
+  { id: "stocky", icon: "cart", title: "Track your groceries", blurb: "Round button, then Stocky. Add the things you buy often and tap Bought each time you shop. Stocky tells you what's running low, puts it on the list and shows the cheapest shop.", words: "groceries grocery stocky shopping list pantry stock buy bought price shop cheap sale barang dapur running out" },
+  { id: "fold", icon: "fold", title: "Fold a card", blurb: "Hold the knob on a card's top edge to tuck it away. Tap it to open again.", words: "hide collapse tidy close card" },
+  { id: "zoom", icon: "search", title: "Zoom a graph", blurb: "Pinch with two fingers. Double-tap to see it all again.", words: "chart graph pinch closer detail" },
 ];
 
 // ---------- the list ----------
@@ -57,9 +58,9 @@ function drawList(ev) {
   const hits = GUIDES.filter((g) => { const hay = `${g.title} ${g.blurb} ${g.words}`.toLowerCase(); return words.every((w) => hay.includes(w)); })
     .sort((a, b) => !!b.steps - !!a.steps);
   $("guideList").innerHTML = hits.map((g, i) => `<li style="--i:${i}"><button type="button" class="gcard${g.steps ? " live" : ""}" data-g="${g.id}">
-    <span class="gico" aria-hidden="true">${g.icon}</span>
+    <span class="gico" aria-hidden="true">${ico(g.icon)}</span>
     <span class="gtxt"><b>${g.title}</b><span>${g.blurb}</span></span>
-    <span class="gtag">${g.steps ? `<i aria-hidden="true">▶</i> Show me · ${g.time}` : "Quick tip"}</span></button></li>`).join("");
+    <span class="gtag">${g.steps ? `${ico("play")} Show me · ${g.time}` : "Quick tip"}</span></button></li>`).join("");
   const empty = $("guideEmpty");
   empty.hidden = hits.length > 0;
   empty.textContent = hits.length ? "" : `Nothing for "${q}" yet. Try weight, meal or run.`;
@@ -68,7 +69,7 @@ function drawList(ev) {
 function openSheet(g) {
   const sheet = $("guideSheet");
   sheet.innerHTML = `<form method="dialog" class="gsin">
-    <div class="gshead"><span class="gico big" aria-hidden="true">${g.icon}</span>
+    <div class="gshead"><span class="gico big" aria-hidden="true">${ico(g.icon)}</span>
       <div><p class="eyebrow">${g.steps ? `Walkthrough · about ${g.time}` : "Quick tip"}</p><h3 id="gsTitle">${g.title}</h3></div></div>
     <p>${g.about || g.blurb}</p>
     ${g.learn ? `<ol class="glearn">${g.learn.map((l) => `<li>${l}</li>`).join("")}</ol>` : `<p class="note">A step-by-step walkthrough for this is on the way.</p>`}
@@ -162,7 +163,7 @@ function finish() {
   ui.root.classList.add("finish");
   [...ui.dots.children].forEach((d) => d.className = "on");
   ui.count.textContent = "All done";
-  ui.title.textContent = "🎉 Your weight is in!";
+  ui.title.textContent = "Your weight is in!";
   ui.text.textContent = "It shows on your card at the top and in your graph. Do this whenever you step on the scale.";
   ui.swipe.hidden = true;
   ui.next.hidden = false;

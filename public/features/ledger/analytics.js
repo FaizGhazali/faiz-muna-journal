@@ -1,4 +1,4 @@
-// Ledger: the Analytics page (#ledger/analytics, section #ledgerAnalytics), opened by "📊 Analytics" beside
+// Ledger: the Analytics page (#ledger/analytics, section #ledgerAnalytics), opened by "Analytics" beside
 // "Arrange cards". Graphs that are good to look at now and then but don't need a place on the everyday board
 // (decided 24 Nov 2026: "Next 12 months, free after bills" was a board card the family found little use for).
 // For now: the next 12 months (income less bills) and the debt-free countdown. Maths in logic/moneyplan.js.

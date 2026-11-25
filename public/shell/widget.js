@@ -1,6 +1,7 @@
 // Offers the Android home-screen widget (android/, "Next Move"): after the app is installed, and from the wheel's ⋯ menu.
 // Android phones only, never in the demo (the widget signs in with the family password).
 import { $ } from "../core/util.js";
+import { ico } from "../core/icons.js";
 
 const APK = "https://github.com/FaizGhazali/faiz-muna-journal/releases/latest/download/next-move.apk";
 
@@ -15,7 +16,7 @@ export function offerWidget({ auto = false } = {}) {
   if (!sheet || !canWidget() || sheet.open) return;
   try { localStorage.setItem(OFFERED, "1"); } catch {}
   sheet.innerHTML = `<form method="dialog" class="gsin">
-    <div class="gshead"><span class="gico big" aria-hidden="true">📲</span>
+    <div class="gshead"><span class="gico big" aria-hidden="true">${ico("phone")}</span>
       <div><p class="eyebrow">Android widget</p><h3 id="wsTitle">Your next move on the home screen</h3></div></div>
     <p>A small card on your home screen shows your next move without opening the journal. Tap it to open the journal.</p>
     <ol class="glearn">

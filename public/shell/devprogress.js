@@ -48,7 +48,7 @@ function slice(r0, r1, a0, a1) {
   return `M${f(x0)} ${f(y0)}A${r1} ${r1} 0 0 1 ${f(x1)} ${f(y1)}L${f(x2)} ${f(y2)}A${r0} ${r0} 0 0 0 ${f(x3)} ${f(y3)}Z`;
 }
 
-// Each slice's label says when it was last worked on, and the journal left longest gets a dashed ring, an ⏳ and
+// Each slice's label says when it was last worked on, and the journal left longest gets a dashed ring and
 // "Next up?" in the list beside it: the point of the wheel is to show which journal is waiting for its turn.
 function drawWheel() {
   const wait = waiting(wheel(log), today());
@@ -69,7 +69,7 @@ function drawWheel() {
       <path class="dw-track" d="${slice(R0, R1, a0, a1)}"/>
       <path class="dw-fill" d="${slice(R0, r, a0, a1)}"/>
       <text x="${lx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle">${esc(m.name)}${when
-        ? `<tspan class="dw-when" x="${lx.toFixed(1)}" dy="15">${m.due ? "⏳ " : ""}${esc(when)}</tspan>` : ""}</text>
+        ? `<tspan class="dw-when" x="${lx.toFixed(1)}" dy="15">${esc(when)}</tspan>` : ""}</text>
     </g>`;
   }).join("");
   const sel = mods.find((m) => m.id === picked);

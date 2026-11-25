@@ -10,6 +10,7 @@ import { S, store, pid, person, mine, find } from "./state.js";
 import { loadPhotos, photoCache } from "./data.js";
 import { paintAi, useCloud, wakeCloud, probe, device, aiState } from "./writer.js";
 import { render } from "./diaryui.js";
+import { ico } from "../../core/icons.js";
 
 const MAX_PHOTOS = 4;
 let saveTimer = 0;
@@ -40,13 +41,13 @@ export function renderEditor(id) {
       </header>
       <p class="note">${id ? "Editing" : "Writing as"} <b>${esc(p.name)}</b>${restored ? ` · <button type="button" class="linkbtn" data-dy="fresh">Start fresh instead</button>` : ""}</p>
       <div class="chips dy-modes" role="tablist" aria-label="How to write">
-        <button type="button" class="chip" role="tab" data-mode="ai" aria-selected="${ed.mode === "ai"}" aria-pressed="${ed.mode === "ai"}">✨ Help me write</button>
-        <button type="button" class="chip" role="tab" data-mode="self" aria-selected="${ed.mode === "self"}" aria-pressed="${ed.mode === "self"}">✍️ Write it myself</button>
+        <button type="button" class="chip" role="tab" data-mode="ai" aria-selected="${ed.mode === "ai"}" aria-pressed="${ed.mode === "ai"}">${ico("sparkle")} Help me write</button>
+        <button type="button" class="chip" role="tab" data-mode="self" aria-selected="${ed.mode === "self"}" aria-pressed="${ed.mode === "self"}">${ico("pen")} Write it myself</button>
       </div>
       <div class="dy-notes" id="dyNotesBox"${ed.mode === "ai" ? "" : " hidden"}>
         <label for="dyNotes">Jot down your day <small>Keywords, half sentences, slang, any language. One thing per line.</small></label>
         <textarea id="dyNotes" rows="5" maxlength="2000" placeholder="went mamak with friends&#10;discussed career&#10;risau pasal duit&#10;laughed until 2AM">${esc(ed.notes)}</textarea>
-        <div class="actions"><button type="button" class="primary" id="dyWrite" data-dy="write">✨ Write it for me</button><button type="button" id="dyStop" data-dy="stop" hidden>Stop</button></div>
+        <div class="actions"><button type="button" class="primary" id="dyWrite" data-dy="write">${ico("sparkle")} Write it for me</button><button type="button" id="dyStop" data-dy="stop" hidden>Stop</button></div>
         <div id="dyAi" class="dy-ai" aria-live="polite"></div>
       </div>
       <label for="dyBody" class="sr">Your diary entry</label>
@@ -115,7 +116,7 @@ function paintTags() {
 function paintPhotos() {
   const host = $("dyEdPhotos"), ed = S.ed; if (!host || !ed) return;
   host.innerHTML = ed.photos.map((p, i) => `<span class="dy-thumb"><img src="${esc(p.thumb || p.data)}" alt="Photo ${i + 1}"><button type="button" class="mini" data-dy="unphoto" data-i="${i}" aria-label="Remove photo ${i + 1}">✕</button></span>`).join("")
-    + (ed.photos.length < MAX_PHOTOS ? `<button type="button" class="dy-addphoto" data-dy="photo">📷 Add photo</button>` : "");
+    + (ed.photos.length < MAX_PHOTOS ? `<button type="button" class="dy-addphoto" data-dy="photo">${ico("camera")} Add photo</button>` : "");
 }
 // Photos are shrunk on the phone (longest side 1280 px, JPEG) so each fits in one database document.
 async function readPhoto(file) {

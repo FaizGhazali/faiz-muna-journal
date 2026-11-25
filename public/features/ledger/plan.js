@@ -9,6 +9,7 @@ import { confirmDelete } from "../../core/confirm.js";
 import { openDocs, docsOn } from "./docsui.js";
 import { monthIncome } from "../../logic/income.js";
 import { rm, toSen, shortDate } from "../../logic/ledger.js";
+import { ico } from "../../core/icons.js";
 import {
   DEFAULT_BUCKETS, DEFAULT_PAY_DAY, PAY_DAY_MAX, bucketsOf, checkPlan, planView, checkCommitment, paidRecord, paidKey,
   monthOf, monthName, liveIn, payOf, billTasks,
@@ -198,7 +199,7 @@ function billRow(r, people) {
     <span class="lpdue ok">✓ ${shortDate(p.date)}</span>
     <span class="lpbn"><b>${esc(c.name)}</b><small>${p.source === "statement" ? `<span class="lptag ok">On statement</span>` : `<span class="lptag">Typed</span>`}${people[p.by] ? ` by ${esc(people[p.by])}` : ""}${left ? ` · ${left}` : ""}</small></span>
     <span class="lpba">${rm(r.amountSen)}</span>
-    ${docsOn() ? `<button type="button" class="mini" data-lp="docs" data-id="${c.id}" aria-label="Receipts for ${esc(c.name)}">📎${p.docs?.length ? ` ${p.docs.length}` : ""}</button>` : ""}
+    ${docsOn() ? `<button type="button" class="mini" data-lp="docs" data-id="${c.id}" aria-label="Receipts for ${esc(c.name)}">${ico("clip")}${p.docs?.length ? ` ${p.docs.length}` : ""}</button>` : ""}
     <button type="button" class="mini" data-lp="unpay" data-id="${c.id}" aria-label="Untick ${esc(c.name)}">Undo</button>
   </div>`;
 }
@@ -278,7 +279,7 @@ async function removeBill(id) {
   renderPlan();
 }
 
-// The 📎 sheet's entry for a paid bill (docsui.js). Bills are shared, so either of you can add the receipt.
+// The paperclip sheet's entry for a paid bill (docsui.js). Bills are shared, so either of you can add the receipt.
 export function billEntry(p, c) {
   const by = ctx.people().find((x) => x.id === p.by)?.name ?? "";
   return { coll: "ledgerPaid", id: p.id, kind: "bill", date: p.date, what: c.name, amountSen: p.amountSen, person: by,

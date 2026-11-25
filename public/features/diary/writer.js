@@ -9,6 +9,7 @@ import { $, esc } from "../../core/util.js";
 import { S, store, pid, person, styleOf } from "./state.js";
 import { count, saveDraft, offerUndo } from "./editor.js";
 import { renderSettings, paintAiPage } from "./settings.js";
+import { ico } from "../../core/icons.js";
 
 // What this device can do (localai.js checkSupport), checked once when the writer is first needed.
 export let device = null;
@@ -61,7 +62,7 @@ export function paintAi() {
       <p class="note">Pick a size. It downloads once${device.mobile ? ", best on Wi-Fi" : ""}.</p>
       ${sizesHtml()}
       <p class="note">${esc(m.note)}</p>
-      <div class="actions"><button type="button" class="primary" data-dy="download">Download ${esc(sizeOf(m))}</button></div>${cloud.cloudReady() ? `<p class="note">No download? Pick ☁️ Cloud above.</p>` : ""}</div>`;
+      <div class="actions"><button type="button" class="primary" data-dy="download">Download ${esc(sizeOf(m))}</button></div>${cloud.cloudReady() ? `<p class="note">No download? Pick Cloud above.</p>` : ""}</div>`;
   } else if (S.modelUi === "sizes") {
     // Changing size while one is already downloaded: same buttons, right here.
     html = `<div class="dy-box"><p><b>Pick a writer size</b></p>${sizesHtml()}<p class="note">${esc(m.note)}</p>
@@ -86,7 +87,7 @@ export function paintAi() {
     <p class="note">The writer is small and makes slips. Change anything that didn't happen, isn't how you felt, or isn't how you'd say it.</p></div>`;
   host.innerHTML = html;
   const ed = S.ed;
-  if (btn) { btn.disabled = aiState.busy || (!useCloud() && device && !device.checking && !device.ok); btn.textContent = aiState.busy && aiState.phase === "write" ? "Writing…" : ed && ed.ai && bodyText(ed.body) ? "✨ Write it again" : "✨ Write it for me"; }
+  if (btn) { btn.disabled = aiState.busy || (!useCloud() && device && !device.checking && !device.ok); btn.innerHTML = aiState.busy && aiState.phase === "write" ? "Writing…" : `${ico("sparkle")} ${ed && ed.ai && bodyText(ed.body) ? "Write it again" : "Write it for me"}`; }
   if (stop) stop.hidden = !(aiState.busy && aiState.phase === "write");
 }
 const repaint = () => { paintAi(); paintAiPage(); };
@@ -113,7 +114,7 @@ export async function wakeCloud() {
   else cloud.cloudWarm(await S.getToken().catch(() => null));
 }
 const cloudOffer = (lead = "") => cloud.cloudReady()
-  ? `<div class="dy-cloudoffer"><span class="note">${esc(lead)}The cloud writer works on any phone, with nothing to download.</span><button type="button" data-dy="cloud-use">☁️ Use the cloud writer</button></div>` : "";
+  ? `<div class="dy-cloudoffer"><span class="note">${esc(lead)}The cloud writer works on any phone, with nothing to download.</span><button type="button" data-dy="cloud-use">${ico("cloud")} Use the cloud writer</button></div>` : "";
 export function cloudAskHtml() {
   return `<div class="dy-box"><p><b>Use the cloud writer?</b></p>
     <p class="note">${S.demo ? "In the demo, only your notes go to a shared server that writes the entry and keeps nothing. Everyone trying the demo shares a few writes a day."
@@ -126,8 +127,8 @@ export function whereHtml() {
   if (!cloud.cloudReady() || aiState.busy) return "";
   const c = useCloud(), phone = (device?.mobile ?? /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent));
   return `<div class="dy-style dy-where" role="group" aria-label="Which writer"><span>Writer</span>
-    <button type="button" class="mini" data-dy="device-use" aria-pressed="${!c}"${phone ? ` disabled title="Not on phones"` : ""}>💻 This ${phone ? "phone" : "device"}${phone ? " (off on phones)" : ""}</button>
-    <button type="button" class="mini" data-dy="cloud-use" aria-pressed="${c}">☁️ Cloud</button></div>`;
+    <button type="button" class="mini" data-dy="device-use" aria-pressed="${!c}"${phone ? ` disabled title="Not on phones"` : ""}>${ico("laptop")} This ${phone ? "phone" : "device"}${phone ? " (off on phones)" : ""}</button>
+    <button type="button" class="mini" data-dy="cloud-use" aria-pressed="${c}">${ico("cloud")} Cloud</button></div>`;
 }
 function cloudLineHtml() {
   const left = S.demo && demoLeftN != null ? `${demoLeftN} demo ${demoLeftN === 1 ? "write" : "writes"} left today` : "";
@@ -138,8 +139,8 @@ export function styleHtml() {
   if (aiState.busy) return "";
   const story = storyOn();
   return `<div class="dy-style" role="group" aria-label="Writing style"><span>Style</span>
-      <button type="button" class="mini" data-dy="style-story" aria-pressed="${story}">📖 Story</button>
-      <button type="button" class="mini" data-dy="style-close" aria-pressed="${!story}">📝 Close to my notes</button></div>
+      <button type="button" class="mini" data-dy="style-story" aria-pressed="${story}">${ico("story")} Story</button>
+      <button type="button" class="mini" data-dy="style-close" aria-pressed="${!story}">${ico("note")} Close to my notes</button></div>
     <p class="note">${story ? `Tells your points as a story. It may add small details${useCloud() ? "" : " (more often with the small model on this device)"}, so you'll see what it added to check.` : "Tidies each point into a sentence, with nothing added."}</p>`;
 }
 // Story (default) or Close to my notes, per device ("journal-ai-style"), for both writers.

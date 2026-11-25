@@ -39,6 +39,11 @@ body { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--body); -w
 ::selection { background: var(--accent-soft) }
 p, li { text-wrap: pretty }
 html { accent-color: var(--accent); caret-color: var(--accent) }
+/* Icons (core/icons.js): one line set in currentColor, sized to the text around them. */
+.ico { display: inline-block; width: 1.15em; height: 1.15em; vertical-align: -.22em; flex: none; overflow: visible }
+:is(.gico, .wslot span, .wheelbtn span, .tile b, .dy-emptyicon, .wmenu button span) > .ico { width: 1em; height: 1em; vertical-align: middle }
+.gico, .wmenu button span, .wslot span, .ricon, .tile b { color: var(--accent) }
+.lic, .fdot { color: var(--muted) }
 .wrap { max-width: 1040px; margin: 0 auto; padding-block: 32px 48px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   display: grid; gap: 24px }

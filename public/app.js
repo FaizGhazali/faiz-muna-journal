@@ -7,6 +7,7 @@ import { getAuth, connectAuthEmulator, onAuthStateChanged, signOut } from "https
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, terminate, clearIndexedDbPersistence,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import "./core/icons.js"; // adds the icon sprite every page uses
 import { collection, doc, setDoc, getDoc, onSnapshot, useMemory } from "./core/fs.js";
 import { initAccount, signIn, personOf, mustChoosePassword, choosePassword } from "./shell/account.js";
 import { openMemory } from "./core/memdb.js";

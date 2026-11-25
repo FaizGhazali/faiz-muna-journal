@@ -9,6 +9,7 @@ import { S, store, person, mine, pid, ro } from "./state.js";
 import { viewOnly } from "../../core/owner.js";
 import { draftKey } from "./editor.js";
 import { suggestions } from "./settings.js";
+import { ico } from "../../core/icons.js";
 
 export function renderDash(fresh) {
   const host = $("diary"), filt = S.filt;
@@ -16,7 +17,7 @@ export function renderDash(fresh) {
     host.innerHTML = `<section class="panel paper dy-hero" id="dyHero" aria-label="Today" data-title="Dearly"></section>
       <section class="panel paper dy-otd" id="dyOtd" aria-labelledby="dyOtdTitle" hidden></section>
       <section class="panel dy-mem" aria-labelledby="dyMemTitle" data-title="Your memories">
-        <div class="dy-memhead"><h2 id="dyMemTitle">${ro() ? "Memories" : "Your memories"}</h2>${ro() ? "" : `<a class="btn mini" href="#diary/ai">✨ AI &amp; privacy<span class="dy-badge" id="dyBadge" hidden></span></a>`}</div>
+        <div class="dy-memhead"><h2 id="dyMemTitle">${ro() ? "Memories" : "Your memories"}</h2>${ro() ? "" : `<a class="btn mini" href="#diary/ai">${ico("sparkle")} AI &amp; privacy<span class="dy-badge" id="dyBadge" hidden></span></a>`}</div>
         <div class="dy-tools" id="dyTools">
           <input type="search" id="dyQ" class="gsearch" placeholder="Search your diary" aria-label="Search your diary" autocomplete="off" enterkeyhint="search" value="${esc(filt.q)}">
           <div class="dy-filters">
@@ -39,7 +40,7 @@ function paintHero() {
     <h2 class="dy-greet">${ro() ? `${esc(p.name)}'s diary` : `${esc(greeting(new Date().getHours()))}, ${esc(p.name)}`}</h2>
     <p class="dy-date">${esc(pd.date)}</p>
     ${ro() ? "" : `<p class="dy-line">${esc(lineFor(t))}</p>`}
-    ${ro() ? viewOnly(pid(), "diary") : `<div class="actions"><a class="btn primary dy-go" href="#diary/write">${has ? "✍️ Continue your draft" : "✍️ Write today's diary"}</a></div>`}
+    ${ro() ? viewOnly(pid(), "diary") : `<div class="actions"><a class="btn primary dy-go" href="#diary/write">${has ? `${ico("pen")} Continue your draft` : `${ico("pen")} Write today's diary`}</a></div>`}
     ${st.total ? `<dl class="dy-stats">
       <div><dt>Entries</dt><dd>${st.total}</dd></div>
       <div><dt>Day streak</dt><dd>${st.streak}</dd></div>
@@ -69,7 +70,7 @@ function paintList() {
   if (!S.ready) { host.innerHTML = `<p class="note">Opening your diary…</p>`; return; }
   if (!live(mine()).length) {
     $("dyTools").hidden = true;
-    host.innerHTML = `<div class="dy-empty"><p class="dy-emptyicon" aria-hidden="true">📔</p>
+    host.innerHTML = `<div class="dy-empty"><p class="dy-emptyicon" aria-hidden="true">${ico("book")}</p>
       ${ro() ? `<h3>Nothing written yet</h3>` : `<h3>Your diary is waiting</h3>
       <p class="note">No need for full sentences. Jot a few words about your day, in English, Malay or both, and Dearly can turn them into an entry that sounds like you. Or write it all yourself.</p>
       <a class="btn primary" href="#diary/write">Write your first entry</a>`}</div>`;

@@ -1,8 +1,9 @@
-// Ledger: the rebate rule editor (#ledgerRules), opened by "⚙️ Rules" on a card.
+// Ledger: the rebate rule editor (#ledgerRules), opened by "Rules" on a card.
 // Edits a copy; checkProgram() in ledger.js checks and tidies it before anything is saved.
 import { collection, doc, setDoc, writeBatch } from "../../core/fs.js";
 import { $, esc } from "../../core/util.js";
 import { SYSTEM_CATEGORIES, PRESETS, rm, toSen, norm, checkProgram, cycleView } from "../../logic/ledger.js";
+import { ico } from "../../core/icons.js";
 
 const CATS = SYSTEM_CATEGORIES.filter((c) => !c.hidden);
 const QUAL = { statement_balance: "Statement balance", cycle_retail_spend: "Spending in the cycle", none: "Nothing (one rate for all)" };
@@ -57,7 +58,7 @@ function render() {
     ${p.tiers.map((t, i) => `<fieldset class="ltier"><legend>Tier ${i + 1}</legend>
       <label class="inline">From RM <input type="text" inputmode="decimal" class="lrsmall" data-tmin="${i}" value="${money(t.minSen)}"${i === 0 ? " disabled" : ""} aria-label="Tier ${i + 1} starts at, RM"> ${p.qualifier === "statement_balance" ? "statement balance" : p.qualifier === "cycle_retail_spend" ? "spent in the cycle" : ""}</label>
       ${t.rates.length ? `<div class="lrates">${t.rates.map((r, j) => `<div class="lrate">
-          <select data-rcat="${i}.${j}" aria-label="Category"><option value="">Pick a category…</option>${CATS.map((c) => `<option value="${c.id}"${c.id === r.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select>
+          <select data-rcat="${i}.${j}" aria-label="Category"><option value="">Pick a category…</option>${CATS.map((c) => `<option value="${c.id}"${c.id === r.cat ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
           <button type="button" class="mini" data-rdel="${i}.${j}" aria-label="Remove this rate">✕</button>
           <label class="lrf"><small>Rate %</small><input type="text" inputmode="decimal" data-rbps="${i}.${j}" value="${pct(r.bps)}"></label>
           <label class="lrf"><small>Cap group</small><input type="text" data-rgroup="${i}.${j}" value="${esc(r.capGroup ?? "")}" placeholder="none" autocomplete="off"></label>
@@ -68,7 +69,7 @@ function render() {
     <div class="actions"><button type="button" class="mini" id="lrTierAdd">＋ Tier</button></div>
     <p class="note">Rates with the same cap group share one cap, like groceries, dining and parking sharing RM50.</p>
     <h3 class="lth">Never earns a rebate</h3>
-    <div class="chips">${CATS.map((c) => `<label class="chip"><input type="checkbox" data-xcat="${c.id}"${exclCats.has(c.id) ? " checked" : ""}> ${c.icon} ${esc(c.name)}</label>`).join("")}</div>
+    <div class="chips">${CATS.map((c) => `<label class="chip"><input type="checkbox" data-xcat="${c.id}"${exclCats.has(c.id) ? " checked" : ""}> ${ico(c.icon)} ${esc(c.name)}</label>`).join("")}</div>
     <label>Shop names containing <small>one per line, e.g. DUITNOW, JOMPAY</small><textarea id="lrWords" rows="4" spellcheck="false">${esc(words.join("\n"))}</textarea></label>
     ${advanced ? `<p class="note">Plus ${advanced} advanced ${advanced === 1 ? "rule" : "rules"} from the preset (kept as they are).</p>` : ""}
     <p class="note" id="lrPreview"></p>

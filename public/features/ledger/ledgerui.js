@@ -23,6 +23,7 @@ import { initDocs, openDocs, refreshDocs, resumeDocs, afterSignIn, docsOn } from
 import { initIncome, renderIncome, incomeEntry } from "./income.js";
 import { makeBoard } from "../../shell/board.js";
 import { boardPrefs } from "../../shell/prefs.js";
+import { ico } from "../../core/icons.js";
 
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (_) { return d; } },
@@ -43,7 +44,7 @@ const BOARD = {
   ],
   sizes: { people: "l" },
   // Beside "Arrange cards": graphs that don't need a place on the board (analytics.js).
-  extra: `<a class="btn mini" href="${ANALYTICS}">📊 Analytics</a>`,
+  extra: `<a class="btn mini" href="${ANALYTICS}">${ico("chart")} Analytics</a>`,
 };
 const KINDS = { purchase: "Spend", payment: "Card payment", refund: "Refund" };
 const TYPES = { credit_card: "Credit card", debit: "Debit card", ewallet: "E-wallet", cash: "Cash", bank: "Bank account" };
@@ -184,7 +185,7 @@ function renderAdd() {
         <label>${pay ? "Card" : "Paid with"}<select id="lgAcct">${live().filter((x) => !pay || x.type === "credit_card").map((x) => `<option value="${x.id}"${x.id === a?.id ? " selected" : ""}>${esc(x.name)}${x.last4 ? ` ··${esc(x.last4)}` : ""}</option>`).join("")}</select></label>
       </div>
       ${pay ? "" : `${where}
-      <label>Category <small id="lgWhy"></small><select id="lgCat">${CATS.map((c) => `<option value="${c.id}"${c.id === f.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>
+      <label>Category <small id="lgWhy"></small><select id="lgCat">${CATS.map((c) => `<option value="${c.id}"${c.id === f.cat ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>
       <div id="lgBucket"></div>`}
       <div class="lwarn" id="lgWarn" role="status" hidden></div>
       <div class="actions"><button type="button" class="primary" id="lgSave">Save</button>${fewer != null ? `<button type="button" class="mini" id="lgFew" data-to="${fewer}">Fewer options</button>` : ""}<button type="button" class="mini" id="lgCard">＋ Card or wallet</button></div>
@@ -200,7 +201,7 @@ function paintQuick() {
   const q = $("lgQuick"), last = $("lgLast");
   if (q) {
     const a = acct(), c = cat(f.cat), day = f.date === today() ? "today" : shortDate(f.date);
-    q.textContent = [f.type === "payment" ? KINDS.payment : f.type === "refund" ? `${KINDS.refund} · ${c.icon} ${c.name}` : `${c.icon} ${c.name}`,
+    q.textContent = [f.type === "payment" ? KINDS.payment : f.type === "refund" ? `${KINDS.refund} · ${c.name}` : c.name,
       a?.name, day, people().filter((p) => canEdit(p.id)).length > 1 ? personName(who()) : ""].filter(Boolean).join(" · ");
   }
   if (last) {
@@ -397,12 +398,12 @@ function renderCards() {
     if (size === "s") return `${open}${board.tile(cid, v.program
       ? `<small>Rebate · ${esc(a.name)}</small><b class="bdbig">${rm(v.rebate.totalSen, { whole: true })}</b><small>${v.next ? `${rm(v.next.needSen, { whole: true })} to next tier` : "Top tier"}</small><small class="note">${days}</small>`
       : `<small>${esc(a.name)} · next statement</small><b class="bdbig">${rm(v.balanceSen, { whole: true })}</b><small class="note">${days}</small>`, a.name)}</section>`;
-    const head = `<div class="lhead"><h2>${esc(a.name)}</h2>${a.last4 ? `<span class="note">··${esc(a.last4)}</span>` : ""}<span class="lbtnrow"><button type="button" class="mini" data-lrules="${a.id}">⚙️ Rules</button><button type="button" class="mini" data-limport="${a.id}">📄 Import statement</button>${board.less(cid)}</span></div>
+    const head = `<div class="lhead"><h2>${esc(a.name)}</h2>${a.last4 ? `<span class="note">··${esc(a.last4)}</span>` : ""}<span class="lbtnrow"><button type="button" class="mini" data-lrules="${a.id}">${ico("sliders")} Rules</button><button type="button" class="mini" data-limport="${a.id}">${ico("file")} Import statement</button>${board.less(cid)}</span></div>
       <p class="lcycle">${shortDate(v.cycle.start)} – ${shortDate(v.cycle.statement)} · <b>${v.daysLeft === 0 ? "statement today" : `${v.daysLeft} ${v.daysLeft === 1 ? "day" : "days"} to statement`}</b> · due ${shortDate(v.cycle.due)}</p>
       ${last ? `<p class="note llast">Last statement ${shortDate(last.statement)}: <b>${last.balanceSen == null ? "–" : rm(last.balanceSen)}</b>${lastReb ? ` · rebate <b>${rm(lastReb.totalSen)}</b> (${esc(lastReb.tierLabel)} tier)` : ""} ✓</p>` : ""}`;
     if (!v.program) return `${open}${head}
       <div class="stats"><div class="stat"><small>Next statement so far</small><b>${rm(v.balanceSen)}</b></div></div>
-      <p class="note">No rebate rules for this card yet. Tap ⚙️ Rules to add them.</p></section>`;
+      <p class="note">No rebate rules for this card yet. Tap Rules to add them.</p></section>`;
     const p = v.program, r = v.rebate, top = p.tiers.at(-1).minSen;
     const max = Math.max(top * 1.25, v.balanceSen * 1.05, 1), at = (sen) => Math.max(0, Math.min(100, (sen / max) * 100));
     // At the 0% tier, show what the first paying tier would give, so the gap is real money.
@@ -434,7 +435,7 @@ function renderCards() {
         <small class="note">${rm(g.eligible)} spent${g.capSen != null ? ` · ${rm(g.cappedSen)} of ${rm(g.capSen, { whole: true })} cap` : ""}</small>
       </div>`).join("")}</div>
       ${r.tier > 0 && v.daysLeft >= 0 ? `<p class="note">Safe to pay before ${shortDate(v.cycle.statement)}: <b>${rm(v.safeSen)}</b>. Pay the rest after, by ${shortDate(v.cycle.due)}.</p>` : ""}
-      ${v.risky.length ? `<p class="note">⚠️ ${v.risky.length} ${v.risky.length === 1 ? "swipe" : "swipes"} near the cut-off may post in the next cycle.</p>` : ""}
+      ${v.risky.length ? `<p class="note">${ico("alert")} ${v.risky.length} ${v.risky.length === 1 ? "swipe" : "swipes"} near the cut-off may post in the next cycle.</p>` : ""}
       ${p.needsMinPay ? `<p class="note">The bank pays the rebate on the next statement, if at least the minimum is paid on time.</p>` : ""}
     </section>`;
   }).join("");
@@ -459,14 +460,14 @@ function renderList() {
     const glow = flashed?.id === t.id && Date.now() - flashed.at < FLASH_MS;
     return `<div class="lrow${open ? " open" : ""}${glow ? " lflash" : ""}" data-row="${t.id}"${glow ? ` style="animation-delay:-${Date.now() - flashed.at}ms"` : ""}>
       <button type="button" class="lopen" data-lopen="${t.id}" aria-expanded="${open}">
-        <span class="lic" aria-hidden="true">${c.icon}</span>
-        <span class="lmain"><b>${t.type === "payment" ? esc(name) : shopHtml(shopDocs[shopKey(t)], name)}</b><small>${shortDate(t.date)} · ${esc(personName(t.spentBy))} · ${esc(names[t.account] ?? "")}${t.type === "payment" ? "" : ` · ${esc(c.name)}`}${t.reconciled ? " · ✓ statement" : ""}${t.docs?.length ? ` · 📎${t.docs.length > 1 ? ` ${t.docs.length}` : ""}` : ""}</small></span>
+        <span class="lic" aria-hidden="true">${ico(c.icon)}</span>
+        <span class="lmain"><b>${t.type === "payment" ? esc(name) : shopHtml(shopDocs[shopKey(t)], name)}</b><small>${shortDate(t.date)} · ${esc(personName(t.spentBy))} · ${esc(names[t.account] ?? "")}${t.type === "payment" ? "" : ` · ${esc(c.name)}`}${t.reconciled ? " · ✓ statement" : ""}${t.docs?.length ? ` · ${ico("clip")}${t.docs.length > 1 ? ` ${t.docs.length}` : ""}` : ""}</small></span>
         <span class="lamt${credit ? " cr" : ""}">${rm(Math.abs(t.amountSen))}${credit ? " CR" : ""}</span>
       </button>
       ${open && !own(t) ? `<div class="ledit">${t.raw && t.raw !== norm(name) ? `<p class="note">On the statement: ${esc(t.raw)}</p>` : ""}${viewOnly(t.spentBy, "spending")}${docsOn() && t.docs?.length ? `<div class="actions">${docsBtn(t)}</div>` : ""}</div>` : open ? `<div class="ledit">
-        ${t.type === "payment" ? "" : `<label>Category<select data-lcat="${t.id}">${CATS.map((x) => `<option value="${x.id}"${x.id === t.cat ? " selected" : ""}>${x.icon} ${esc(x.name)}</option>`).join("")}</select></label>`}
+        ${t.type === "payment" ? "" : `<label>Category<select data-lcat="${t.id}">${CATS.map((x) => `<option value="${x.id}"${x.id === t.cat ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label>`}
         ${t.raw && t.raw !== norm(name) ? `<p class="note">On the statement: ${esc(t.raw)}</p>` : ""}
-        <div class="actions"><button type="button" class="mini" data-ledit="${t.id}">✏️ Edit</button>${docsOn() ? docsBtn(t) : ""}<button type="button" class="mini" data-ldel="${t.id}">Delete</button></div>
+        <div class="actions"><button type="button" class="mini" data-ledit="${t.id}">${ico("pen")} Edit</button>${docsOn() ? docsBtn(t) : ""}<button type="button" class="mini" data-ldel="${t.id}">Delete</button></div>
       </div>` : ""}
     </div>`;
   }).join("")}</div>${list.length > shown ? `<button type="button" class="mini" id="lgMore">Show more</button>` : ""}`
@@ -475,13 +476,13 @@ function renderList() {
 }
 
 // ---------- receipts and documents (docsui.js) ----------
-const docsBtn = (t) => `<button type="button" class="mini" data-ldocs="${t.id}">📎 ${t.docs?.length ? `${t.docs.length} ${t.docs.length === 1 ? "file" : "files"}` : t.type === "payment" ? "Add proof" : "Add receipt"}</button>`;
+const docsBtn = (t) => `<button type="button" class="mini" data-ldocs="${t.id}">${ico("clip")} ${t.docs?.length ? `${t.docs.length} ${t.docs.length === 1 ? "file" : "files"}` : t.type === "payment" ? "Add proof" : "Add receipt"}</button>`;
 function txnEntry(t) {
   const name = t.type === "payment" ? `Card payment ${accounts.find((a) => a.id === t.account)?.name ?? ""}`.trim() : t.merchant || t.raw || cat(t.cat).name;
   return { coll: "ledgerTxns", id: t.id, kind: t.type, date: t.date, what: name, amountSen: Math.abs(t.amountSen), person: personName(t.spentBy),
     docs: t.docs, canEdit: own(t), title: `${name} · ${rm(Math.abs(t.amountSen))} · ${shortDate(t.date)}` };
 }
-// The entry behind a 📎 sheet, from the live data (null when it's gone).
+// The entry behind a paperclip sheet, from the live data (null when it's gone).
 function findEntry(coll, id) {
   if (coll === "ledgerTxns") { const t = txns.find((x) => x.id === id); return t ? txnEntry(t) : null; }
   if (coll === "ledgerIncome") { const x = incomes.find((y) => y.id === id); return x ? incomeEntry(x) : null; }
@@ -517,7 +518,7 @@ function editForm(t) {
     </div>
     <label>${pay ? "Card" : "Paid with"}<select id="leAcct">${cards.map((x) => `<option value="${x.id}"${x.id === e.account ? " selected" : ""}>${esc(x.name)}${x.last4 ? ` ··${esc(x.last4)}` : ""}</option>`).join("")}</select></label>
     ${pay ? "" : `<label>Where<input type="text" id="leRaw" list="lgShops" autocomplete="off" value="${esc(e.raw)}"></label>
-    <label>Category<select id="leCat">${CATS.map((c) => `<option value="${c.id}"${c.id === e.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>
+    <label>Category<select id="leCat">${CATS.map((c) => `<option value="${c.id}"${c.id === e.cat ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>
     <div id="leBucket">${bucketChips(t)}</div>`}
     <p class="msg" id="leMsg" aria-live="polite">${esc(e.msg)}</p>
     <div class="actions"><button type="submit" class="primary" id="leSave">Save changes</button><button type="button" id="leCancel">Cancel</button></div>
@@ -620,7 +621,7 @@ function paintOffer(host) {
   if (!offer || offer.host !== host) { el.innerHTML = ""; return; }
   const c = cat(offer.cat), n = movable(offer, offer.pattern).length;
   el.innerHTML = `<div class="loffer" role="group" aria-label="Always categorise this shop">
-    <p><b>Always put this shop in ${c.icon} ${esc(c.name)}?</b> Shop names starting with:</p>
+    <p><b>Always put this shop in ${esc(c.name)}?</b> Shop names starting with:</p>
     <input type="text" id="${host}-pat" value="${esc(offer.pattern)}" autocomplete="off" aria-label="Shop name starts with">
     ${n ? `<label class="inline"><input type="checkbox" id="${host}-also" checked> Also move ${n} earlier ${n === 1 ? "item" : "items"}</label>` : ""}
     <div class="actions"><button type="button" class="primary" data-offer="yes" data-host="${host}">Yes, always</button><button type="button" data-offer="no" data-host="${host}">Not now</button></div>
@@ -651,7 +652,7 @@ export function refreshLedgerParts() {
     const big = rows[0]?.sen || 1;
     slot.innerHTML = `<div class="calhead"><h3 class="ptitle">Spending</h3><a class="btn mini" href="#ledger/spend/all">See all →</a></div>
       ${rows.length ? `<p class="week"><b>${rm(total)}</b> ${esc(month)}${pay > 1 ? "" : " so far"}${last ? ` · ${rm(last)} by this day last month` : ""}</p>
-      <div class="lcats">${rows.slice(0, 5).map((r) => `<div class="lcat"><span>${cat(r.cat).icon} ${esc(cat(r.cat).name)}</span><i style="width:${Math.max(3, Math.round((r.sen / big) * 100))}%"></i><b>${rm(r.sen, { whole: true })}</b></div>`).join("")}</div>`
+      <div class="lcats">${rows.slice(0, 5).map((r) => `<div class="lcat"><span>${ico(cat(r.cat).icon)} ${esc(cat(r.cat).name)}</span><i style="width:${Math.max(3, Math.round((r.sen / big) * 100))}%"></i><b>${rm(r.sen, { whole: true })}</b></div>`).join("")}</div>`
         : `<p class="note">Nothing logged ${esc(month)} yet. Logging is optional: add what you want to keep an eye on.</p>`}`;
   });
 }

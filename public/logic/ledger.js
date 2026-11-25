@@ -60,20 +60,20 @@ export function dateParts(s) {
 // System categories. Ids are fixed forever (transactions and rules point at them). `module` lets
 // later Ledger parts (tax relief, savings, crypto) add their own without changing this shape.
 export const SYSTEM_CATEGORIES = [
-  { id: "fuel-petronas", name: "Fuel – PETRONAS", module: "spending", icon: "⛽" },
-  { id: "fuel-other", name: "Fuel – Other", module: "spending", icon: "⛽" },
-  { id: "groceries", name: "Groceries", module: "spending", icon: "🛒" },
-  { id: "dining", name: "Dining", module: "spending", icon: "🍜" },
-  { id: "parking", name: "Cashless Parking", module: "spending", icon: "🅿️" },
-  { id: "tolls", name: "Tolls", module: "spending", icon: "🛣️" },
-  { id: "medical", name: "Medical", module: "spending", icon: "🩺" },
-  { id: "insurance", name: "Insurance", module: "spending", icon: "🛡️" },
-  { id: "bnpl", name: "BNPL Repayment", module: "spending", icon: "🧾" },
-  { id: "shopping", name: "Shopping", module: "spending", icon: "🛍️" },
-  { id: "utilities", name: "Utilities", module: "spending", icon: "💡" },
-  { id: "gov-tax", name: "Government / Tax", module: "spending", icon: "🏛️" },
-  { id: "other", name: "Other", module: "spending", icon: "•" },
-  { id: "payment", name: "Card payment", module: "spending", icon: "↩︎", hidden: true },
+  { id: "fuel-petronas", name: "Fuel – PETRONAS", module: "spending", icon: "fuel" },
+  { id: "fuel-other", name: "Fuel – Other", module: "spending", icon: "fuel" },
+  { id: "groceries", name: "Groceries", module: "spending", icon: "cart" },
+  { id: "dining", name: "Dining", module: "spending", icon: "bowl" },
+  { id: "parking", name: "Cashless Parking", module: "spending", icon: "parking" },
+  { id: "tolls", name: "Tolls", module: "spending", icon: "road" },
+  { id: "medical", name: "Medical", module: "spending", icon: "medical" },
+  { id: "insurance", name: "Insurance", module: "spending", icon: "shield" },
+  { id: "bnpl", name: "BNPL Repayment", module: "spending", icon: "receipt" },
+  { id: "shopping", name: "Shopping", module: "spending", icon: "bag" },
+  { id: "utilities", name: "Utilities", module: "spending", icon: "bulb" },
+  { id: "gov-tax", name: "Government / Tax", module: "spending", icon: "bank" },
+  { id: "other", name: "Other", module: "spending", icon: "tag" },
+  { id: "payment", name: "Card payment", module: "spending", icon: "undo", hidden: true },
 ];
 export const catName = (id, extra = []) => [...SYSTEM_CATEGORIES, ...extra].find((c) => c.id === id)?.name ?? "Other";
 

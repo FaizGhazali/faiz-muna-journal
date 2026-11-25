@@ -71,8 +71,8 @@ export function docPlan({ file: { name = "", type: mime = "" } = {}, date, kind,
   return { folder, name: file, path: `${folder}/${file}`, type: fileType(name, mime), ext, shrink };
 }
 
-// Short label for a link on an entry: "📄 PDF", "🖼 Photo", "📎 File".
-export const docIcon = (type) => ({ image: "🖼", pdf: "📄" }[type] ?? "📎");
+// Icon name (core/icons.js) for a link on an entry.
+export const docIcon = (type) => ({ image: "image", pdf: "file" }[type] ?? "clip");
 
 // The size to redraw a photo at, keeping its shape: { w, h } (unchanged when already small enough).
 export function fitSize(w, h, max = SHRINK_PX) {

@@ -1,5 +1,5 @@
 // Ledger: the Income card (#ledgerIncome, data-card "income"): salaries, part-time pay and side money (flipping,
-// a bonus) as they come in, each with 📎 for its payslip or proof (docsui.js). What the money plan counts as the
+// a bonus) as they come in, each with a paperclip for its payslip or proof (docsui.js). What the money plan counts as the
 // month's income is worked out in logic/income.js (real salaries; last month's stands in until this month's is
 // logged; extras on top). Each person adds and changes only their own; the other's show read-only.
 // Small: this month's total. Medium: the total and the latest entries. Large: who's in, extras, every entry this
@@ -13,6 +13,7 @@ import { monthOf, addMonths, payOf, payLabel } from "../../logic/moneyplan.js";
 import { INCOME_KINDS, incomeKind, checkIncome, monthIncome, lastIncome, sources, FROM_MAX, NOTE_MAX } from "../../logic/income.js";
 import { openDocs, docsOn } from "./docsui.js";
 import { planState } from "./plan.js";
+import { ico } from "../../core/icons.js";
 
 const M_SHOWN = 3; // entries on the medium card
 let ctx, form = null, msg = "", flash = null; // form: { id|null, kind, amount, date, from, note, err }
@@ -80,9 +81,9 @@ function row(x, names, actions) {
   const k = incomeKind(x.kind), mine = canEdit(x.person), n = x.docs?.length ?? 0;
   return `<div class="lpb lnrow" data-inc="${x.id}">
     <span class="lpdue">${shortDate(x.date)}</span>
-    <span class="lpbn"><b>${k.icon} ${esc(x.from || k.name)}</b><small>${esc(k.name)} · ${esc(names[x.person] ?? "")}${x.note ? ` · ${esc(x.note)}` : ""}${!actions && n ? ` · 📎${n > 1 ? ` ${n}` : ""}` : ""}</small></span>
+    <span class="lpbn"><b>${ico(k.icon)} ${esc(x.from || k.name)}</b><small>${esc(k.name)} · ${esc(names[x.person] ?? "")}${x.note ? ` · ${esc(x.note)}` : ""}${!actions && n ? ` · ${ico("clip")}${n > 1 ? ` ${n}` : ""}` : ""}</small></span>
     <b class="lpba ok">+${rm(x.amountSen)}</b>
-    ${actions ? `<span class="lbtnrow">${docsOn() && (mine || n) ? `<button type="button" class="mini" data-ln="docs" data-id="${x.id}" aria-label="Payslip or proof">📎${n ? ` ${n}` : ""}</button>` : ""}${mine ? `<button type="button" class="mini" data-ln="edit" data-id="${x.id}">Edit</button>` : ""}</span>` : ""}
+    ${actions ? `<span class="lbtnrow">${docsOn() && (mine || n) ? `<button type="button" class="mini" data-ln="docs" data-id="${x.id}" aria-label="Payslip or proof">${ico("clip")}${n ? ` ${n}` : ""}</button>` : ""}${mine ? `<button type="button" class="mini" data-ln="edit" data-id="${x.id}">Edit</button>` : ""}</span>` : ""}
   </div>`;
 }
 
@@ -90,7 +91,7 @@ function incomeForm() {
   const f = form, mine = sources(ctx.incomes(), ctx.me());
   return `<div class="lpbform" data-form="income">
     <h3>${f.id ? "Edit income" : "Add income"}</h3>
-    <div class="chips" role="group" aria-label="What it is">${INCOME_KINDS.map((k) => `<button type="button" class="chip" data-lnkind="${k.id}" aria-pressed="${k.id === f.kind}">${k.icon} ${esc(k.name)}</button>`).join("")}</div>
+    <div class="chips" role="group" aria-label="What it is">${INCOME_KINDS.map((k) => `<button type="button" class="chip" data-lnkind="${k.id}" aria-pressed="${k.id === f.kind}">${ico(k.icon)} ${esc(k.name)}</button>`).join("")}</div>
     ${incomeKind(f.kind).hint ? `<p class="note">${esc(incomeKind(f.kind).hint)}</p>` : ""}
     <div class="two">
       <label>Amount, RM<input type="text" id="lnAmt" inputmode="decimal" autocomplete="off" placeholder="2500" value="${esc(f.amount)}"></label>
@@ -127,7 +128,7 @@ async function save() {
   try {
     await ctx.commit(() => setDoc(ref, body), `${what} ${old ? "saved" : "added"}.`);
     form = null; clearDirty(); flash = { id: ref.id, at: Date.now() };
-    msg = old || !docsOn() ? "" : `Saved. Tap 📎 on it to add the ${r.income.kind === "salary" || r.income.kind === "parttime" ? "payslip" : "proof"} now or later.`;
+    msg = old || !docsOn() ? "" : `Saved. Tap the paperclip on it to add the ${r.income.kind === "salary" || r.income.kind === "parttime" ? "payslip" : "proof"} now or later.`;
     renderIncome();
   } catch (_) { /* commit showed the error; the form stays as typed */ }
 }
@@ -143,7 +144,7 @@ async function remove(id) {
   renderIncome();
 }
 
-// The 📎 sheet's entry for an income (docsui.js): salary and part-time go to Payslips, the rest to Income.
+// The paperclip sheet's entry for an income (docsui.js): salary and part-time go to Payslips, the rest to Income.
 export function incomeEntry(x) {
   const k = incomeKind(x.kind), names = people();
   return { coll: "ledgerIncome", id: x.id, kind: k.folder, date: x.date, what: x.from ? `${k.name} ${x.from}` : k.name, amountSen: x.amountSen,

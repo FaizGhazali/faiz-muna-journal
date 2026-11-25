@@ -10,6 +10,7 @@ import { face } from "../../core/face.js";
 import { canEdit, viewOnly } from "../../core/owner.js";
 import { titleOf, bodyText, prettyDate, words } from "../../logic/diary.js";
 import { $, esc, iso, parse, addDays, today, fmt } from "../../core/util.js";
+import { ico } from "../../core/icons.js";
 
 const MONTHS = Array.from({ length: 12 }, (_, m) => new Date(2000, m, 1).toLocaleDateString(undefined, { month: "short" }));
 
@@ -115,12 +116,12 @@ function madeOf(m) {
 
 // The reflection cards for this person, from reflect.js.
 const cards = () => reflections({ map: moods(), diary: mine(), facts: dayFacts(me()), today: today() });
-const ICON = { comfort: "🤍", past: "📖", bright: "☀️", trend: "📈", pattern: "🔎", streak: "✍️", month: "🗓️", empty: "🌱" };
+const ICON = { comfort: "heart", past: "story", bright: "sun", trend: "trend", pattern: "search", streak: "pen", month: "calendar", empty: "sprout" };
 function reflectHtml(c, dash) {
   const go = [c.entry ? `<button type="button" class="rgo" data-read="${esc(c.entry)}">Read entry</button>` : "", c.date ? `<button type="button" class="rgo" data-day="${esc(c.date)}">See the day</button>` : ""].join("");
   const h = dash ? "h3" : "h4";
   return `<article class="rcard" style="--rc:${isMood(c.mood) ? `var(--m${c.mood})` : "var(--line)"}">
-    <div class="rhead"><span class="ricon" aria-hidden="true">${ICON[c.kind] || "💭"}</span><${h} class="rtitle">${esc(c.title)}</${h}>${isMood(c.mood) ? face(c.mood, 22) : ""}</div>
+    <div class="rhead"><span class="ricon" aria-hidden="true">${ico(ICON[c.kind] || "thought")}</span><${h} class="rtitle">${esc(c.title)}</${h}>${isMood(c.mood) ? face(c.mood, 22) : ""}</div>
     <p class="rtext">${esc(c.text)}</p>${go ? `<div class="rgos">${go}</div>` : ""}</article>`;
 }
 function renderReflect() {
@@ -223,12 +224,12 @@ function renderDay(pid, map, t) {
   const e = entries().find((x) => x.person === pid && x.date === d) || {}, f = dayFacts(pid)[d] || {};
   const pages = mine().filter((x) => x.date === d).sort((a, b) => (a.created || 0) - (b.created || 0));
   const did = [];
-  if (e.run) did.push(["🏃", `Ran ${e.run.km} km${e.run.secs ? ` in ${Math.round(e.run.secs / 60)} min` : ""}${e.run.hr ? `, ${e.run.hr} bpm` : ""}`]);
-  else if (e.minutes > 0) did.push(["🏃", `${e.minutes} min exercise`]);
-  if (typeof e.weight === "number") did.push(["⚖️", `Weighed ${e.weight} kg`]);
-  if (f.habitsDue) did.push(["✅", `${f.habitsDone} of ${f.habitsDue} habits`]);
-  if (f.move) did.push(["➡️", "Did a Next Move"]);
-  if (e.note) did.push(["📝", e.note]);
+  if (e.run) did.push(["pulse", `Ran ${e.run.km} km${e.run.secs ? ` in ${Math.round(e.run.secs / 60)} min` : ""}${e.run.hr ? `, ${e.run.hr} bpm` : ""}`]);
+  else if (e.minutes > 0) did.push(["pulse", `${e.minutes} min exercise`]);
+  if (typeof e.weight === "number") did.push(["scale", `Weighed ${e.weight} kg`]);
+  if (f.habitsDue) did.push(["ok", `${f.habitsDone} of ${f.habitsDue} habits`]);
+  if (f.move) did.push(["next", "Did a Next Move"]);
+  if (e.note) did.push(["note", e.note]);
   if (shownDay !== d) allPages = false;
   const box = $("mdDay");
   box.innerHTML = `<div class="flash">
@@ -236,11 +237,11 @@ function renderDay(pid, map, t) {
         <div class="mnow">${face(pv, 40)}<div><strong>${esc(fmt(d, { weekday: "long", day: "numeric", month: "long" }))}</strong><small>${pv ? MOODS[pv].label : "Not rated"}${madeOf(m) ? ` · ${esc(madeOf(m))}` : ""}</small></div></div>
         <button type="button" class="mini" data-step="1"${d < t ? "" : " disabled"} aria-label="Day after">›</button></div>
       ${pages.length ? `<div class="fpages">
-        ${pages.length > 1 ? `<p class="fphead">📔 ${pages.length} diary entries</p>` : ""}
-        ${(allPages ? pages : pages.slice(0, FEW)).map((x) => `<button type="button" class="fpage" data-read="${esc(x.id)}">${isMood(x.mood) ? face(x.mood, 22) : `<span class="fdot" aria-hidden="true">📔</span>`}<b>${esc(titleOf(x))}</b><span class="fgo" aria-hidden="true">›</span></button>`).join("")}
+        ${pages.length > 1 ? `<p class="fphead">${ico("book")} ${pages.length} diary entries</p>` : ""}
+        ${(allPages ? pages : pages.slice(0, FEW)).map((x) => `<button type="button" class="fpage" data-read="${esc(x.id)}">${isMood(x.mood) ? face(x.mood, 22) : `<span class="fdot" aria-hidden="true">${ico("book")}</span>`}<b>${esc(titleOf(x))}</b><span class="fgo" aria-hidden="true">›</span></button>`).join("")}
         ${pages.length > FEW ? `<button type="button" class="linkbtn fmore" data-allpages aria-expanded="${allPages}">${allPages ? "Show fewer" : `Show all ${pages.length}`}</button>` : ""}
       </div>` : ""}
-      ${did.length ? `<ul class="fdid">${did.map(([i, s]) => `<li><span aria-hidden="true">${i}</span>${esc(s)}</li>`).join("")}</ul>` : ""}
+      ${did.length ? `<ul class="fdid">${did.map(([i, s]) => `<li><span aria-hidden="true">${ico(i)}</span>${esc(s)}</li>`).join("")}</ul>` : ""}
       ${!pages.length && !did.length ? `<p class="note">Nothing written or logged this day.</p>` : ""}
       ${canEdit(pid) ? `<p class="mask">${m?.rating ? "Your rating for the day" : "Rate this day"}</p>${faces(m?.rating ?? null, "data-rate")}` : viewOnly(pid, "mood")}
     </div>`;
@@ -338,7 +339,7 @@ function readEntry(id) {
         <button type="button" class="mini" data-rd="close" aria-label="Close">✕</button></div>
       ${e.title ? `<h4 class="rdtitle">${esc(e.title)}</h4>` : ""}
       <div class="rdtext">${paras || `<p class="note">This entry is empty.</p>`}</div>
-      <p class="note">${[n ? `📷 ${n} photo${n > 1 ? "s" : ""} in Dearly` : "", `${words(bodyText(e.body))} words`].filter(Boolean).join(" · ")}</p>
+      <p class="note">${[n ? `${ico("camera")} ${n} photo${n > 1 ? "s" : ""} in Dearly` : "", `${words(bodyText(e.body))} words`].filter(Boolean).join(" · ")}</p>
       <div class="rdfoot">
         ${day.length > 1 ? `<div class="rdstep"><button type="button" class="mini" data-rd="${prev ? esc(prev.id) : ""}"${prev ? "" : " disabled"} aria-label="Earlier entry">‹</button><span>${i + 1} of ${day.length}</span><button type="button" class="mini" data-rd="${next ? esc(next.id) : ""}"${next ? "" : " disabled"} aria-label="Later entry">›</button></div>` : "<span></span>"}
         <a class="btn" href="#diary/read/${esc(e.id)}">Open in Dearly</a>

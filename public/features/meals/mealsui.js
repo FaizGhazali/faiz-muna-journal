@@ -4,6 +4,7 @@ import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from "..
 import { SLOTS, LEARN_AFTER, slotAt, portion, total, dayTotal, plateOf, rowFor, logItems, rankSets, readFood, fitsSlot, burnOf, intakeRange, weightOn, verdict, shadeOf, yearStats } from "../../logic/meals.js";
 
 import { money, SERVES_MAX } from "../../logic/stocky.js";
+import { ico } from "../../core/icons.js";
 import { offerWidget } from "../../shell/widget.js";
 import { confirmDelete } from "../../core/confirm.js";
 import { canEdit, viewOnly } from "../../core/owner.js";
@@ -125,7 +126,7 @@ function stockHtml() {
   const low = rows.map((r) => ({ food: r.food, s: stock.of(r.food) })).filter(({ s }) => s && ["low", "out"].includes(s.status));
   if (!low.length) return "";
   const line = (s) => (s.status === "out" ? `Probably out of <b>${esc(s.name)}</b>` : `Low on <b>${esc(s.name)}</b>${s.daysLeft != null ? `, about ${s.daysLeft} day${s.daysLeft === 1 ? "" : "s"} left` : ""}`);
-  return `<div class="mstock">${low.map(({ food, s }) => `<p><span>🛒 ${line(s)}</span>
+  return `<div class="mstock">${low.map(({ food, s }) => `<p><span>${ico("cart")} ${line(s)}</span>
     ${s.listed ? `<span class="note">On the list</span>` : `<button type="button" class="mini" data-act="stock-list" data-food="${esc(food)}">Add to list</button>`}</p>`).join("")}</div>`;
 }
 const totHtml = (t) => `<div><b>${t.kcal}</b><small>kcal</small></div><div><b>${num(t.carb)}</b><small>carbs g</small></div><div><b>${num(t.protein)}</b><small>protein g</small></div><div><b>${num(t.fat)}</b><small>fat g</small></div>`;
@@ -138,11 +139,11 @@ function plateCost() {
 function costLine(s) {
   if (s.made !== "cooked" && s.made !== "bought") return "";
   const c = stock.cost(s);
-  if (s.made === "bought") return c ? `🛍️ Bought · <b>${money(c.plate)}</b> a plate` : "🛍️ Bought";
-  if (!c) return "🍳 Cooked · add what goes in the pot to see the cost";
+  if (s.made === "bought") return c ? `${ico("bag")} Bought · <b>${money(c.plate)}</b> a plate` : `${ico("bag")} Bought`;
+  if (!c) return `${ico("cook")} Cooked · add what goes in the pot to see the cost`;
   const none = c.missing.length ? `no price yet for ${esc(c.missing.join(", "))}` : "";
-  if (!c.priced) return `🍳 Cooked · ${none}`;
-  return `🍳 Cooked · about <b>${money(c.plate)}</b> a plate${c.serves > 1 ? ` (${money(c.pot)} makes ${c.serves})` : ""}${none ? ` · ${none}` : ""}`;
+  if (!c.priced) return `${ico("cook")} Cooked · ${none}`;
+  return `${ico("cook")} Cooked · about <b>${money(c.plate)}</b> a plate${c.serves > 1 ? ` (${money(c.pot)} makes ${c.serves})` : ""}${none ? ` · ${none}` : ""}`;
 }
 // Prices in Stocky changed: update the costs shown, but never redraw a set form someone is filling in.
 export function refreshMealCost() {
@@ -255,7 +256,7 @@ function setForm(s) {
       <button type="button" class="mini" data-act="srow-drop" data-i="${i}" aria-label="Remove">✕</button></div>`).join("")}
     <button type="button" class="mini" data-act="srow-add">+ Another food</button>
     <fieldset class="madepick"><legend>Made</legend>
-      <div class="seg">${[["cooked", "🍳 Cooked"], ["bought", "🛍️ Bought"]].map(([k, v]) => `<input type="radio" name="made" id="made-${k}" value="${k}"${setMade === k ? " checked" : ""}><label for="made-${k}">${v}</label>`).join("")}</div>
+      <div class="seg">${[["cooked", `${ico("cook")} Cooked`], ["bought", `${ico("bag")} Bought`]].map(([k, v]) => `<input type="radio" name="made" id="made-${k}" value="${k}"${setMade === k ? " checked" : ""}><label for="made-${k}">${v}</label>`).join("")}</div>
       ${setMade === "cooked" ? cookedHtml() : setMade === "bought" ? boughtHtml() : `<small class="note">Cooked at home or bought outside? Pick one to see what a plate costs.</small>`}
     </fieldset>
     <div class="actions"><button type="submit" class="primary">${s ? "Save changes" : "Save set"}</button><button type="button" data-act="cancel">Cancel</button></div>
@@ -574,11 +575,11 @@ function readSetRows() {
 // ---------- journal wheel ----------
 // Tap the round button, then tap a journal. (Holding it and sliding to one, then letting go, also works.)
 export const JOURNALS = [
-  { id: "meals", name: "Meals", icon: "🍽️" },
-  { id: "weight", name: "Weight", icon: "⚖️" },
-  { id: "diary", name: "Dearly", icon: "📔" },
-  { id: "stocky", name: "Stocky", icon: "🛒" },
-  { id: "ledger", name: "Ledger", icon: "💳" },
+  { id: "meals", name: "Meals", icon: "plate" },
+  { id: "weight", name: "Weight", icon: "scale" },
+  { id: "diary", name: "Dearly", icon: "book" },
+  { id: "stocky", name: "Stocky", icon: "cart" },
+  { id: "ledger", name: "Ledger", icon: "card" },
 ];
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (_) { return d; } },
@@ -590,7 +591,7 @@ const TIP_VIEWS = 5, TIP_KEY = "journal-tip-more";
 export function initWheel() {
   const fab = $("wheelBtn"), wheel = $("wheel"), ring = $("wheelRing"), hub = $("wheelHub");
   const R = () => Math.min(120, innerWidth / 2 - 50);
-  ring.innerHTML = JOURNALS.map((j, i) => `<button type="button" class="wslot${j.soon ? " soon" : ""}" data-j="${j.id}" style="--i:${i}"><span aria-hidden="true">${j.icon}</span>${esc(j.name)}</button>`).join("");
+  ring.innerHTML = JOURNALS.map((j, i) => `<button type="button" class="wslot${j.soon ? " soon" : ""}" data-j="${j.id}" style="--i:${i}"><span aria-hidden="true">${ico(j.icon)}</span>${esc(j.name)}</button>`).join("");
   const slots = [...ring.querySelectorAll(".wslot")];
   let open = false, hot = null, dragging = false, startX = 0, startY = 0, openedAt = 0, liftedAt = 0;
   // On a phone the browser sends a click where the finger lifted, and by then the open wheel covers that spot.
@@ -598,7 +599,7 @@ export function initWheel() {
   const ghost = () => dragging || performance.now() - Math.max(openedAt, liftedAt) < 400;
 
   const current = () => (location.hash === "#soon" ? null : currentJournal());
-  const paintFab = () => { const j = JOURNALS.find((x) => x.id === current()); fab.firstElementChild.textContent = j ? j.icon : "＋"; fab.setAttribute("aria-label", `Switch journal. Now: ${j ? j.name : "empty slot"}`); };
+  const paintFab = () => { const j = JOURNALS.find((x) => x.id === current()); fab.firstElementChild.innerHTML = ico(j ? j.icon : "plus"); fab.setAttribute("aria-label", `Switch journal. Now: ${j ? j.name : "empty slot"}`); };
   const place = () => {
     const r = R();
     slots.forEach((s, i) => {

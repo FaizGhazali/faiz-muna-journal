@@ -14,6 +14,7 @@ import { bucketsOf, bucketFor, monthOf, monthName, monthBills, txnBucket, catBuc
 import { ALL, bucketItems, byMonth, byShop, byCat, totals, shopTrack, monthsWith, shopKey, shopName, usualCat, nickMap, cleanNick, NICK_MAX } from "../../logic/bucketspend.js";
 import { planState, bucketColours } from "./plan.js";
 import { namesOf, shopLabel, whichFirst } from "../../logic/shops.js";
+import { ico } from "../../core/icons.js";
 
 const ROUTE = /^#ledger\/spend\/([\w-]+)$/;
 export const spendRoute = () => location.hash.match(ROUTE)?.[1] ?? null;
@@ -25,11 +26,11 @@ const money = (sen) => `${rm(Math.abs(sen))}${sen < 0 ? " CR" : ""}`;
 // Your own name for a shop, as a small tag after the statement name.
 const nicks = () => nickMap(ctx.shops());
 // A shop's two names (statement name and your name for it): the one that came first, the other as a
-// remark tag (🏷 your name, 🧾 the statement's). shopLabel() in logic/shops.js.
+// remark tag (tag icon: your name, receipt icon: the statement's). shopLabel() in logic/shops.js.
 const shopDocs = () => Object.fromEntries(ctx.shops().filter((x) => x.key).map((x) => [x.key, x]));
 export function shopHtml(shopDoc, name) {
   const l = shopLabel(shopDoc, name);
-  return `${esc(l.main)}${l.remark ? ` <span class="lsnick">${l.mainIsNick ? "🧾" : "🏷"} ${esc(l.remark)}</span>` : ""}`;
+  return `${esc(l.main)}${l.remark ? ` <span class="lsnick">${ico(l.mainIsNick ? "receipt" : "tag")} ${esc(l.remark)}</span>` : ""}`;
 }
 const times = (n) => `${n} ${n === 1 ? "time" : "times"}`;
 // Months here are pay months (the plan's payday): "25 Oct – 24 Nov", with the year when it isn't this year's.
@@ -163,7 +164,7 @@ function body(plan, bucket) {
     </button>`).join("")}</div>
     ${shops.length > SHOPS_SHOWN ? `<button type="button" class="mini" data-ls="allshops" aria-expanded="${st.allShops}">${st.allShops ? "Show fewer" : `Show all ${shops.length} shops`}</button>` : ""}
     ${cats.length > 1 ? `<h3 class="lth">By category</h3>
-    <div class="lcats">${cats.map((c) => `<div class="lcat"><span>${cat(c.cat).icon} ${esc(cat(c.cat).name)}</span><i style="width:${Math.max(3, Math.round((Math.max(0, c.sen) / bigCat) * 100))}%"></i><b>${rm(c.sen, { whole: true })}</b></div>`).join("")}</div>` : ""}
+    <div class="lcats">${cats.map((c) => `<div class="lcat"><span>${ico(cat(c.cat).icon)} ${esc(cat(c.cat).name)}</span><i style="width:${Math.max(3, Math.round((Math.max(0, c.sen) / bigCat) * 100))}%"></i><b>${rm(c.sen, { whole: true })}</b></div>`).join("")}</div>` : ""}
     <h3 class="lth">Every item</h3>
     ${itemsHtml(items)}`;
 }
@@ -181,7 +182,7 @@ function itemsHtml(items) {
   return `${byMonth(items.slice(0, st.shown), pay()).map((g) => `<div class="lsmonth">
       <h4>${esc(mLabel(g.month))} <span>${rm(whole[g.month].sen)} · ${times(whole[g.month].n)}</span></h4>
       <div class="llist">${g.items.map((t) => `<div class="lrow"><button type="button" class="lopen" data-lshop="${esc(shopKey(t))}">
-        <span class="lic" aria-hidden="true">${cat(t.cat).icon}</span>
+        <span class="lic" aria-hidden="true">${ico(cat(t.cat).icon)}</span>
         <span class="lmain"><b>${shopHtml(sd[shopKey(t)], t.merchant || t.raw || cat(t.cat).name)}</b><small>${shortDate(t.date)} · ${esc(names[t.spentBy] ?? "")} · ${esc(cat(t.cat).name)}</small></span>
         <span class="lamt${t.amountSen < 0 ? " cr" : ""}">${money(t.amountSen)}</span>
       </button></div>`).join("")}</div>
@@ -213,7 +214,7 @@ function paintSheet() {
     <div id="lseFirst">${firstHtml()}</div>
     ${plan ? `<div class="lbl"><span>Counts in</span><div class="chips" role="group" aria-label="Counts in which bucket">${bucketsOf(plan).map((b) => `<button type="button" class="chip" data-lsebucket="${b.id}" aria-pressed="${b.id === ed.bucket}">${esc(b.name)}</button>`).join("")}</div></div>`
       : `<p class="note">Save your money plan first to pick a bucket.</p>`}
-    <label>Category<select id="lseCat">${CATS.map((c) => `<option value="${c.id}"${c.id === ed.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></label>
+    <label>Category<select id="lseCat">${CATS.map((c) => `<option value="${c.id}"${c.id === ed.cat ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>
     <p class="note">${mix.length > 1 ? `Now: ${mix.map(([c, n]) => `${esc(cat(c).name)} ${n}`).join(", ")}. All become ${esc(cat(ed.cat).name)}. ` : ""}${plan ? (own ? `${esc(cat(ed.cat).name)} usually counts in ${esc(bucketName(catBucket(ed.cat, plan)))}; this shop goes in ${esc(bucketName(ed.bucket))}.` : `${esc(cat(ed.cat).name)} counts in ${esc(bucketName(ed.bucket))}.`) : ""}</p>
     <div class="actions"><button type="button" class="primary" data-lse="save">Save</button><button type="button" data-lse="close">Cancel</button></div>
     <p class="msg" id="lseMsg" aria-live="polite"></p>

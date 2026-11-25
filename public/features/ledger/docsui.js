@@ -1,5 +1,5 @@
 // Ledger: receipts and documents on an entry (#ldSheet, a <dialog class="gsheet"> outside #ledger), opened by
-// 📎 on a Recent item or a paid bill. Take a photo or choose any file (several at once); each goes to the
+// The paperclip on a Recent item or a paid bill. Take a photo or choose any file (several at once); each goes to the
 // family's OneDrive (shell/onedrive.js) under a name and folder from logic/docs.js, and the entry keeps a link
 // (`docs` on ledgerTxns / ledgerPaid). Adding later is the point: open the entry any time and add the official
 // receipt. Removing takes away the link only; the file stays in OneDrive. Only your own entries can be changed.
@@ -9,6 +9,7 @@ import { confirmDelete } from "../../core/confirm.js";
 import { docPlan, docIcon, DOCS_MAX } from "../../logic/docs.js";
 import { available, connected, connect, finishSignIn, shrink, upload } from "../../shell/onedrive.js";
 import { toast } from "../../core/toast.js";
+import { ico } from "../../core/icons.js";
 
 const REOPEN = "journal-docs-reopen"; // the entry to come back to after connecting OneDrive (this tab only)
 let ctx, cur = null, busy = "", msg = "";
@@ -65,15 +66,15 @@ function paint() {
     <div class="mhead"><h3 id="ldSheetTitle">Receipts and documents</h3><button type="button" class="mini lsx" data-ld="close" aria-label="Close"${busy ? " disabled" : ""}>✕</button></div>
     <p class="note">${esc(e.title)}</p>
     ${e.docs.length ? `<ul class="ldlist">${e.docs.map((x, i) => `<li>
-      <a href="${esc(x.url)}" target="_blank" rel="noopener"><span aria-hidden="true">${docIcon(x.type)}</span><span><b>${esc(x.name)}</b><small>${esc(x.path.split("/").slice(0, -1).join(" › "))}</small></span></a>
+      <a href="${esc(x.url)}" target="_blank" rel="noopener">${ico(docIcon(x.type))}<span><b>${esc(x.name)}</b><small>${esc(x.path.split("/").slice(0, -1).join(" › "))}</small></span></a>
       ${e.canEdit ? `<button type="button" class="mini" data-ld="remove" data-i="${i}" aria-label="Remove ${esc(x.name)}"${busy ? " disabled" : ""}>Remove</button>` : ""}
     </li>`).join("")}</ul>` : `<p class="note">Nothing yet. ${e.canEdit ? "Add the receipt now, or come back any time." : ""}</p>`}
     ${!e.canEdit ? "" : !connected() ? `<p class="note">Files go to your OneDrive, in Apps › Our Journal › Ledger, named for you.</p>
       <div class="actions"><button type="button" class="primary" data-ld="connect">Connect OneDrive</button></div>`
       : full ? `<p class="note">That's ${DOCS_MAX} files, the most for one entry.</p>`
       : `<div class="actions ldadd">
-        <label class="btn primary${busy ? " disabled" : ""}">📷 Take a photo<input type="file" accept="image/*" capture="environment" hidden${busy ? " disabled" : ""}></label>
-        <label class="btn${busy ? " disabled" : ""}">📁 Choose files<input type="file" multiple hidden${busy ? " disabled" : ""}></label>
+        <label class="btn primary${busy ? " disabled" : ""}">${ico("camera")} Take a photo<input type="file" accept="image/*" capture="environment" hidden${busy ? " disabled" : ""}></label>
+        <label class="btn${busy ? " disabled" : ""}">${ico("folder")} Choose files<input type="file" multiple hidden${busy ? " disabled" : ""}></label>
       </div>
       <p class="note">Photos, PDFs or any document. Photos are made smaller so they upload quickly; PDFs and other files stay as they are.</p>`}
     <p class="msg" aria-live="polite">${esc(busy || msg)}</p>

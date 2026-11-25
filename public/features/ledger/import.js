@@ -8,6 +8,7 @@ import { canEdit, viewOnly } from "../../core/owner.js";
 import { toast } from "../../core/toast.js";
 import { SYSTEM_CATEGORIES, rm, shortDate, cycleOf, cycleForTxn, lastStatement, toSen, computeRebate, rebateSnapshot, programFor } from "../../logic/ledger.js";
 import { pageLines, parseStatement, parsePasted, checkTotals, reconcile, tally, candidates, suggestPattern, parseSheet, sheetDupes } from "../../logic/ledgerimport.js";
+import { ico } from "../../core/icons.js";
 
 // pdf.js, pinned (sw.js keeps cdn.jsdelivr.net files offline once fetched). Loaded only when a PDF is picked.
 const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs";
@@ -16,7 +17,7 @@ const BATCH = 400;
 
 const CATS = SYSTEM_CATEGORIES.filter((c) => !c.hidden);
 const cat = (id) => SYSTEM_CATEGORIES.find((c) => c.id === id) ?? SYSTEM_CATEGORIES.find((c) => c.id === "other");
-const MARK = { matched: "✅", category: "🏷️", amount: "⚠️", new: "➕", missing: "❌" };
+const MARK = { matched: ico("ok"), category: ico("tag"), amount: ico("alert"), new: ico("plus"), missing: ico("miss") };
 const ORDER = ["amount", "category", "new", "missing", "matched"];
 const HEAD = {
   amount: "Different amount", category: "Different category", new: "On the statement, not logged", missing: "Logged, not on this statement", matched: "Matched",
@@ -57,7 +58,7 @@ function render() {
     host.innerHTML = `${top}
       <p class="note">Pick the statement PDF from your bank. It's read here on this phone: it's never uploaded or kept.</p>
       <div class="actions">
-        <label class="btn primary lfile">📄 Choose statement PDF<input type="file" id="liFile" accept="application/pdf,.pdf"></label>
+        <label class="btn primary lfile">${ico("file")} Choose statement PDF<input type="file" id="liFile" accept="application/pdf,.pdf"></label>
         <button type="button" id="liCancel">Cancel</button>
       </div>
       <p class="msg" id="liMsg" aria-live="polite">${imp.step === "reading" ? "Reading the statement…" : esc(imp.msg)}</p>
@@ -183,7 +184,7 @@ function renderReview(top) {
       <div><dt>Minimum payment</dt><dd>${p.minPaySen == null ? "–" : rm(p.minPaySen)}</dd></div>
       <div><dt>Lines</dt><dd>${p.rows.length}</dd></div>
     </dl>
-    <p class="note" id="liCheck">${p.check == null ? "" : p.check.ok ? "✓ The lines add up to the statement balance." : `⚠️ The lines add up to ${rm(p.check.sumSen)}, but the statement says ${rm(p.balanceSen)}. A line may be missing.`}${p.bad?.length ? ` Lines ${p.bad.join(", ")} couldn't be read.` : ""}</p>
+    <p class="note" id="liCheck">${p.check == null ? "" : p.check.ok ? "✓ The lines add up to the statement balance." : `${ico("alert")} The lines add up to ${rm(p.check.sumSen)}, but the statement says ${rm(p.balanceSen)}. A line may be missing.`}${p.bad?.length ? ` Lines ${p.bad.join(", ")} couldn't be read.` : ""}</p>
     <div class="lbl mwho"><span>New items spent by</span><div class="seg">${ctx.people().map((q) => `<input type="radio" name="liWho" id="liw-${q.id}" value="${q.id}"${q.id === imp.spentBy ? " checked" : ""}><label for="liw-${q.id}">${esc(q.name)}</label>`).join("")}</div></div>
     <div id="liOffer"></div>
     <div class="lrev" id="liList">${groups}</div>
@@ -201,10 +202,10 @@ function rowHtml(x, i) {
     : x.kind === "category" ? `<small class="lnote">You logged it as ${esc(cat(t.cat).name)}; the shop rules say ${esc(cat(x.suggest).name)}.</small>`
     : "";
   const choose = (x.kind === "new" || x.kind === "category") && r?.type !== "payment"
-    ? `<select class="licat" data-i="${i}" aria-label="Category for ${esc(name)}">${CATS.map((c) => `<option value="${c.id}"${c.id === pk.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select>` : "";
+    ? `<select class="licat" data-i="${i}" aria-label="Category for ${esc(name)}">${CATS.map((c) => `<option value="${c.id}"${c.id === pk.cat ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>` : "";
   // Only its owner can remove a logged item (firestore.rules), so the other person's missing ones just show.
   const theirs = x.kind === "missing" && t.spentBy && !canEdit(t.spentBy);
-  const tick = x.kind === "matched" ? "" : theirs ? `<span aria-hidden="true">👀</span>` : `<input type="checkbox" class="lion" data-i="${i}"${pk.on ? " checked" : ""} aria-label="${x.kind === "missing" ? "Remove from log" : "Accept"}: ${esc(name)}">`;
+  const tick = x.kind === "matched" ? "" : theirs ? `${ico("eye", { label: "Theirs" })}` : `<input type="checkbox" class="lion" data-i="${i}"${pk.on ? " checked" : ""} aria-label="${x.kind === "missing" ? "Remove from log" : "Accept"}: ${esc(name)}">`;
   return `<div class="lrrow k-${x.kind}">
     ${tick || `<span aria-hidden="true">✓</span>`}
     <div class="lmain"><b>${esc(name)}</b><small>${line}</small>${extra}${choose}${theirs ? viewOnly(t.spentBy, "spending") : ""}</div>
@@ -301,14 +302,14 @@ function renderSheet(top) {
     <p class="lcycle">From a spreadsheet${rows.length ? ` · ${shortDate(first)} – ${shortDate(last)}` : ""} · spent by ${esc(ctx.people().find((p) => p.id === imp.sheetWho)?.name ?? "")}</p>
     <p class="note">${rows.length} new ${rows.length === 1 ? "item" : "items"} to add. ${dupes.length ? `${dupes.length} already in Ledger (same amount within 3 days), so ${dupes.length === 1 ? "it's" : "they're"} skipped.` : ""}${bad.length ? ` ${bad.length === 1 ? "Row" : "Rows"} ${bad.slice(0, 8).join(", ")}${bad.length > 8 ? "…" : ""} couldn't be read.` : ""}</p>
     <div id="liOffer"></div>
-    <div class="lrev" id="lsList">${rows.length ? `<div class="lgrp"><h3>➕ To add <b>${rows.length}</b></h3>${rows.map((x, i) => {
+    <div class="lrev" id="lsList">${rows.length ? `<div class="lgrp"><h3>${ico("plus")} To add <b>${rows.length}</b></h3>${rows.map((x, i) => {
       const r = x.row;
       return `<div class="lrrow k-new"><input type="checkbox" class="lson" data-i="${i}"${x.on ? " checked" : ""} aria-label="Add ${esc(r.merchant)}">
         <div class="lmain"><b>${esc(r.merchant)}</b><small>${shortDate(r.date)}${r.postedGuess ? "" : ` · posted ${shortDate(r.posted)}`}${r.notes ? ` · ${esc(r.notes)}` : ""}</small>
-        ${r.type === "payment" ? "" : `<select class="lscat" data-i="${i}" aria-label="Category for ${esc(r.merchant)}">${CATS.map((c) => `<option value="${c.id}"${c.id === x.cat ? " selected" : ""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select>`}</div>
+        ${r.type === "payment" ? "" : `<select class="lscat" data-i="${i}" aria-label="Category for ${esc(r.merchant)}">${CATS.map((c) => `<option value="${c.id}"${c.id === x.cat ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>`}</div>
         <span class="lamt${r.amountSen < 0 ? " cr" : ""}">${rm(Math.abs(r.amountSen))}${r.amountSen < 0 ? " CR" : ""}</span></div>`;
     }).join("")}</div>` : ""}
-    ${dupes.length ? `<details class="lgrp"><summary>✅ Already in Ledger <b>${dupes.length}</b></summary>${dupes.map((d) => `<div class="lrrow k-matched"><span aria-hidden="true">✓</span><div class="lmain"><b>${esc(d.row.merchant)}</b><small>${shortDate(d.row.date)} · matches ${esc(d.txn.merchant || d.txn.raw || "")} on ${shortDate(d.txn.date)}</small></div><span class="lamt">${rm(Math.abs(d.row.amountSen))}</span></div>`).join("")}</details>` : ""}
+    ${dupes.length ? `<details class="lgrp"><summary>${ico("ok")} Already in Ledger <b>${dupes.length}</b></summary>${dupes.map((d) => `<div class="lrrow k-matched"><span aria-hidden="true">✓</span><div class="lmain"><b>${esc(d.row.merchant)}</b><small>${shortDate(d.row.date)} · matches ${esc(d.txn.merchant || d.txn.raw || "")} on ${shortDate(d.txn.date)}</small></div><span class="lamt">${rm(Math.abs(d.row.amountSen))}</span></div>`).join("")}</details>` : ""}
     </div>
     <div class="actions">${rows.length ? `<button type="button" class="primary" id="lsSave">Add ticked items</button>` : ""}<button type="button" id="liCancel">${rows.length ? "Cancel" : "Close"}</button></div>
     <p class="msg" id="liMsg" aria-live="polite">${esc(imp.msg)}</p>`;

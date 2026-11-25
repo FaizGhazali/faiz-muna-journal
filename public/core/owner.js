@@ -3,6 +3,7 @@
 // their birthday); the other person's show read-only. Shared things (Stocky, foods and meal sets, the Ledger
 // plan, cards and bills) both can change. app.js calls setSelf() after sign-in (the demo plays the first person).
 import { esc } from "./util.js";
+import { ico } from "./icons.js";
 
 let self = null, nameOf = () => "";
 
@@ -25,5 +26,5 @@ export function mayWrite(col, id, body) {
 // The line shown where the edit controls would be: "Muna's mood. Only Muna can change it."
 export function viewOnly(pid, what) {
   const n = esc(nameOf(pid) || "They");
-  return `<p class="viewonly" role="note"><span aria-hidden="true">👀</span> ${n}'s ${esc(what)}. Only ${n} can change ${what.endsWith("s") ? "them" : "it"}.</p>`;
+  return `<p class="viewonly" role="note">${ico("eye")} ${n}'s ${esc(what)}. Only ${n} can change ${what.endsWith("s") ? "them" : "it"}.</p>`;
 }
