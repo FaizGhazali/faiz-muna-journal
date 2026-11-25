@@ -3,8 +3,8 @@
 Built as planned. Differences: no `firestore.rules` change was needed (`receipts` and `receiptAliases` are shared
 Stocky collections, already covered by the shared rule); a discount line is folded into the item line above it (lower
 price, `sale: true`); the review page lets the amount added be typed (`amount` on a line) since a receipt's "2 × 1L"
-isn't always two of the item's usual packs. Still to do by hand: Gemini key + `modal deploy` + `READER_URL`
-(docs/receipt-modal.md), and trying the Android scanner on a real phone.
+isn't always two of the item's usual packs. Reader deployed 25 Nov 2026 (`receipt-reader` on Modal, Gemini key in the `gemini`
+secret). Still to do: trying it with a real receipt, and the Android scanner on a real phone.
 
 Scan a shop receipt and have its items and prices added to Stocky. Manual work only once per new printed
 item name (it's remembered as an alias) or when a scan fails the totals check.

@@ -5,8 +5,8 @@
 // takes a photo with a file input. Plan: docs/receipt-scan-plan.md.
 
 // The address `modal deploy modal/receipt_reader.py` prints. Empty = scanning is hidden (the demo still has it).
-export const READER_URL = "";
-export const readerReady = () => /^(https:\/\/[a-z0-9-]+\.modal\.run|http:\/\/localhost:\d+)\/?$/.test(READER_URL);
+export const READER_URL = "https://faizghazali21--receipt-reader-web.us-east.modal.run";
+export const readerReady = () => /^(https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)?\.modal\.run|http:\/\/localhost:\d+)\/?$/.test(READER_URL);
 
 export const LONG_EDGE = 1600; // px; plenty for receipt text, a few hundred KB as JPEG
 export const QUALITY = 0.85;
