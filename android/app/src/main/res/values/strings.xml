@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">Next Move</string>
     <string name="widget_desc">Your next move from the journal</string>
+    <string name="asset_statements" translatable="false">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://faiz-muna-journal-c43ab.web.app\"}}]</string>
 </resources>

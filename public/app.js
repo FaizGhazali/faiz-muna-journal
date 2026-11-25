@@ -98,7 +98,7 @@ initBackup({ db });
 initMeals({ db, people, me: currentPerson, entries: allEntries, commit, stock: { of: stockOf, list: listFood, items: priceItems, cost: costOf, changed: () => refreshStocky() } });
 // Shared journals stamp who did it (a buy, a bill ticked, new spending): the one signed in, not who "For" shows.
 const doer = () => selfId() ?? currentPerson();
-initStocky({ db, people, me: doer, commit, mealData, pricesChanged: refreshMealCost, ledgerShops });
+initStocky({ db, people, me: doer, commit, mealData, pricesChanged: refreshMealCost, ledgerShops, demo: DEMO, token: async () => (auth?.currentUser ? auth.currentUser.getIdToken() : null) });
 initPrefs({ db, commit, demo: DEMO }); // card layouts that follow each person (before the Ledger board uses it)
 initLedger({ db, people, me: doer, commit, billsChanged: refreshActivities, stocky: { shops: stockyShops, at: stockyAtShop, since: stockySince, rename: renameStockyShop }, shopsChanged: () => refreshStocky() });
 initWheel();

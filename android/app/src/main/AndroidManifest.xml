@@ -3,6 +3,19 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- To find the installed journal app (a Chrome WebAPK) and share a scanned receipt straight to it. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="image/*" />
+        </intent>
+    </queries>
+
     <!-- allowBackup off: the sign-in token must not end up in a phone backup. -->
     <application
         android:allowBackup="false"
@@ -19,6 +32,32 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Scan a receipt for Stocky: from the journal's button (journalscan://scan) or the widget. -->
+        <activity
+            android:name=".ScanActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="journalscan" android:host="scan" />
+            </intent-filter>
+        </activity>
+
+        <!-- The scanned picture, read-only, only for the app it's shared with. -->
+        <provider
+            android:name=".ReceiptProvider"
+            android:authorities="${applicationId}.receipt"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <!-- Lets the journal's site ask whether this app is installed (navigator.getInstalledRelatedApps). -->
+        <meta-data
+            android:name="asset_statements"
+            android:resource="@string/asset_statements" />
 
         <!-- Exported: some phone makers' launchers leave out widgets that aren't. It only ever re-fetches the card. -->
         <receiver

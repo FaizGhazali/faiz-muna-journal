@@ -1,5 +1,6 @@
 // Stocky, the groceries journal (#stocky view). One shared house stock and shopping list for both people.
-// Pages by hash: #stocky (list + at home), #stocky/item/<id>, #stocky/add, #stocky/prices ("Price book"), #stocky/plan.
+// Pages by hash: #stocky (list + at home), #stocky/item/<id>, #stocky/add, #stocky/prices ("Price book"), #stocky/plan,
+// and receipt scanning (receipt.js): #stocky/receipts, #stocky/receipt/<id>, #stocky/scan.
 // Maths and the data model live in stocky.js. Meals are read, never written: what meals use is worked out.
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "../../core/fs.js";
 import { confirmDelete } from "../../core/confirm.js";
@@ -9,6 +10,7 @@ import { findByName, SEARCH_MIN } from "../../logic/search.js";
 import { shopChoices, stockyAt, renames, firstUsed, ledgerShopOf, shopLabel } from "../../logic/shops.js";
 import { $, esc, iso, parse, today, lastUsed } from "../../core/util.js";
 import { ico } from "../../core/icons.js";
+import { initReceipts, startReceipts, stopReceipts, wireReceipts, receiptsPage, receiptPage, scanPage, canScan } from "./receipt.js";
 
 const day = (d) => parse(d).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
@@ -31,10 +33,13 @@ export function initStocky(opts) {
   if (opts.pricesChanged) pricesChanged = opts.pricesChanged;
   if (opts.ledgerShops) ledgerNames = opts.ledgerShops;
   for (const c of ["pantry", "buys", "prices", "shopList", "foods", "kinds", "ledgerShops"]) cols[c] = collection(opts.db, c);
+  initReceipts({ db: opts.db, commit, me, demo: opts.demo, token: opts.token, pantry: () => pantry, buys: () => buys, kinds: () => kinds, list: () => list,
+    ledgerShops: () => ledgerShops, lastKind: () => lastKind(), shopsHtml: () => datalist(), refresh: (force) => refreshStocky(force) });
   byShop = store.get("journal-stocky-byshop", "") === "1";
   try { shut = new Set(JSON.parse(store.get("journal-stocky-shut", "[]"))); } catch (_) { shut = new Set(); }
   addEventListener("hashchange", () => { if (route().page !== "add") newName = ""; closePeek(); pricing = false; editing = false; unfolded.clear(); refreshStocky(true); });
   wire();
+  wireReceipts($("stocky"));
 }
 export function startStocky() {
   const on = (c, set) => unsubs.push(onSnapshot(cols[c], (s) => { set(s.docs.map((d) => ({ id: d.id, ...d.data() }))); refreshStocky(); }));
@@ -44,8 +49,9 @@ export function startStocky() {
   on("shopList", (v) => { list = v.sort((a, b) => (a.created || 0) - (b.created || 0)); });
   on("kinds", (v) => { kinds = allKinds(v); repaintMenus(); });
   on("ledgerShops", (v) => { ledgerShops = v; });
+  startReceipts();
 }
-export function stopStocky() { unsubs.forEach((u) => u()); unsubs = []; }
+export function stopStocky() { unsubs.forEach((u) => u()); unsubs = []; stopReceipts(); }
 
 function compute() {
   const { meals, sets } = mealData(), t = today();
@@ -113,12 +119,13 @@ export function refreshStocky(force) {
   pending = false;
   if (host.hidden && !force) return;
   const r = route();
-  host.innerHTML = r.page === "item" ? itemPage(r.id) : r.page === "add" ? addPage() : r.page === "prices" ? pricesPage() : r.page === "plan" ? planPage() : homePage();
+  const PAGES = { item: () => itemPage(r.id), add: addPage, prices: pricesPage, plan: planPage, receipts: receiptsPage, receipt: () => receiptPage(r.id), scan: scanPage };
+  host.innerHTML = (PAGES[r.page] || homePage)();
   if (peek && sheet.open) sheet.innerHTML = sheetHtml(peek);
   syncForms();
 }
 
-const nav = (on) => `<nav class="chips sk-nav" aria-label="Stocky pages">${[["", `${ico("cart")} List`], ["prices", `${ico("tag")} Price book`], ["plan", `${ico("plate")} Plan meals`]]
+const nav = (on) => `<nav class="chips sk-nav" aria-label="Stocky pages">${[["", `${ico("cart")} List`], ["prices", `${ico("tag")} Price book`], ["plan", `${ico("plate")} Plan meals`], ...(canScan() ? [["receipts", `${ico("receipt")} Scan receipt`]] : [])]
   .map(([k, v]) => `<a class="chip" href="#stocky${k ? "/" + k : ""}" aria-pressed="${on === (k || "home")}">${v}</a>`).join("")}</nav>`;
 const say = () => `<p class="note sk-msg" role="status">${esc(msg)}</p>`;
 const PILL = { out: ["--obese", "Out"], low: ["--over", "Low"], soon: ["--under", "Buy soon"], ok: ["--good", "Fine"], unknown: ["--line", "Not sure"] };

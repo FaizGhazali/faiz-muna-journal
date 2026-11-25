@@ -96,7 +96,7 @@ export function habitFacts(pid) {
   return out;
 }
 
-const RESUME = /^#(activities|mood|mealsets|fitness\/[\w-]+|diary(?:\/(?:write|ai|(?:edit|read)\/[\w-]+))?|stocky(?:\/(?:add|prices|plan|item\/[\w-]+))?|ledger(?:\/spend\/[\w-]+|\/analytics)?)$/;
+const RESUME = /^#(activities|mood|mealsets|fitness\/[\w-]+|diary(?:\/(?:write|ai|(?:edit|read)\/[\w-]+))?|stocky(?:\/(?:add|prices|plan|receipts|(?:item|receipt)\/[\w-]+))?|ledger(?:\/spend\/[\w-]+|\/analytics)?)$/;
 function showView() {
   const h = location.hash;
   store.set("journal-page", RESUME.test(h) ? h : "");

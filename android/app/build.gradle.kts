@@ -49,3 +49,9 @@ android {
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
+
+dependencies {
+    // Receipt scanning (ScanActivity): Google's document scanner UI, run by Play services. It brings some AndroidX in
+    // underneath; the app's own code still uses none.
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
+}

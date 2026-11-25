@@ -16,6 +16,7 @@ import kotlin.concurrent.thread
 /**
  * The home-screen card: "Your next move", the title and the reason line, exactly as the journal shows them.
  * Refreshes every 30 minutes (updatePeriodMillis) and when ↻ is tapped. Tapping the card opens the journal at #next.
+ * The receipt button opens ScanActivity (scan a shop receipt for Stocky).
  */
 class MoveWidget : AppWidgetProvider() {
 
@@ -88,6 +89,9 @@ class MoveWidget : AppWidgetProvider() {
                 val open = Intent(Intent.ACTION_VIEW, Uri.parse(Api.SITE + "#next")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 v.setOnClickPendingIntent(R.id.root, PendingIntent.getActivity(ctx, 2, open, flags))
             }
+            // Scan a receipt for Stocky, straight from the home screen (no sign-in needed: the journal saves it).
+            val scan = Intent(ctx, ScanActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            v.setOnClickPendingIntent(R.id.scan, PendingIntent.getActivity(ctx, 4, scan, flags))
             val again = Intent(ctx, MoveWidget::class.java).setAction(ACTION_REFRESH)
             v.setOnClickPendingIntent(R.id.refresh, PendingIntent.getBroadcast(ctx, 3, again, flags))
             mgr.updateAppWidget(ids, v)

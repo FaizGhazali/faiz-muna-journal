@@ -13,6 +13,13 @@
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
+  "share_target": {
+    "action": "/share-receipt",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": { "files": [{ "name": "receipt", "accept": ["image/*"] }] }
+  },
+  "related_applications": [{ "platform": "play", "id": "com.faizmuna.journal.widget" }],
   "shortcuts": [
     { "name": "What's next?", "short_name": "Next", "url": "/#next", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
     { "name": "Quick idea", "short_name": "Idea", "url": "/#idea", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] }

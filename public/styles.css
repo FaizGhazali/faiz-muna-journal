@@ -1322,6 +1322,39 @@ button.mini.primary, a.btn.mini.primary { color: var(--on-accent); font-weight: 
 .sk-opt.new > button { color: var(--accent) }
 .sk-kindnote { color: var(--accent); font-size: 12px; min-height: 0 }
 .sk-kindnote:empty { display: none }
+/* Stocky receipt scanning (features/stocky/receipt.js) */
+.rc-pick { cursor: pointer }
+.rc-status { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--r-ctl); background: var(--surface-2); font-weight: 600 }
+.rc-status.bad, .rc-check.bad { background: color-mix(in oklch, var(--over) 16%, var(--surface)) }
+.rc-spin { width: 16px; height: 16px; flex: none; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: rcspin .8s linear infinite }
+@keyframes rcspin { to { transform: rotate(360deg) } }
+@media (prefers-reduced-motion: reduce) { .rc-spin { animation-duration: 2.4s } }
+.rc-check { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 8px; padding: 10px 12px; border-radius: var(--r-ctl); font-size: 14px }
+.rc-check.good { background: var(--good-soft) }
+.rc-check .ico, .rc-status .ico { flex: none; margin-top: 2px }
+.mform .two3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px }
+@media (max-width: 520px) { .mform .two3 { grid-template-columns: 1fr 1fr } .mform .two3 > :first-child { grid-column: 1 / -1 } }
+.rc-lines { display: grid; margin-top: 6px }
+.rc-line { display: grid; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--line) }
+.rc-line.skip { opacity: .6 }
+.rc-line.bad { background: color-mix(in oklch, var(--over) 12%, transparent); margin: 0 -8px; padding: 12px 8px; border-radius: var(--r-ctl) }
+.rc-line.disc { color: var(--muted) }
+.rc-top { display: flex; justify-content: space-between; gap: 10px }
+.rc-raw { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; overflow-wrap: anywhere }
+.rc-edit { display: grid; grid-template-columns: minmax(0, 1fr) 76px 96px; gap: 6px; align-items: center }
+.rc-edit > input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px }
+@media (max-width: 520px) { .rc-edit { grid-template-columns: 1fr 1fr } .rc-edit > input { grid-column: 1 / -1 } }
+.rc-n { display: flex; align-items: center; gap: 4px; margin: 0; font-size: 13px; color: var(--muted) }
+.rc-n input { min-width: 0; width: 100% }
+.rc-pickrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px }
+.rc-pickrow select { flex: 1 1 180px; min-width: 0 }
+.rc-state { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--surface-2) }
+.rc-state.is-alias { background: var(--good-soft) }
+.rc-state.is-suggested { background: color-mix(in oklch, var(--over) 20%, var(--surface)) }
+.rc-amt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--muted) }
+.rc-amt input { width: 96px }
+.rc-amt small { flex-basis: 100% }
+.rc-new { padding: 8px; border-radius: var(--r-ctl); background: var(--surface-2) }
 /* Delete prompt (confirm.js) */
 .cdel h2 { margin: 0; font-size: 20px }
 .cdel-body { display: grid; gap: 8px; line-height: 1.5 }
