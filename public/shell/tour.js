@@ -7,6 +7,7 @@
 import { unfold } from "../core/collapse.js";
 import { $ } from "../core/util.js";
 import { ico } from "../core/icons.js";
+import { canWidget, offerWidget } from "./widget.js";
 
 const LOST_MS = 600;
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -47,6 +48,8 @@ const GUIDES = [
   { id: "diary", icon: "book", title: "Write in your diary", blurb: "Round button, then Dearly, then Write today's diary. Jot a few words and tap Write it for me, or write it yourself.", words: "dearly diary journal write entry ai writer notes malay manglish dear" },
   { id: "stocky", icon: "cart", title: "Track your groceries", blurb: "Round button, then Stocky. Add the things you buy often and tap Bought each time you shop. Stocky tells you what's running low, puts it on the list and shows the cheapest shop.", words: "groceries grocery stocky shopping list pantry stock buy bought price shop cheap sale barang dapur running out" },
   { id: "fold", icon: "fold", title: "Fold a card", blurb: "Hold the knob on a card's top edge to tuck it away. Tap it to open again.", words: "hide collapse tidy close card" },
+  { id: "widget", icon: "phone", title: "Get the home-screen widget", blurb: "On Android: your next move on the home screen. Removed it? Download it again here.", widget: true,
+    words: "widget android home screen next move app apk install reinstall download deleted removed uninstalled lost" },
   { id: "zoom", icon: "search", title: "Zoom a graph", blurb: "Pinch with two fingers. Double-tap to see it all again.", words: "chart graph pinch closer detail" },
 ];
 
@@ -55,12 +58,12 @@ function drawList(ev) {
   $("guideList").classList.toggle("intro", !ev); // cards slide in when the page opens, not on every key typed
   const q = $("guideSearch").value.trim().toLowerCase();
   const words = q.split(/\s+/).filter(Boolean);
-  const hits = GUIDES.filter((g) => { const hay = `${g.title} ${g.blurb} ${g.words}`.toLowerCase(); return words.every((w) => hay.includes(w)); })
+  const hits = GUIDES.filter((g) => !g.widget || canWidget()).filter((g) => { const hay = `${g.title} ${g.blurb} ${g.words}`.toLowerCase(); return words.every((w) => hay.includes(w)); })
     .sort((a, b) => !!b.steps - !!a.steps);
   $("guideList").innerHTML = hits.map((g, i) => `<li style="--i:${i}"><button type="button" class="gcard${g.steps ? " live" : ""}" data-g="${g.id}">
     <span class="gico" aria-hidden="true">${ico(g.icon)}</span>
     <span class="gtxt"><b>${g.title}</b><span>${g.blurb}</span></span>
-    <span class="gtag">${g.steps ? `${ico("play")} Show me · ${g.time}` : "Quick tip"}</span></button></li>`).join("");
+    <span class="gtag">${g.steps ? `${ico("play")} Show me · ${g.time}` : g.widget ? "Download" : "Quick tip"}</span></button></li>`).join("");
   const empty = $("guideEmpty");
   empty.hidden = hits.length > 0;
   empty.textContent = hits.length ? "" : `Nothing for "${q}" yet. Try weight, meal or run.`;
@@ -258,7 +261,8 @@ export function initGuides() {
   });
   $("guideList").addEventListener("click", (ev) => {
     const g = GUIDES.find((x) => x.id === ev.target.closest(".gcard")?.dataset.g);
-    if (g) openSheet(g);
+    if (g?.widget) offerWidget(); // the widget sheet has its own steps and the download button
+    else if (g) openSheet(g);
   });
   $("guideSheet").addEventListener("click", (ev) => { if (ev.target === $("guideSheet")) $("guideSheet").close(); }); // tap outside closes
   drawList();

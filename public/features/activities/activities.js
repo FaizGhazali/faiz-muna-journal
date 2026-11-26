@@ -16,6 +16,7 @@ import { canEdit, viewOnly } from "../../core/owner.js";
 import { $, esc, iso, parse, dayNum, addDays, today, lastUsed } from "../../core/util.js";
 import { rm } from "../../logic/ledger.js";
 import { DUMP_KINDS, pageName } from "../../logic/braindump.js";
+import { canWidget } from "../../shell/widget.js";
 
 const fmt = (s) => parse(s).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "";
@@ -211,6 +212,9 @@ function publishMoves() {
   }
 }
 
+// Android only: a quiet way back to the home-screen widget (also after it was removed).
+const widgetLink = () => (!ro() && canWidget() ? `<p class="meta"><button type="button" class="link" data-widget>Put this on your home screen</button></p>` : "");
+
 function renderMove() {
   publishMoves();
   const m = currentMove(), el = $("next");
@@ -225,7 +229,7 @@ function renderMove() {
            <div class="actions"><a class="btn primary" href="#activities" data-mv="ideas">See ideas</a></div>`
         : `<h2>Nothing planned. Go somewhere new.</h2><p class="detail">Take a short walk or visit a café you haven't tried. Or add something you'd like to do.</p>
            <div class="actions"><a class="btn primary" href="#activities" data-mv="add">Add something</a></div>`}
-      ${msg}`;
+      ${msg}${widgetLink()}`;
     return;
   }
   const { a, why } = m, t = a.bill ? BILL_TAG : TYPES[a.type], { detail, minutes } = describe(a), url = safeUrl(a.url);
@@ -240,7 +244,7 @@ function renderMove() {
       <button type="button" data-mv="later">Not now</button>
       <button type="button" data-mv="another">Suggest another</button>
     </div>`}
-    ${msg}`;
+    ${msg}${widgetLink()}`;
 }
 
 async function moveAction(act) {

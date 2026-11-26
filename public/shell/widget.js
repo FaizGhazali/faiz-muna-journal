@@ -54,6 +54,8 @@ function firstOpen() {
 export function initWidget() {
   const sheet = $("widgetSheet");
   sheet?.addEventListener("click", (ev) => { if (ev.target === sheet) sheet.close(); }); // tap outside closes
+  // Any [data-widget] button (Next Move card, Show me how) opens the sheet, so it can be installed again after removing it.
+  document.addEventListener("click", (ev) => { if (ev.target.closest?.("[data-widget]")) { ev.preventDefault(); offerWidget(); } });
   // The wheel's ⋯ menu entry only shows where the widget can be installed.
   document.querySelectorAll("[data-go=widget]").forEach((b) => { b.hidden = !canWidget(); });
   firstOpen();
