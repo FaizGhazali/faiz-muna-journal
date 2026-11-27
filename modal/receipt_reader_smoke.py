@@ -13,7 +13,17 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
 @app.function(image=image, secrets=[modal.Secret.from_name("gemini")], timeout=120)
 def check_payslip():
     from PIL import Image, ImageDraw, ImageFont
-    from receipt_reader import PAYSLIP_MODEL, PAYSLIP_PROMPT, PAYSLIP_SCHEMA, ask_gemini
+    from receipt_reader import (
+        LEGACY_RECEIPT_MODELS, PAYSLIP_MODEL, PAYSLIP_PROMPT, PAYSLIP_SCHEMA,
+        ask_gemini, receipt_model,
+    )
+
+    for variable in ("GEMINI_MODEL", "GEMINI_MODEL_FALLBACK"):
+        override = os.environ.get(variable, "").strip().removeprefix("models/")
+        status = ("unset" if not override else
+                  "legacy 2.5 override (using the updated default)" if override in LEGACY_RECEIPT_MODELS else
+                  "set to a non-legacy override")
+        print(f"Modal gemini secret: {variable} is {status}.")
 
     scan = Image.new("RGB", (1200, 850), "white")
     draw = ImageDraw.Draw(scan)
@@ -40,3 +50,20 @@ def check_payslip():
     assert result.get("payment_date") == "2026-11-27", "Gemini did not extract synthetic pay date"
     assert "Example Services" in (result.get("employer") or ""), "Gemini did not extract synthetic employer"
     print("Gemini read all three fields from a synthetic scanned PDF.")
+
+    receipt = Image.new("RGB", (1050, 520), "white")
+    draw = ImageDraw.Draw(receipt)
+    for index, line in enumerate((
+        "EXAMPLE SHOP - TEST RECEIPT",
+        "27/11/2026",
+        "Item A       1 x 12.34       RM 12.34",
+        "TOTAL                         RM 12.34",
+    )):
+        draw.text((50, 45 + index * 95), line, font=font, fill="black")
+    with io.BytesIO() as buffer:
+        receipt.save(buffer, format="JPEG")
+        for fallback in (False, True):
+            reader = "fallback" if fallback else "default"
+            result = ask_gemini(buffer.getvalue(), receipt_model(fallback), os.environ["GEMINI_API_KEY"])
+            assert result.get("total") == 12.34, f"Receipt {reader} model did not extract the synthetic total"
+            print(f"Receipt {reader} model extracted the synthetic total.")

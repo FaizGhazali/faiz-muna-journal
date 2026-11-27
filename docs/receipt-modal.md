@@ -15,8 +15,9 @@ hidden for the family (the demo always has it, with a made-up receipt).
    ```
 
    Optional, to change models without a deploy of the app: add `GEMINI_MODEL=...` (first try, default
-   `gemini-2.5-flash-lite`) and `GEMINI_MODEL_FALLBACK=...` (second try when the lines don't add up, default
-   `gemini-2.5-flash`) to the same secret.
+   `gemini-3.5-flash-lite`) and `GEMINI_MODEL_FALLBACK=...` (second try when the lines don't add up, default
+   `gemini-3.5-flash`) to the same secret. Empty overrides and legacy 2.5 Flash or Flash-Lite overrides use
+   the current defaults. Google routes requests for Gemini 3.5 Flash to Gemini 3.6 Flash.
 3. Deploy:
 
    ```powershell

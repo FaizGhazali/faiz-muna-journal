@@ -33,11 +33,12 @@ ORIGINS = [
     "https://faiz-muna-journal-c43ab.firebaseapp.com",
     "http://localhost:5000",
 ]
-MODEL = "gemini-2.5-flash-lite"  # when the secret doesn't set GEMINI_MODEL
+MODEL = "gemini-3.5-flash-lite"  # when the secret doesn't set GEMINI_MODEL
 PAYSLIP_MODEL = "gemini-3.5-flash-lite"
-MODEL_FALLBACK = "gemini-2.5-flash"  # when it doesn't set GEMINI_MODEL_FALLBACK
+MODEL_FALLBACK = "gemini-3.5-flash"  # when it doesn't set GEMINI_MODEL_FALLBACK
 PER_HOUR = 20  # reads per hour for the family together
 PER_DAY = 60  # reads per day
+LEGACY_RECEIPT_MODELS = {"gemini-2.5-flash-lite", "gemini-2.5-flash"}
 MAX_BYTES = 4_000_000  # the picture; the app sends ~1600 px JPEGs of a few hundred KB
 
 PROMPT = """Read this shop receipt (most likely from Malaysia, in Malay or English).
@@ -112,6 +113,12 @@ def bump(key: str, cap: int) -> bool:
         return False
     limits[key] = n + 1
     return True
+
+
+def receipt_model(fallback=False):
+    variable, default = ("GEMINI_MODEL_FALLBACK", MODEL_FALLBACK) if fallback else ("GEMINI_MODEL", MODEL)
+    override = os.environ.get(variable, "").strip().removeprefix("models/")
+    return override if override and override not in LEGACY_RECEIPT_MODELS else default
 
 
 class GeminiRequestError(Exception):
@@ -199,9 +206,8 @@ def web():
             raise HTTPException(400, "incorrect document format")
         if not bump(f"day:{time.strftime('%Y-%m-%d', time.gmtime())}", PER_DAY) or not bump(f"hour:{time.strftime('%Y-%m-%d-%H', time.gmtime())}", PER_HOUR):
             raise HTTPException(429, "too many scans for now")
-        model = os.environ.get("GEMINI_MODEL_FALLBACK", MODEL_FALLBACK) if body.get("fallback") is True else os.environ.get("GEMINI_MODEL", MODEL)
-        if is_pdf:
-            model = os.environ.get("GEMINI_PAYSLIP_MODEL", PAYSLIP_MODEL)
+        model = (os.environ.get("GEMINI_PAYSLIP_MODEL", PAYSLIP_MODEL) if is_pdf
+                 else receipt_model(body.get("fallback") is True))
         settings = ("application/pdf", PAYSLIP_PROMPT, PAYSLIP_SCHEMA) if is_pdf else ("image/jpeg", PROMPT, SCHEMA)
         try:
             answer = await run_in_threadpool(ask_gemini, data, model, os.environ["GEMINI_API_KEY"], *settings)
