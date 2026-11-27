@@ -10,6 +10,8 @@ import { findByName, SEARCH_MIN } from "../../logic/search.js";
 import { shopChoices, stockyAt, renames, firstUsed, ledgerShopOf, shopLabel, shopId } from "../../logic/shops.js";
 import { $, esc, iso, parse, today, lastUsed } from "../../core/util.js";
 import { ico } from "../../core/icons.js";
+import { priceHistory } from "../../logic/stocky.js";
+import { historyChart, shopComparison } from "./pricehistory.js";
 import { initReceipts, startReceipts, stopReceipts, wireReceipts, receiptsPage, receiptPage, scanPage, canScan } from "./receipt.js";
 
 const day = (d) => parse(d).toLocaleDateString(undefined, { day: "numeric", month: "short" });
@@ -38,7 +40,12 @@ export function initStocky(opts) {
     ledgerShops: () => ledgerShops, lastKind: () => lastKind(), shopsHtml: () => datalist(), refresh: (force) => refreshStocky(force) });
   byShop = store.get("journal-stocky-byshop", "") === "1";
   try { shut = new Set(JSON.parse(store.get("journal-stocky-shut", "[]"))); } catch (_) { shut = new Set(); }
-  addEventListener("hashchange", () => { if (route().page !== "add") newName = ""; closePeek(); pricing = false; editing = false; unfolded.clear(); refreshStocky(true); });
+  addEventListener("hashchange", () => {
+    const { page, action } = route();
+    if (page !== "add") newName = "";
+    closePeek(); pricing = page === "item" && action === "price"; editing = false; unfolded.clear(); refreshStocky(true);
+    if (pricing) $("stocky").querySelector('[data-skform="price"] input[name=price]')?.focus();
+  });
   wire();
   wireReceipts($("stocky"));
 }
@@ -108,8 +115,8 @@ const addRow = (row) => commit(() => setDoc(doc(cols.shopList), { ...row, create
 // ---------- drawing ----------
 const route = () => {
   const h = location.hash.replace(/^#stocky\/?/, "");
-  const [page, id] = h.split("/");
-  return { page: page || "home", id };
+  const [page, id, action] = h.split("/");
+  return { page: page || "home", id, action };
 };
 export function refreshStocky(force) {
   const host = $("stocky"); if (!host || !people().length) return;
@@ -121,13 +128,15 @@ export function refreshStocky(force) {
   pending = false;
   if (host.hidden && !force) return;
   const r = route();
-  const PAGES = { item: () => itemPage(r.id), add: addPage, prices: pricesPage, plan: planPage, receipts: receiptsPage, receipt: () => receiptPage(r.id), scan: scanPage };
+  const PAGES = { item: () => itemPage(r.id), add: addPage, prices: pricesPage, wishlist: wishlistPage, analytics: analyticsPage,
+    plan: planPage, receipts: receiptsPage, receipt: () => receiptPage(r.id), scan: scanPage };
   host.innerHTML = (PAGES[r.page] || homePage)();
   if (sheet.open && peek) sheet.innerHTML = sheetHtml(peek);
   syncForms();
 }
 
-const nav = (on) => `<nav class="chips sk-nav" aria-label="Stocky pages">${[["", `${ico("cart")} List`], ["prices", `${ico("tag")} Price book`], ["plan", `${ico("plate")} Plan meals`], ...(canScan() ? [["receipts", `${ico("receipt")} Scan receipt`]] : [])]
+const nav = (on) => `<nav class="chips sk-nav" aria-label="Stocky pages">${[["", `${ico("cart")} List`], ["prices", `${ico("tag")} Price book`],
+  ["wishlist", `${ico("star")} Wishlist`], ["analytics", `${ico("chart")} Analytics`], ["plan", `${ico("plate")} Plan meals`], ...(canScan() ? [["receipts", `${ico("receipt")} Scan receipt`]] : [])]
   .map(([k, v]) => `<a class="chip" href="#stocky${k ? "/" + k : ""}" aria-pressed="${on === (k || "home")}">${v}</a>`).join("")}</nav>`;
 const say = () => `<p class="note sk-msg" role="status">${esc(msg)}</p>`;
 const PILL = { out: ["--obese", "Out"], low: ["--over", "Low"], soon: ["--under", "Buy soon"], ok: ["--good", "Fine"], unknown: ["--line", "Not sure"], noRestock: ["--line", "No auto-restock"] };
@@ -372,7 +381,8 @@ function itemPage(id) {
   const linked = linkRows(p).map((r) => foods.find((f) => f.id === r.food)?.name).filter(Boolean);
   const hist = buys.filter((b) => b.item === p.id).sort((a, b) => b.date.localeCompare(a.date) || (b.at || 0) - (a.at || 0)).slice(0, 10);
   const key = "item-" + p.id;
-  return `<div class="fdtop"><a class="btn" href="#stocky">← Back</a></div>
+  const fromPrices = route().action === "price";
+  return `<div class="fdtop"><a class="btn" href="${fromPrices ? "#stocky/prices" : "#stocky"}">${fromPrices ? "← Price book" : "← Back"}</a></div>
   <section class="panel sk-detail" aria-labelledby="skItemTitle" data-title="${esc(p.name)}">
     <div class="mhead"><h2 id="skItemTitle">${esc(p.name)}</h2>${pill(e.status)}</div>
     <p class="note">${esc(kindName(p.kind))}${linked.length ? ` · used in <b class="ink">${esc(linked.join(", "))}</b>` : ""} · usually ${amount(p.pack, p.unit)} at a time</p>
@@ -381,6 +391,7 @@ function itemPage(id) {
     ${levelChips(p)}`}
     <div class="actions">${buying === key ? "" : `<button type="button" class="primary" data-sk="buy" data-key="${key}">Bought some</button>`}${onList(p.id) ? `<span class="note">On the list</span>` : `<button type="button" data-sk="list" data-id="${esc(p.id)}">Add to list</button>`}</div>
     ${buying === key ? buyForm({ key, item: p.id, qty: p.pack }, p) : ""}
+    <div class="actions">${wishlistButton(p)}${p.wishlist ? `<a class="btn mini" href="#stocky/wishlist/${esc(p.id)}">View on Wishlist</a>` : ""}</div>
     ${say()}
   </section>
   <section class="panel sk-more" aria-label="More about ${esc(p.name)}" data-title="Prices, buys and edit">
@@ -404,12 +415,13 @@ function itemPage(id) {
 const part = (key, title, gist, force, body) => `<details class="sk-part" data-part="${key}"${force || unfolded.has(key) ? " open" : ""}>
   <summary><b>${title}</b>${gist ? `<small>${gist}</small>` : ""}</summary>${body}</details>`;
 function priceForm(p) {
-  return `<form class="mform" data-skform="price" novalidate>
+  return `<form class="mform" data-skform="price" data-id="${esc(p.id)}" novalidate>
     <div class="two"><label>Amount (${p.unit})<input type="number" name="qty" inputmode="decimal" min="0" step="any" value="${esc(p.pack)}"></label>
       <label>Price, RM<input type="number" name="price" inputmode="decimal" min="0" step="0.01"></label></div>
     <label>Shop<input type="text" name="shop" list="skShops" maxlength="40" value="${esc(lastShop())}" placeholder="Like Mydin, Lotus's, pasar"></label>
+    <label>Date seen<input type="date" name="date" max="${today()}" value="${today()}"></label>
     <label class="sk-check"><input type="checkbox" name="sale" data-sk-toggle="until"> On sale</label>
-    <label data-sk-show="until" hidden>Sale ends (optional)<input type="date" name="until" min="${today()}"></label>
+    <label data-sk-show="until" hidden>Sale ends (optional)<input type="date" name="until"></label>
     <p class="note" data-sk-hint role="status"></p>
     <div class="actions"><button type="submit" class="primary">Save price</button><button type="button" data-sk="cancel">Cancel</button></div>
     ${datalist()}
@@ -426,11 +438,13 @@ const linkRow = (foods, a = {}, unit = "g") => `<div class="srow" data-link-row>
 // Add or edit an item. Food can be linked to a Meals food, or a new Meals food made from it.
 function itemForm(p) {
   const { foods } = mealData(), v = (k, d = "") => esc(p?.[k] ?? d);
+  const source = p ? "" : addSource();
+  const tracking = !!source;
   return `<form class="mform" data-skform="item" novalidate>
     <label>Name<input type="text" name="name" maxlength="60" value="${p ? v("name") : esc(newName)}" placeholder="Beras, Telur, Tisu"></label>
     <div class="two">${kindField(p ? kindOf(p.kind, kinds).id : lastKind())}${unitSelect(p ? p.unit : lastUnit())}</div>
-    <label>Usually bought at once<input type="number" name="pack" inputmode="decimal" min="0" value="${v("pack")}" placeholder="5000 for a 5 kg bag, 30 for a tray"></label>
-    ${restockCheckbox(p)}
+    <label>${tracking ? "Pack quantity" : "Usually bought at once"}<input type="number" name="pack" inputmode="decimal" min="0" step="any" value="${v("pack", tracking ? 1 : "")}" placeholder="5000 for a 5 kg bag, 30 for a tray"></label>
+    ${tracking ? "" : `${restockCheckbox(p)}
     <fieldset class="sk-links" data-sk-show="food">
       <legend>Used in meals</legend>
       <small class="note">Each meal food it goes into × how much of it is in 100 g of that food. Logging those meals uses it up.</small>
@@ -444,13 +458,70 @@ function itemForm(p) {
     ${p ? "" : `<label class="sk-check"><input type="checkbox" name="bought" checked data-sk-toggle="bought"> I just bought it</label>
     <div data-sk-show="bought"><div class="two"><label>Price paid, RM<input type="number" name="price" inputmode="decimal" min="0" step="0.01" placeholder="optional"></label>
       <label>Shop<input type="text" name="shop" list="skShops" maxlength="40" value="${esc(lastShop())}" placeholder="optional"></label></div>
-      <label class="sk-check"><input type="checkbox" name="sale"> It was on sale</label></div>${datalist()}`}
+      <label class="sk-check"><input type="checkbox" name="sale"> It was on sale</label></div>${datalist()}`}`}
     <p class="note sk-msg" role="status">${esc(msg)}</p>
-    <div class="actions"><button type="submit" class="primary">${p ? "Save changes" : "Add item"}</button>${p ? `<button type="button" data-sk="cancel">Cancel</button>` : `<a class="btn" href="#stocky">Cancel</a>`}</div>
+    <div class="actions"><button type="submit" class="primary">${p ? "Save changes" : "Add item"}</button>${p ? `<button type="button" data-sk="cancel">Cancel</button>` : `<a class="btn" href="${addBack(source)}">Cancel</a>`}</div>
   </form>`;
 }
-const addPage = () => `<div class="fdtop"><a class="btn" href="#stocky">← Back</a></div>
+const addSource = () => ["prices", "wishlist"].includes(route().id) ? route().id : "";
+const addBack = (source) => source ? `#stocky/${source}` : "#stocky";
+const addPage = () => `<div class="fdtop"><a class="btn" href="${addBack(addSource())}">← Back</a></div>
   <section class="panel" aria-labelledby="skAddTitle"><h2 id="skAddTitle">Add an item</h2>${itemForm(null)}</section>`;
+
+function wishlistButton(p, iconOnly = false) {
+  const label = p.wishlist ? "Remove from Wishlist" : "Add to Wishlist";
+  return `<button type="button" class="mini${iconOnly ? " sk-favorite" : ""}" data-sk="wishlist-toggle" data-id="${esc(p.id)}" aria-pressed="${!!p.wishlist}"${iconOnly ? ` aria-label="${label}: ${esc(p.name)}" title="${label}"` : ""}>${ico("star")}${iconOnly ? "" : ` ${label}`}</button>`;
+}
+const historyFor = (p) => priceHistory(p, buys, prices, today(), priceShopKey);
+
+function wishlistPage() {
+  const items = pantry.filter((p) => p.wishlist);
+  const p = items.find((item) => item.id === route().id);
+  if (p) return `${nav("wishlist")}
+    <div class="fdtop"><a class="btn" href="#stocky/wishlist">← Wishlist</a></div>
+    <section class="panel"><h2>${esc(p.name)}</h2>
+      <div class="actions">
+        ${pricing ? "" : '<button type="button" class="primary" data-sk="price">+ Record price</button>'}
+        <a class="btn" href="#stocky/analytics/${esc(p.id)}">Compare shops</a>
+        ${wishlistButton(p)}
+      </div>
+      ${pricing ? priceForm(p) : ""}
+      ${historyChart(p, historyFor(p), priceShopName)}
+    </section>`;
+  const available = pantry.filter((item) => !item.wishlist);
+  return `${nav("wishlist")}
+    <section class="panel" aria-labelledby="skWishTitle"><div class="mhead">
+      <h2 id="skWishTitle">Wishlist</h2><a class="btn primary" href="#stocky/add/wishlist">+ New item</a>
+    </div>
+    ${available.length ? `<form class="mform" data-skform="wishlist">
+      <label>Add an existing item<select name="item" required><option value="">Choose an item</option>
+        ${available.map((item) => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join("")}</select></label>
+      <div class="actions"><button type="submit" class="mini">Add to Wishlist</button></div>
+    </form>` : ""}
+    ${items.length ? `<div class="mlist">${items.map((item) =>
+    `<a class="mitem sk-link" href="#stocky/wishlist/${esc(item.id)}"><b>${esc(item.name)}</b><span>Price history →</span></a>`).join("")}</div>`
+    : '<p class="note">Add a planned purchase to start tracking the prices you see.</p>'}
+    </section>`;
+}
+
+function analyticsPage() {
+  const pricedIds = new Set([...buys, ...prices].filter((r) => r.shop && perUnit(r) > 0).map((r) => r.item));
+  const selectedId = route().id;
+  const options = pantry.filter((p) => p.id === selectedId || p.wishlist || pricedIds.has(p.id));
+  const p = options.find((item) => item.id === selectedId) || options[0];
+  const shops = p ? historyFor(p) : [];
+  return `${nav("analytics")}
+    <section class="panel"><h2>Price analytics</h2>
+    ${p ? `<label for="skAnalyticsItem">Item</label>
+      <select id="skAnalyticsItem">${options.map((item) => `<option value="${esc(item.id)}"${item.id === p.id ? " selected" : ""}>${esc(item.name)}</option>`).join("")}</select>
+      <div id="skAnalyticsResults">${analyticsResults(p, shops)}</div>`
+    : '<p class="note">Record a shop price to start comparing prices and checking sale claims.</p>'}
+    </section>`;
+}
+
+function analyticsResults(p, shops) {
+  return historyChart(p, shops, priceShopName) + shopComparison(p, shops, priceShopName);
+}
 
 function pricesPage() {
   const shops = new Map();
@@ -461,8 +532,9 @@ function pricesPage() {
   if (priceShop && !shops.has(priceShop.key)) shops.set(priceShop.key, priceShop.name);
   const options = [...shops].sort((a, b) => a[1].localeCompare(b[1]));
   return `${nav("prices")}
+    <div class="actions"><a class="btn primary" href="#stocky/add/prices">+ Add item</a></div>
     <div class="sk-price-filters">
-      <input type="search" id="skPriceFind" class="gsearch" placeholder="Search priced items" aria-label="Search the Price book" aria-controls="skPriceResults" autocomplete="off" enterkeyhint="search" value="${esc(priceQ)}">
+      <input type="search" id="skPriceFind" class="gsearch" placeholder="Search items" aria-label="Search the Price book" aria-controls="skPriceResults" autocomplete="off" enterkeyhint="search" value="${esc(priceQ)}">
       <select id="skPriceShop" aria-label="Filter prices by shop" aria-controls="skPriceResults"><option value="">All shops</option>${options.map(([key, name]) => `<option value="${esc(key)}"${key === priceShop?.key ? " selected" : ""}>${esc(name)}</option>`).join("")}</select>
     </div>
     <div id="skPriceResults">${priceResults()}</div>`;
@@ -475,10 +547,10 @@ function priceRow(p, s, detail) {
   const { record } = s, { qty, unit } = displayPack(Number(record.qty), p.unit);
   const standardQty = p.unit === "pcs" ? 1 : 1000;
   const comparison = Number(record.qty) === standardQty ? "" : `<small>${money(shown(s.now, p.unit))} ${unitLabel(p.unit)}</small>`;
-  return `<button type="button" class="mitem sk-link sk-price-row" data-sk="calculate-price" data-id="${esc(p.id)}" data-shop="${esc(s.shop)}" data-pack="${esc(record.qty)}" data-price="${esc(record.price)}" aria-haspopup="dialog">
+  return `<div class="sk-price-entry"><button type="button" class="mitem sk-link sk-price-row" data-sk="calculate-price" data-id="${esc(p.id)}" data-shop="${esc(s.shop)}" data-pack="${esc(record.qty)}" data-price="${esc(record.price)}" aria-haspopup="dialog">
     <span><b>${esc(p.name)}</b><small>${shopHtml(s.shop)}${detail}</small></span>
     <span>${money(record.price)} <small>for ${packNumber.format(qty)} ${unit}</small>${comparison}</span>
-  </button>`;
+  </button>${wishlistButton(p, true)}</div>`;
 }
 
 function priceResults() {
@@ -486,7 +558,9 @@ function priceResults() {
   const priced = pantry.map((p) => ({ ...p, offers: shopsFor(p) })).filter((p) => p.offers.length);
   const q = priceQ.trim();
   const withP = q ? findByName(priced, q).hits : priced;
-  if ((q || priceShop) && !withP.length) return `<p class="note" role="status">No priced items${q ? ` match “${esc(q)}”` : ""}${priceShop ? ` at ${esc(priceShop.name)}` : ""}.</p>`;
+  const withoutPrices = priceShop ? [] : pantry.filter((p) => !boards[p.id].length);
+  const unpriced = q ? findByName(withoutPrices, q).hits : withoutPrices;
+  if ((q || priceShop) && !withP.length && !unpriced.length) return `<p class="note" role="status">No items${q ? ` match “${esc(q)}”` : ""}${priceShop ? ` at ${esc(priceShop.name)}` : ""}.</p>`;
   const sales = withP.flatMap((p) => p.offers.filter((s) => s.onSale).map((s) =>
     priceRow(p, s, ` · <i class="sk-sale">Sale</i>${s.until ? ` till ${esc(day(s.until))}` : ""}${s.normal ? ` · normal ${money(shown(s.normal, p.unit))} ${unitLabel(p.unit)}` : ""}`)));
   const title = priceShop ? "Prices at " + priceShop.name : "Cheapest shop for each";
@@ -505,7 +579,10 @@ function priceResults() {
       return priceRow(p, s, sale + compared);
     }).join("")}</div>`
       : `<p class="note">Add prices when you buy, or tap an item and add a price you saw. Stocky compares the price per kg, per litre or per piece, so different pack sizes are fair.</p>`}
-  </section>`;
+  </section>
+  ${unpriced.length ? `<section class="panel"><h2>No recent shop price</h2><div class="mlist">
+    ${unpriced.map((p) => `<div class="sk-price-entry"><a class="mitem sk-link sk-price-row" href="#stocky/item/${esc(p.id)}/price"><span><b>${esc(p.name)}</b></span><span>Record a price →</span></a>${wishlistButton(p, true)}</div>`).join("")}
+  </div></section>` : ""}`;
 }
 
 function planPage() {
@@ -546,7 +623,7 @@ function syncForms() {
 // Under a price being typed: what it is per kg, and how it compares with usual.
 function hint(f) {
   const h = f.querySelector("[data-sk-hint]"); if (!h) return;
-  const el = f.elements, p = pantry.find((x) => x.id === (f.dataset.skform === "price" ? route().id : rowByKey(f.dataset.key)?.item));
+  const el = f.elements, p = pantry.find((x) => x.id === (f.dataset.skform === "price" ? f.dataset.id : rowByKey(f.dataset.key)?.item));
   const q = Number(el.qty?.value), pr = Number(el.price?.value), unit = p?.unit || el.unit?.value;
   if (!(q > 0 && pr > 0) || !unit) { h.textContent = ""; return; }
   const u = perUnit({ qty: q, price: pr }), vs = p && vsUsual(p.id, u, buys, prices, today());
@@ -555,18 +632,13 @@ function hint(f) {
 const rowByKey = (k) => (k?.startsWith("item-") ? { key: k, item: k.slice(5) } : listRows().find((r) => r.key === k));
 
 // ---------- saving ----------
-// The kind typed in a form: an existing id, or a new kind (made with commitKind() once the rest checks out).
+// The kind typed in a form: an existing id, or a new kind to save with the item.
 function kindFrom(f) {
   const m = matchKind(f.elements.kind?.value, kinds);
   if (m.error) return m;
   if (m.id) return { id: m.id, ids: kinds.map((k) => k.id) };
   const ref = doc(cols.kinds);
   return { id: ref.id, ids: [...kinds.map((k) => k.id), ref.id], make: { ref, body: { name: m.name, created: Date.now() } } };
-}
-async function commitKind(k) {
-  if (!k.make) return;
-  kinds = allKinds([...kinds.filter((x) => !x.builtIn), { id: k.id, ...k.make.body }]);
-  await commit(() => setDoc(k.make.ref, k.make.body));
 }
 async function saveBuy(f) {
   const r = rowByKey(f.dataset.key); if (!r || f.dataset.saving) return;
@@ -620,15 +692,29 @@ async function savePreviewRestock(input) {
   }
 }
 async function savePrice(f) {
-  const el = f.elements;
+  if (f.dataset.saving) return;
+  const el = f.elements, date = el.date.value, p = pantry.find((item) => item.id === f.dataset.id);
+  if (!p) { setMsg(f, "This item is no longer available."); return; }
+  if (!date || date > today() || el.date.validity.rangeOverflow) { setMsg(f, "Pick the date you saw the price, up to today."); return; }
+  if (el.sale.checked && el.until.value && el.until.value < date) { setMsg(f, "The sale end must be on or after the date seen."); return; }
   const { rec, error } = readPrice({ qty: el.qty.value, price: el.price.value, shop: el.shop.value, sale: el.sale.checked, until: el.until.value }, { needPrice: true });
   if (error) { setMsg(f, error); return; }
-  pricing = false; msg = "";
-  await commit(() => setDoc(doc(cols.prices), { item: route().id, date: today(), ...rec, at: Date.now() }), "Price saved.");
-  refreshStocky(true);
+  const submit = f.querySelector('[type="submit"]');
+  f.dataset.saving = "1"; f.dataset.dirty = "1"; submit.disabled = true;
+  try {
+    await commit(() => setDoc(doc(cols.prices), { item: p.id, unit: p.unit, date, ...rec, at: Date.now() }), "Price saved.");
+    if (f.isConnected) { pricing = false; msg = ""; refreshStocky(true); }
+  } catch (_) {
+    if (f.isConnected) setMsg(f, "Could not save the price. Try again.");
+  } finally {
+    delete f.dataset.saving;
+    submit.disabled = false;
+  }
 }
 async function saveItem(f) {
+  if (f.dataset.saving) return;
   const el = f.elements, id = $("skSheet").contains(f) ? peek : route().page === "item" ? route().id : null, { foods } = mealData();
+  const source = route().page === "add" ? addSource() : "";
   const k = kindFrom(f);
   if (k.error) { setMsg(f, k.error); return; }
   if (!el.unit.value) { setMsg(f, "Pick what it's counted in: grams, ml or pieces."); return; }
@@ -648,21 +734,49 @@ async function saveItem(f) {
   if (error) { setMsg(f, error); return; }
   if (pantry.some((p) => p.id !== id && p.name.toLowerCase() === item.name.toLowerCase())) { setMsg(f, "That's already in Stocky."); return; }
   let buy = null;
-  if (!id && el.bought.checked) {
+  if (!id && el.bought?.checked) {
     const p = readPrice({ qty: item.pack, price: el.price.value, shop: el.shop.value, sale: el.sale.checked });
     if (p.error) { setMsg(f, p.error); return; }
     buy = p.rec;
   }
-  await commitKind(k);
-  if (newFood) await commit(() => setDoc(newFood.ref, newFood.body));
   const ref = id ? doc(cols.pantry, id) : doc(cols.pantry);
-  const old = id ? pantry.find((p) => p.id === id) : null;
-  const body = { ...item, created: old?.created || Date.now(), updated: Date.now(), ...(old?.check ? { check: old.check } : {}),
-    ...(el.noRestock.checked ? { noRestock: true } : {}) };
-  editing = false; msg = id ? "Saved." : `Added ${item.name}.${newFood ? " It's in your Meals foods too." : ""}`;
-  await commit(() => setDoc(ref, body), msg);
-  if (buy) await commit(() => setDoc(doc(cols.buys), { item: ref.id, date: today(), ...buy, by: me(), at: Date.now() }));
-  if (!id) location.hash = "#stocky"; else refreshStocky(true);
+  const at = Date.now(), batch = writeBatch(db), noRestock = !!(source || el.noRestock?.checked);
+  if (k.make) batch.set(k.make.ref, k.make.body);
+  if (newFood) batch.set(newFood.ref, newFood.body);
+  if (id) batch.update(ref, { ...item, links: item.links || [], noRestock, updated: at });
+  else batch.set(ref, { ...item, created: at, updated: at, ...(noRestock ? { noRestock } : {}),
+    ...(source === "wishlist" ? { wishlist: true } : {}) });
+  if (buy) batch.set(doc(cols.buys), { item: ref.id, date: today(), ...buy, by: me(), at });
+  const message = id ? "Saved." : `Added ${item.name}.${newFood ? " It's in your Meals foods too." : ""}`;
+  const submit = f.querySelector('[type="submit"]');
+  f.dataset.saving = "1"; f.dataset.dirty = "1"; submit.disabled = true;
+  try {
+    await commit(() => batch.commit(), message);
+    if (!f.isConnected) return;
+    if (source === "prices") location.hash = `#stocky/item/${ref.id}/price`;
+    else if (source === "wishlist") location.hash = `#stocky/wishlist/${ref.id}`;
+    else if (!id) location.hash = "#stocky";
+    else { editing = false; msg = message; refreshStocky(true); }
+  } catch (_) {
+    if (f.isConnected) setMsg(f, "Could not save the item. Try again.");
+  } finally {
+    delete f.dataset.saving;
+    submit.disabled = false;
+  }
+}
+
+async function setWishlist(id, wishlist, button, target) {
+  if (!pantry.some((p) => p.id === id) || button.disabled) return;
+  const hash = location.hash;
+  button.disabled = true;
+  try {
+    await commit(() => updateDoc(doc(cols.pantry, id), { wishlist }), wishlist ? "Added to Wishlist." : "Removed from Wishlist.");
+    if (target && location.hash === hash) location.hash = target;
+  } catch (_) {
+    // The shared save helper reports write failures.
+  } finally {
+    button.disabled = false;
+  }
 }
 async function addTyped(f) {
   const name = f.elements.name.value.trim(), qty = Number(f.elements.qty.value) || 0;
@@ -731,6 +845,10 @@ function wire() {
     const act = b.dataset.sk, id = b.dataset.id || route().id, here = sheet.open ? sheet : host;
     if (act === "peek") openPeek(b.dataset.id);
     if (act === "unpeek") { closePeek(); if (pending) refreshStocky(); }
+    if (act === "wishlist-toggle") {
+      const p = pantry.find((item) => item.id === id);
+      if (p) await setWishlist(id, !p.wishlist, b, route().page === "wishlist" ? "#stocky/wishlist" : "");
+    }
     if (act === "calculate-price") openPriceCalculator(b.dataset);
     if (act === "shelf") { const k = b.dataset.kind; shut.has(k) ? shut.delete(k) : shut.add(k); store.set("journal-stocky-shut", JSON.stringify([...shut])); refreshStocky(true); }
     if (act === "more") { opened.add(b.dataset.kind); refreshStocky(true); }
@@ -772,10 +890,22 @@ function wire() {
     if (k === "price") savePrice(f);
     if (k === "item") saveItem(f);
     if (k === "row") addTyped(f);
+    if (k === "wishlist") {
+      const id = f.elements.namedItem("item").value;
+      setWishlist(id, true, f.querySelector('[type="submit"]'), `#stocky/wishlist/${id}`);
+    }
   });
   both("change", (ev) => {
     if (ev.target.matches("[data-sk-restock]")) { savePreviewRestock(ev.target); return; }
     if (ev.target.id === "skCalcUnit") { updatePriceCalculator(); return; }
+    if (ev.target.id === "skAnalyticsItem") {
+      const p = pantry.find((item) => item.id === ev.target.value);
+      if (p) {
+        history.replaceState(history.state, "", `#stocky/analytics/${p.id}`);
+        $("skAnalyticsResults").innerHTML = analyticsResults(p, historyFor(p));
+      }
+      return;
+    }
     if (ev.target.id === "skPriceShop") {
       const select = ev.target;
       priceShop = select.value ? { key: select.value, name: select.selectedOptions[0].textContent } : null;

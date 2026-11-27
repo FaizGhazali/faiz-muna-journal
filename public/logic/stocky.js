@@ -185,6 +185,28 @@ export function priceRecords(itemId, buys, prices, today) {
     .sort((a, b) => b.date.localeCompare(a.date) || (b.at || 0) - (a.at || 0));
 }
 
+// Full history for Wishlist and Analytics. Keep the Price book's recent-offer rules separate.
+export function priceHistory(item, buys, prices, today, keyOfShop = shopKey) {
+  const shops = new Map();
+  const records = [...buys, ...prices].filter((r) => r.item === item.id && r.shop
+    && (!r.unit || r.unit === item.unit) && /^\d{4}-\d{2}-\d{2}$/.test(r.date) && Number.isFinite(Date.parse(r.date)) && r.date <= today
+    && Number.isFinite(perUnit(r)) && perUnit(r) > 0)
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.at || 0) - (b.at || 0));
+  for (const r of records) {
+    const key = keyOfShop(r.shop);
+    if (!key) continue;
+    if (!shops.has(key)) shops.set(key, []);
+    shops.get(key).push({ ...r, value: shown(perUnit(r), item.unit) });
+  }
+  return [...shops.values()].map((points) => {
+    const latest = points.at(-1);
+    const regular = latest.sale ? points.findLast((r) => !r.sale
+      && (r.date < latest.date || (r.date === latest.date && r.at > 0 && r.at < latest.at))) ?? null : null;
+    const savings = regular ? (regular.value - latest.value) / regular.value : null;
+    return { shop: latest.shop.trim(), points, latest, regular, savings };
+  }).sort((a, b) => a.latest.value - b.latest.value || a.shop.localeCompare(b.shop));
+}
+
 // One row per shop: its normal price (the latest non-sale one), a sale price if one is on now, and the price to pay now.
 // Cheapest now first. Each row keeps the original record for its displayed price.
 export function priceBoard(itemId, buys, prices, today, keyOfShop = shopKey) {

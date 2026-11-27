@@ -1,12 +1,43 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { priceHistory } from "../public/logic/stocky.js";
 import { buyRate, mealUse, estimate, lowItems, priceBoard, priceAtQuantity, vsUsual, usualPrice, setCost, linkRows, linksOf, linksTo, cookedIn, itemUse, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind, matchKind, kindsLike, shelves } from "../public/logic/stocky.js";
 
 const T = "2026-11-22";
 const rice = { id: "rice", name: "Beras", kind: "food", unit: "g", pack: 5000, food: "f-nasi" };
 const buy = (date, qty, extra = {}) => ({ item: "rice", date, qty, at: 0, ...extra });
 const meal = (date, g, food = "f-nasi") => ({ person: "p1", date, items: [{ food, g }] });
+
+test("priceHistory combines old purchases and observations in comparable units and groups shop aliases", () => {
+  const regular = buy("2024-01-04", 5000, { shop: "Mydin", price: 20 });
+  const sale = buy("2026-11-20", 500, { shop: "MYDIN ", price: 1.5, sale: true });
+  const other = buy("2026-11-15", 1000, { shop: "Lotus's", price: 2.5 });
+  const ignored = [
+    buy("2026-11-23", 500, { shop: "Mydin", price: 1 }),
+    buy(T, 500, { shop: "Mydin", price: 1, unit: "ml" }),
+    buy(T, 500, { shop: "Mydin" }),
+    buy(T, 500, { price: 1 }),
+    buy(T, 500, { item: "other", shop: "Mydin", price: 1 }),
+    buy("2026-00-15", 500, { shop: "Mydin", price: 1 }),
+  ];
+  const [lotus, mydin] = priceHistory(rice, [regular, other], [sale, ...ignored], T);
+  assert.equal(lotus.latest.value, 2.5);
+  assert.deepEqual(mydin.points.map((r) => [r.date, r.value]), [[regular.date, 4], [sale.date, 3]]);
+  assert.equal(mydin.regular.date, regular.date);
+  assert.equal(mydin.savings, 0.25);
+});
+
+test("sale evidence uses only an earlier regular price from the same shop", () => {
+  const regular = buy(T, 1000, { shop: "Mydin", price: 4, at: 10 });
+  const sale = buy(T, 1000, { shop: "Mydin", price: 5, sale: true, at: 20 });
+  const other = buy("2026-11-01", 1000, { shop: "Lotus's", price: 8 });
+  const evidence = (records) => priceHistory(rice, [other], records, T).find((r) => r.shop === "Mydin");
+  assert.equal(evidence([sale, regular]).savings, -0.25);
+  assert.equal(evidence([{ ...sale, price: 4 }, regular]).savings, 0);
+  assert.equal(evidence([sale, { ...regular, at: 0 }]).regular, null);
+  assert.equal(evidence([sale, { ...regular, at: 30 }]).latest.sale, undefined);
+});
 
 test("buyRate needs two buy days", () => {
   assert.equal(buyRate([]), null);

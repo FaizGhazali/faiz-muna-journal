@@ -1234,6 +1234,14 @@ a.btn.mini { font-size: 13px; font-weight: 400; padding: 4px 10px; color: var(--
 .sk-nav { display: flex; flex-wrap: wrap; gap: 8px }
 .sk-nav a.chip { text-decoration: none; color: var(--ink); border: 1px solid var(--line) }
 .sk-nav a.chip[aria-pressed="true"] { color: var(--on-accent) }
+.sk-history { margin: 1rem 0 }
+.sk-history figcaption { color: var(--muted); font-size: .9rem }
+.sk-history svg { display: block; width: 100%; max-width: 42rem }
+.sk-history text { fill: var(--ink); font: 12px var(--body) }
+.sk-history-grid { stroke: var(--line) }
+.sk-history-legend { display: flex; flex-wrap: wrap; gap: .35rem 1rem; list-style: none; padding: 0; margin: 0; font-size: .85rem }
+.sk-history-legend li { display: flex; align-items: center; gap: .35rem; overflow-wrap: anywhere }
+.sk-history-legend li span { flex: none; width: .65rem; height: .65rem; border-radius: 50%; background: var(--series) }
 .sk-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; padding: 10px 0; border-bottom: 1px solid var(--line) }
 .sk-row small, .sk-best { display: block; color: var(--muted); font-size: 13px }
 .sk-row.low > div > b::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--over); vertical-align: middle }
@@ -1260,6 +1268,9 @@ a.btn.mini { font-size: 13px; font-weight: 400; padding: 4px 10px; color: var(--
 .sk-price-row > span:first-child { min-width: 0; font-weight: 400; white-space: normal; overflow-wrap: anywhere }
 .sk-price-row > span:last-child { text-align: end }
 .sk-price-row:hover { background: var(--accent-soft) }
+.sk-price-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px }
+.sk-favorite { display: grid; place-items: center; min-width: 36px; min-height: 36px; padding: 6px }
+.sk-favorite[aria-pressed="true"] svg { fill: currentColor }
 .sk-found { margin: 4px 0 0 }
 .sk-none { padding: 8px 0 }
 .sk-none p { margin: 0 0 8px }
