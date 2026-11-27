@@ -13,8 +13,9 @@ import { monthOf, addMonths, payOf, payLabel } from "../../logic/moneyplan.js";
 import { INCOME_KINDS, incomeKind, checkIncome, monthIncome, lastIncome, sources, FROM_MAX, NOTE_MAX } from "../../logic/income.js";
 import { openDocs, docsOn } from "./docsui.js";
 import { pageLines } from "../../logic/ledgerimport.js";
-import { payslipFields } from "../../logic/payslip.js";
+import { payslipFields, scannedPayslipFields } from "../../logic/payslip.js";
 import { openLocalPdf } from "./pdf.js";
+import { readerReady, readPayslipPdf } from "../stocky/receiptread.js";
 import { planState } from "./plan.js";
 import { ico } from "../../core/icons.js";
 
@@ -134,6 +135,10 @@ function documentPanel(f) {
         <input type="file" id="lnPdf" accept="application/pdf,.pdf" hidden>`}
   </div>
   ${f.file && docsOn() ? `<label class="lnkeep"><input type="checkbox" id="lnKeep"${f.keep ? " checked" : ""}> Keep a copy in OneDrive</label>` : ""}
+  ${f.canScan ? `<div class="lnscan">
+    <button type="button" class="mini" data-ln="scan-pdf" aria-disabled="${Boolean(f.scan)}">Scan with Gemini</button>
+    <span class="note">Sends this PDF to Google Gemini for text extraction.</span>
+  </div>` : ""}
   <p class="note lnimportmsg" role="status">${esc(f.pdfStatus ?? "")}</p>`;
 }
 
@@ -156,6 +161,9 @@ function setPdfValue(f, field, value) {
 }
 
 function clearDocument(f) {
+  f.scan?.abort();
+  f.scan = null;
+  f.canScan = false;
   if (f.preview) URL.revokeObjectURL(f.preview);
   f.file = f.preview = f.pdfStatus = null;
   f.keep = false;
@@ -191,20 +199,67 @@ async function readPayslip(file) {
     }
     if (form !== f || f.file !== file || f.saving) return;
     const parsed = payslipFields(lines);
-    const filled = Object.keys(parsed).filter((field) =>
-      parsed[field] && setPdfValue(f, field, field === "from" ? parsed.from.slice(0, FROM_MAX) : parsed[field]));
-    const review = filled.length
-      ? `Check suggested ${filled.map((field) => FIELD_NAMES[field]).join(", ")} before saving.`
-      : "No fields filled. Enter the payment details below.";
-    f.pdfStatus = filled.length && !f.date ? `${review} Enter the date you received the payment.` : review;
+    f.canScan = Boolean(ctx.token && readerReady() && (!parsed.amount || !parsed.from || !lines.length));
+    applyPayslipFields(f, parsed);
+    if (!lines.length) f.pdfStatus = f.canScan
+      ? "This PDF has no selectable text. Scan it or enter the details below."
+      : "This PDF has no selectable text. Enter the details below.";
   } catch (error) {
     if (form !== f || f.file !== file || f.saving) return;
     f.pdfStatus = error?.name === "PasswordException"
       ? "This PDF is password-protected. Enter the payment details below."
       : "Couldn't read this PDF. Enter the payment details below.";
   }
-  const status = $("lnImport")?.querySelector("[role=status]");
-  if (status) status.textContent = f.pdfStatus;
+  renderDocument(f);
+}
+
+function applyPayslipFields(f, parsed) {
+  const filled = Object.keys(parsed).filter((field) =>
+    parsed[field] && !f.suggested.has(field) &&
+    setPdfValue(f, field, field === "from" ? parsed.from.slice(0, FROM_MAX) : parsed[field]));
+  const review = filled.length
+    ? `Check suggested ${filled.map((field) => FIELD_NAMES[field]).join(", ")} before saving.`
+    : "No new fields filled. Enter any missing details below.";
+  f.pdfStatus = filled.length && !f.date ? `${review} Enter the date you received the payment.` : review;
+}
+
+async function scanPayslip(f) {
+  if (!f.canScan || f.scan) return;
+  if (f.file.size > 4_000_000) {
+    f.pdfStatus = "Gemini scanning supports PDFs up to 4 MB. You can still enter the details below.";
+    renderDocument(f, '[data-ln="scan-pdf"]');
+    return;
+  }
+  const file = f.file;
+  const controller = new AbortController();
+  const { signal } = controller;
+  f.scan = controller;
+  f.pdfStatus = "Scanning payslip with Gemini...";
+  renderDocument(f, '[data-ln="scan-pdf"]');
+  try {
+    const token = await ctx.token();
+    if (signal.aborted || form !== f || f.saving) return;
+    if (!token) throw Object.assign(new Error(), { status: 401 });
+    const result = await readPayslipPdf(file, token, signal);
+    if (signal.aborted || form !== f || f.saving) return;
+    applyPayslipFields(f, scannedPayslipFields(result));
+    f.canScan = false;
+  } catch (error) {
+    if (signal.aborted || form !== f || f.saving) return;
+    f.pdfStatus = ({
+      401: "Sign in again to scan this PDF.",
+      403: "Your account cannot scan payslips.",
+      404: "The payslip reader is awaiting deployment. Enter the details below.",
+      413: "This PDF is too large to scan. Enter the details below.",
+      429: "The reader has reached its limit. Try again later.",
+    })[error.status] ?? "Couldn't scan this PDF. Try again or enter the details below.";
+  } finally {
+    if (f.scan === controller) f.scan = null;
+    if (form === f && !signal.aborted) {
+      const focused = document.activeElement?.dataset.ln === "scan-pdf";
+      renderDocument(f, focused ? (f.canScan ? '[data-ln="scan-pdf"]' : '[data-ln="remove-pdf"]') : undefined);
+    }
+  }
 }
 
 function removePayslip(f) {
@@ -287,6 +342,7 @@ function click(b) {
   const a = b.dataset.ln, id = b.dataset.id; if (!a) return;
   if (a === "new") open();
   if (a === "pick-pdf") $("lnPdf")?.click();
+  if (a === "scan-pdf" && form?.file) scanPayslip(form);
   if (a === "remove-pdf" && form?.file) removePayslip(form);
   if (a === "edit") open(id);
   if (a === "cancel") closeForm();

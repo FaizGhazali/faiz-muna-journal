@@ -100,7 +100,7 @@ initMeals({ db, people, me: currentPerson, entries: allEntries, commit, stock: {
 const doer = () => selfId() ?? currentPerson();
 initStocky({ db, people, me: doer, commit, mealData, pricesChanged: refreshMealCost, ledgerShops, demo: DEMO, token: async () => (auth?.currentUser ? auth.currentUser.getIdToken() : null) });
 initPrefs({ db, commit, demo: DEMO }); // card layouts that follow each person (before the Ledger board uses it)
-initLedger({ db, people, me: doer, commit, billsChanged: refreshActivities, stocky: { shops: stockyShops, at: stockyAtShop, since: stockySince, rename: renameStockyShop }, shopsChanged: () => refreshStocky() });
+initLedger({ db, people, me: doer, commit, token: DEMO ? null : () => auth?.currentUser?.getIdToken(), billsChanged: refreshActivities, stocky: { shops: stockyShops, at: stockyAtShop, since: stockySince, rename: renameStockyShop }, shopsChanged: () => refreshStocky() });
 initWheel();
 initCollapse();
 initZoom();

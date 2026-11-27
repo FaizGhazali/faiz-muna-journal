@@ -65,6 +65,7 @@ Ledger/2026/2026-12/Bills/2026-12-01 Car RM520 Muna.pdf
 ### Income documents
 
 In **Add income**, choose **Fill from document** to read a text-based payslip PDF on your device.
+For scanned PDFs, choose **Scan with Gemini** to send the PDF through Modal to Google for extraction.
 Review the suggested net pay, employer and payment date. Tick **Keep a copy in OneDrive** to attach
 the PDF after saving. You can also add proof later using the paperclip on the income entry.
 If OneDrive needs you to sign in, choose the file again after connecting.

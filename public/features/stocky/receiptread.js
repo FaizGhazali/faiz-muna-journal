@@ -30,10 +30,25 @@ export async function shrink(file) {
 
 // Ask the reader. fallback = the stronger model, for a second try when the first answer doesn't add up.
 export async function readPicture(b64, token, fallback = false) {
-  const r = await fetch(READER_URL.replace(/\/$/, "") + "/read", {
+  return readerRequest("/read", { image: b64, fallback }, token);
+}
+
+export async function readPayslipPdf(file, token, signal) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+  }
+  const result = await readerRequest("/read-payslip", { pdf: btoa(binary) }, token, signal);
+  return result.payslip;
+}
+
+async function readerRequest(path, body, token, signal) {
+  const r = await fetch(READER_URL.replace(/\/$/, "") + path, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ image: b64, fallback }),
+    body: JSON.stringify(body),
+    signal,
   });
   if (!r.ok) throw Object.assign(new Error(`reader-${r.status}`), { status: r.status });
   return r.json(); // { model, receipt }

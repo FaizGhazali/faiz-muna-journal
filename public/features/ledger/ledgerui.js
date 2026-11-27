@@ -98,7 +98,7 @@ export function initLedger(opts) {
   initPlan({ ...shared, me, planChanged: () => renderAnalytics(), billsChanged: opts.billsChanged });
   initAnalytics(shared);
   initDocs({ db: () => db, commit, me });
-  initIncome({ ...shared, me });
+  initIncome({ ...shared, me, token: opts.token });
   afterSignIn();
   initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases, shops: () => shopNames, stocky });
   $("me").addEventListener("change", () => { f.who = null; formKey = ""; refreshLedger(); });

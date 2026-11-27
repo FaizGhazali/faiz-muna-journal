@@ -4,6 +4,15 @@ function unique(values) {
   return matches.length === 1 ? matches[0] : "";
 }
 
+export function scannedPayslipFields(result) {
+  const sen = result?.net_pay_sen;
+  const amount = Number.isSafeInteger(sen) && sen > 0 ? (sen / 100).toFixed(2) : "";
+  const date = typeof result?.payment_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(result.payment_date)
+    ? paymentDate(result.payment_date) : "";
+  const from = typeof result?.employer === "string" ? result.employer.replace(/\s+/g, " ").trim() : "";
+  return { amount, date, from };
+}
+
 function paymentDate(value) {
   let [year, month, day] = value.split(/[/.-]/);
   if (year.length !== 4) [year, day] = [day, year];

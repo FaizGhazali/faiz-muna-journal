@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { payslipFields } from "../public/logic/payslip.js";
+import { payslipFields, scannedPayslipFields } from "../public/logic/payslip.js";
 import { docPlan } from "../public/logic/docs.js";
 
 test("payslip autofill extracts labeled net pay, payer and payment date", () => {
@@ -23,4 +23,11 @@ test("income proof files are grouped by person and year without amounts in the n
     "Ledger/Income/Faiz/2026/Payslips/2026-11-27 - ACME Group - Payslip.pdf");
   assert.equal(docPlan({ ...spec, kind: "income", what: "" }).path,
     "Ledger/Income/Faiz/2026/Other proof/2026-11-27 - Income proof.pdf");
+});
+
+test("Gemini payslip results accept whole sen and a valid ISO date", () => {
+  assert.deepEqual(scannedPayslipFields({ net_pay_sen: 412305, payment_date: "2026-11-27", employer: " Example   Company " }),
+    { amount: "4123.05", date: "2026-11-27", from: "Example Company" });
+  assert.deepEqual(scannedPayslipFields({ net_pay_sen: 4123.05, payment_date: "2026-11-31", employer: null }),
+    { amount: "", date: "", from: "" });
 });

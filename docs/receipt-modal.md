@@ -7,7 +7,7 @@ hidden for the family (the demo always has it, with a made-up receipt).
 ## Once, on the PC
 
 1. Get a Gemini API key: <https://aistudio.google.com/apikey> (free tier). Google may use free-tier requests to improve
-   its products. That's fine for shop receipts; don't send anything else through it.
+   its products. Ledger keeps payslips on-device unless you click **Scan with Gemini**. That action sends the PDF through Modal to Google. Use manual entry if you want to keep the PDF local.
 2. Modal is already set up for Dearly (`pip install modal`, `modal setup`). Store the key as a Modal secret:
 
    ```powershell
@@ -25,6 +25,13 @@ hidden for the family (the demo always has it, with a made-up receipt).
 
    It prints an address like `https://<workspace>--receipt-reader-web.modal.run`.
 4. Paste that address into `READER_URL` in `public/features/stocky/receiptread.js`, then ship (push to `main`).
+
+## Payslip PDFs
+
+Ledger first reads selectable text on your device. If it cannot fill the payslip details, **Scan with Gemini**
+sends the PDF (up to 4 MB) to the same authenticated Modal service. Review each suggestion before saving.
+Payslips use the same quota as Stocky receipts. To release changes to the payslip reader, deploy
+`modal/receipt_reader.py` before publishing the Firebase frontend. No additional secret is needed.
 
 ## Limits and safety
 
