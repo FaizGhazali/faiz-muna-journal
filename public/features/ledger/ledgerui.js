@@ -20,7 +20,8 @@ import { payOf, monthOf, monthRange, addMonths, bucketsOf, txnBucket, ownBucket 
 import { initSpend, renderSpend, shopHtml } from "./spend.js";
 import { initAnalytics, renderAnalytics, ANALYTICS } from "./analytics.js";
 import { initDocs, openDocs, refreshDocs, resumeDocs, afterSignIn, docsOn } from "./docsui.js";
-import { initIncome, renderIncome, incomeEntry } from "./income.js";
+import { initTax, openTax, refreshTax, taxDocEntry } from "./taxui.js";
+import { initIncome, renderIncome, incomeEntry, openIncome } from "./income.js";
 import { makeBoard } from "../../shell/board.js";
 import { boardPrefs } from "../../shell/prefs.js";
 import { ico } from "../../core/icons.js";
@@ -52,7 +53,7 @@ const CATS = SYSTEM_CATEGORIES.filter((c) => !c.hidden);
 const cat = (id) => SYSTEM_CATEGORIES.find((c) => c.id === id) ?? SYSTEM_CATEGORIES.find((c) => c.id === "other");
 
 let db, commit, people, me, unsubs = [], seeded = false;
-let accounts = [], programs = [], aliases = [], cycles = {}, txns = [], rebates = {}, shopNames = [], incomes = [];
+let accounts = [], programs = [], aliases = [], cycles = {}, txns = [], rebates = {}, shopNames = [], incomes = [], taxRecords = [];
 // "Always categorise" offer after a category is changed by hand: { raw, cat, pattern, host, msg }.
 let offer = null, openRow = null;
 // The add form. catAuto: the category came from a merchant rule (it follows the shop until picked by hand).
@@ -98,7 +99,8 @@ export function initLedger(opts) {
   initPlan({ ...shared, me, planChanged: () => renderAnalytics(), billsChanged: opts.billsChanged });
   initAnalytics(shared);
   initDocs({ db: () => db, commit, me });
-  initIncome({ ...shared, me, token: opts.token });
+  initIncome({ ...shared, me, token: opts.token, openTax });
+  initTax({ ...shared, me, taxRecords: () => taxRecords, openIncome, incomeEntry });
   afterSignIn();
   initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases, shops: () => shopNames, stocky });
   $("me").addEventListener("change", () => { f.who = null; formKey = ""; refreshLedger(); });
@@ -113,7 +115,10 @@ export function startLedger() {
   sub("ledgerCycles", (x) => { cycles = Object.fromEntries(x.map((c) => [c.id, c])); });
   sub("ledgerRebates", (x) => { rebates = Object.fromEntries(x.map((r) => [r.id, r])); });
   sub("ledgerShops", (x) => { shopNames = x; checkShops(); });
-  sub("ledgerIncome", (x) => { incomes = x.filter((i) => /^\d{4}-\d{2}-\d{2}$/.test(i.date || "") && Number.isInteger(i.amountSen)); });
+  sub("ledgerIncome", (x) => {
+    incomes = x.filter((i) => !i.taxType && /^\d{4}-\d{2}-\d{2}$/.test(i.date || "") && Number.isInteger(i.amountSen));
+    taxRecords = x.filter((i) => ["ea", "relief"].includes(i.taxType) && /^\d{4}$/.test(i.year || ""));
+  });
   unsubs.push(onSnapshot(query(collection(db, "ledgerTxns"), where("date", ">=", addDays(today(), -LOAD_DAYS))), (s) => {
     txns = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((t) => /^\d{4}-\d{2}-\d{2}$/.test(t.date || "") && Number.isInteger(t.amountSen));
     refreshLedger();
@@ -130,6 +135,7 @@ export function refreshLedger() {
   renderSpend();
   renderAnalytics();
   renderIncome();
+  refreshTax();
   refreshDocs(findEntry); resumeDocs(findEntry);
   renderAdd();
   renderImport();
@@ -485,7 +491,10 @@ function txnEntry(t) {
 // The entry behind a paperclip sheet, from the live data (null when it's gone).
 function findEntry(coll, id) {
   if (coll === "ledgerTxns") { const t = txns.find((x) => x.id === id); return t ? txnEntry(t) : null; }
-  if (coll === "ledgerIncome") { const x = incomes.find((y) => y.id === id); return x ? incomeEntry(x) : null; }
+  if (coll === "ledgerIncome") {
+    const x = incomes.find((y) => y.id === id), tax = taxRecords.find((y) => y.id === id);
+    return x ? incomeEntry(x) : tax ? taxDocEntry(tax) : null;
+  }
   if (coll === "ledgerPaid") { const { paid, commitments } = planState(), p = paid[id], c = p && commitments.find((x) => x.id === p.commitment); return c ? billEntry(p, c) : null; }
   return null;
 }

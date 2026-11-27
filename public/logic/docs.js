@@ -67,12 +67,16 @@ export function docFolder({ date, kind }) {
 // A photo that will be shrunk is saved as .jpg; asIs (shrinking didn't help) keeps the file's own type.
 export function docPlan({ income, file: { name = "", type: mime = "" } = {}, date, kind, what, amountSen = null, person = "", asIs = false }) {
   const shrink = !asIs && shrinkable(name, mime), ext = shrink ? "jpg" : extOf(name, mime);
-  const folder = income
+  const tax = kind === "ea" || kind === "relief";
+  const owner = cleanName(person, 30) || "Unknown";
+  const folder = tax ? [ROOT, "Income Tax", owner, date.slice(0, 4), kind === "ea" ? "EA forms" : "Relief evidence"].join("/")
+    : income
     ? [ROOT, "Income", cleanName(person, 30) || "Unknown", date.slice(0, 4), kind === "salary" ? "Payslips" : "Other proof"].join("/")
     : docFolder({ date, kind });
   const title = kind === "salary" ? "Payslip" : "Income proof";
   const incomeName = [date, cleanName(what), title].filter(Boolean).join(" - ");
-  const filename = income ? incomeName + (ext ? `.${ext}` : "") : docName({ date, what, amountSen, person, ext });
+  const taxName = [date.slice(0, 4), cleanName(what), kind === "ea" ? "EA form" : "Relief evidence"].filter(Boolean).join(" - ");
+  const filename = tax ? taxName + (ext ? `.${ext}` : "") : income ? incomeName + (ext ? `.${ext}` : "") : docName({ date, what, amountSen, person, ext });
   return { folder, name: filename, path: `${folder}/${filename}`, type: fileType(name, mime), ext, shrink };
 }
 

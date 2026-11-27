@@ -1603,6 +1603,32 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 .lnimportmsg { margin: 4px 0 0 }
 .lnimportmsg:empty, .lnform > .msg:empty { display: none }
 .lnform input[data-suggested] { border-color: var(--accent); background: var(--accent-soft) }
+.lnpayroll summary { cursor: pointer; color: var(--accent); padding: 8px 0 }
+.lnpayroll summary .note { margin-inline-start: 6px }
+.lnpayfields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px }
+.lnpayfields label { min-width: 0 }
+#ledgerTaxSheet { max-width: min(680px, calc(100vw - 18px)); width: 100% }
+.taxsheet { display: grid; gap: 14px }
+.taxsheet h2, .taxsheet h3, .taxsheet p { margin: 0 }
+.taxsheet h2, .taxsheet h3 { font-family: var(--display, Georgia, serif) }
+.taxfilters, .taxmetrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
+.taxmetrics { padding: 14px; background: var(--accent-soft); border-radius: 14px }
+.taxmetrics strong { display: block; margin-top: 4px; font-size: clamp(19px, 4.5vw, 30px); line-height: 1.15 }
+.taxsheet nav [aria-pressed=true] { color: var(--on-accent); background: var(--accent); border-color: var(--accent) }
+.taxgroup { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px }
+.taxreview { display: grid; gap: 8px; list-style: none; padding: 0; margin: 0 }
+.taxreview li { background: var(--bg); border: 1px solid var(--line); border-inline-start: 3px solid var(--accent); padding: 10px 12px; border-radius: 10px }
+.taxreview li span, .taxlines small, .taxtable small { display: block; color: var(--muted) }
+.taxlines { margin: 0 }
+.taxlines div { display: flex; align-items: baseline; gap: 8px; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line) }
+.taxlines dd { margin: 0; font-weight: 700; text-align: end }
+.taxtable { overflow-x: auto }
+.taxtable table { border-collapse: collapse; width: 100%; text-align: start }
+.taxtable :is(th,td) { text-align: start; padding: 7px; border-bottom: 1px solid var(--line); font-size: .84rem }
+.taxdiff { color: var(--accent) }
+.taxcheck { display: flex; align-items: center; gap: 8px }
+.taxsheet > .msg:empty { display: none }
+@media(max-width: 400px) { .lnpayfields { grid-template-columns: 1fr } }
 .lnnote summary { color: var(--accent); cursor: pointer; min-height: 32px; align-content: center }
 .lnnote input { width: 100% }
 @media (max-width: 440px) {

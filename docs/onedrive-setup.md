@@ -80,3 +80,18 @@ Ledger/Income/Faiz/2026/Payslips/2026-11-27 - Company Name - Payslip.pdf
 
 The folder year and filename date come from **Date received**. Existing attachments can still be opened
 from their original entries.
+
+### Income Tax
+
+Open **Income → Income Tax** and pick the person and Year of Assessment. In a payslip entry, record the
+pay period, gross pay and employee deductions under **Payroll details**. The budget uses net pay, while
+the tax overview uses the payroll fields and groups entries by the calendar year of **Date received**.
+
+Enter annual totals under **Compare EA** and attach each employer's EA form. Under **Relief checklist**, record
+amounts, attach supporting receipts and mark them reviewed. The CSV is a worksheet for checking your figures.
+To keep annual documents together, add them to the appropriate year. New attachments go to:
+
+```
+Ledger/Income Tax/<person>/<year>/EA forms/
+Ledger/Income Tax/<person>/<year>/Relief evidence/
+```

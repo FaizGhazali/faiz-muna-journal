@@ -15,11 +15,14 @@ import { openDocs, docsOn } from "./docsui.js";
 import { pageLines } from "../../logic/ledgerimport.js";
 import { payslipFields, scannedPayslipFields } from "../../logic/payslip.js";
 import { openLocalPdf } from "./pdf.js";
+import { PAYROLL, inputAmount, payslipPayroll, periodValid, readAmounts, scannedPayroll } from "../../logic/tax.js";
 import { readerReady, readPayslipPdf } from "../stocky/receiptread.js";
 import { planState } from "./plan.js";
 import { ico } from "../../core/icons.js";
 
 const PDF_FIELDS = { amount: "lnAmt", date: "lnDate", from: "lnFrom" };
+const PAY_FIELDS = Object.fromEntries([...PAYROLL, ["period", ""]].map(([key]) => [key, `lnPay-${key}`]));
+const FORM_FIELDS = { ...PDF_FIELDS, ...PAY_FIELDS };
 const FIELD_NAMES = { amount: "net pay", date: "payment date", from: "employer" };
 const M_SHOWN = 3; // entries on the medium card
 let ctx, form = null, msg = "", flash = null; // form: { id|null, kind, amount, date, from, note, err }
@@ -28,6 +31,9 @@ export function initIncome(c) {
   ctx = c;
   const host = $("ledgerIncome");
   host.addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (b) click(b); });
+  host.addEventListener("toggle", (ev) => {
+    if (form && ev.target.matches(".lnpayroll")) form.payrollOpen = ev.target.open;
+  }, true);
   host.addEventListener("change", (ev) => {
     if (ev.target.id === "lnPdf" && ev.target.files[0]) readPayslip(ev.target.files[0]);
   });
@@ -35,7 +41,7 @@ export function initIncome(c) {
     if (!form || form.saving) return;
     const t = ev.target;
     if (t.id === "lnKeep") { form.keep = t.checked; return; }
-    const field = Object.keys(PDF_FIELDS).find((key) => PDF_FIELDS[key] === t.id);
+    const field = Object.keys(FORM_FIELDS).find((key) => FORM_FIELDS[key] === t.id);
     if (!field && t.id !== "lnNote") return;
     host.querySelector("[data-form]")?.setAttribute("data-dirty", "1");
     if (field) {
@@ -107,7 +113,7 @@ function incomeForm() {
   return `<div class="lpbform lnform" data-form="income">
     <fieldset id="lnFields"${f.saving ? " disabled" : ""}>
       <h3>${f.id ? "Edit income" : "Add income"}</h3>
-      ${f.id ? "" : `<div class="lnimport" id="lnImport">${documentPanel(f)}</div>`}
+      <div class="lnimport" id="lnImport">${documentPanel(f)}</div>
       <div class="chips" role="group" aria-label="Income type">${INCOME_KINDS.map((k) => `<button type="button" class="chip" data-lnkind="${k.id}" aria-pressed="${k.id === f.kind}">${ico(k.icon)} ${esc(k.name)}</button>`).join("")}</div>
       ${incomeKind(f.kind).hint ? `<p class="note">${esc(incomeKind(f.kind).hint)}</p>` : ""}
       <div class="two">
@@ -116,6 +122,13 @@ function incomeForm() {
       </div>
       <label>From<input type="text" id="lnFrom"${f.suggested.has("from") ? " data-suggested" : ""} list="lnFromList" maxlength="${FROM_MAX}" autocomplete="off" placeholder="${f.kind === "side" ? "Buyer or platform" : "Employer or payer"}" value="${esc(f.from)}"></label>
       <datalist id="lnFromList">${mine.map((s) => `<option value="${esc(s)}"></option>`).join("")}</datalist>
+      <details class="lnpayroll"${f.payrollOpen ? " open" : ""}>
+        <summary>Payroll details <span class="note">Optional</span></summary>
+        <div class="lnpayfields">
+          <label>Pay period<input type="month" id="lnPay-period" value="${esc(f.period)}"${f.suggested.has("period") ? " data-suggested" : ""}></label>
+          ${PAYROLL.map(([key, label]) => `<label>${label} (RM)<input type="text" inputmode="decimal" autocomplete="off" id="${PAY_FIELDS[key]}" value="${esc(f[key] ?? "")}"${f.suggested.has(key) ? " data-suggested" : ""}></label>`).join("")}
+        </div>
+      </details>
       <details class="lnnote"${f.note ? " open" : ""}>
         <summary>${f.note ? "Note" : "Add note"}</summary>
         <label class="sr" for="lnNote">Note</label><input type="text" id="lnNote" maxlength="${NOTE_MAX}" autocomplete="off" value="${esc(f.note)}">
@@ -131,7 +144,7 @@ function documentPanel(f) {
     ${f.file ? `<b class="lnfilename">${ico("file")} ${esc(f.file.name)}</b>
       <div class="lbtnrow">${f.preview ? `<a class="btn mini" href="${esc(f.preview)}" target="_blank" rel="noopener">Preview</a>` : ""}
         <button type="button" class="mini" data-ln="remove-pdf">Remove</button></div>`
-    : `<button type="button" class="mini" data-ln="pick-pdf">${ico("file")} Fill from document</button><span class="note">Optional &middot; Payslip PDF</span>
+    : `<button type="button" class="mini" data-ln="pick-pdf">${ico("file")} ${f.id ? "Read payslip" : "Fill from document"}</button><span class="note">Optional &middot; Payslip PDF</span>
         <input type="file" id="lnPdf" accept="application/pdf,.pdf" hidden>`}
   </div>
   ${f.file && docsOn() ? `<label class="lnkeep"><input type="checkbox" id="lnKeep"${f.keep ? " checked" : ""}> Keep a copy in OneDrive</label>` : ""}
@@ -152,7 +165,7 @@ function renderDocument(f, focus) {
 function setPdfValue(f, field, value) {
   if (f.edited.has(field)) return false;
   f[field] = value;
-  const input = $(PDF_FIELDS[field]);
+  const input = $(FORM_FIELDS[field]);
   input.value = value;
   if (value) f.suggested.add(field);
   else f.suggested.delete(field);
@@ -182,7 +195,7 @@ async function readPayslip(file) {
   $("ledgerIncome").querySelector("[data-form]")?.setAttribute("data-dirty", "1");
   f.file = file;
   f.preview = URL.createObjectURL(new Blob([file], { type: "application/pdf" }));
-  f.beforePdf = { amount: f.amount, date: f.date, from: f.from };
+  f.beforePdf = Object.fromEntries(Object.keys(FORM_FIELDS).map((key) => [key, f[key] ?? ""]));
   f.pdfStatus = "Reading payslip on this device…";
   renderDocument(f, '[data-ln="remove-pdf"]');
   try {
@@ -197,9 +210,10 @@ async function readPayslip(file) {
     }
     if (form !== f || f.file !== file || f.saving) return;
     const parsed = payslipFields(lines);
+    const payroll = payslipPayroll(lines);
     const needsDate = !parsed.date && !f.edited.has("date");
-    f.canScan = Boolean(ctx.token && readerReady() && (!parsed.amount || !parsed.from || needsDate));
-    applyPayslipFields(f, parsed);
+    f.canScan = Boolean(ctx.token && readerReady() && (!parsed.amount || !parsed.from || needsDate || PAYROLL.some(([key]) => !payroll[key])));
+    applyPayslipFields(f, parsed, payroll);
     if (!lines.length) f.pdfStatus = f.canScan
       ? "This PDF has no selectable text. Scan it or enter the details below."
       : "This PDF has no selectable text. Enter the details below.";
@@ -212,7 +226,7 @@ async function readPayslip(file) {
   renderDocument(f);
 }
 
-function applyPayslipFields(f, parsed) {
+function applyPayslipFields(f, parsed, payroll) {
   const filled = Object.keys(PDF_FIELDS).filter((field) =>
     parsed[field] && (!f.suggested.has(field) || (field === "date" && f.estimatedDate)) &&
     setPdfValue(f, field, field === "from" ? parsed.from.slice(0, FROM_MAX) : parsed[field]));
@@ -220,10 +234,19 @@ function applyPayslipFields(f, parsed) {
   if (!f.suggested.has("date") && parsed.periodEnd) {
     f.estimatedDate = setPdfValue(f, "date", parsed.periodEnd);
   }
+  const period = parsed.periodEnd?.slice(0, 7);
+  let addedPayroll = false;
+  for (const [key, value] of Object.entries({ ...payroll, period })) {
+    if (value && !f.suggested.has(key) && setPdfValue(f, key, value)) addedPayroll = true;
+  }
+  if (addedPayroll) {
+    f.payrollOpen = true;
+    $("lnPay-period").closest("details").open = true;
+  }
   const review = filled.length
     ? `Check suggested ${filled.map((field) => FIELD_NAMES[field]).join(", ")} before saving.`
     : "No new fields filled. Enter any missing details below.";
-  f.pdfStatus = review;
+  f.pdfStatus = addedPayroll ? `${review} Review the payroll details below.` : review;
   if (f.estimatedDate && !f.edited.has("date")) {
     f.pdfStatus += ` The document gives a pay period. ${shortDate(f.date)} is the period end. Confirm the date you were actually paid.`;
   } else if (!f.date) f.pdfStatus += " Enter the date you received the payment.";
@@ -251,7 +274,7 @@ async function scanPayslip(f) {
     if (!token) throw Object.assign(new Error(), { status: 401 });
     const result = await readPayslipPdf(file, token, signal);
     if (signal.aborted || form !== f || f.saving) return;
-    applyPayslipFields(f, scannedPayslipFields(result));
+    applyPayslipFields(f, scannedPayslipFields(result), scannedPayroll(result));
     f.canScan = false;
   } catch (error) {
     if (signal.aborted || form !== f || f.saving) return;
@@ -272,25 +295,29 @@ async function scanPayslip(f) {
 }
 
 function removePayslip(f) {
-  for (const field of Object.keys(PDF_FIELDS)) {
+  for (const field of Object.keys(FORM_FIELDS)) {
     if (!f.edited.has(field)) {
       f[field] = f.beforePdf[field];
-      $(PDF_FIELDS[field]).value = f[field];
+      $(FORM_FIELDS[field]).value = f[field];
     }
-    $(PDF_FIELDS[field]).removeAttribute("data-suggested");
+    $(FORM_FIELDS[field]).removeAttribute("data-suggested");
   }
   f.suggested.clear();
   clearDocument(f);
   renderDocument(f, '[data-ln="pick-pdf"]');
 }
 
-function open(id = null) {
+export function openIncome(id = null) {
   const x = id ? ctx.incomes().find((y) => y.id === id) : null;
-  if (x && !canEdit(x.person)) { msg = ""; return; }
+  if (id && (!x || !canEdit(x.person))) { msg = ""; return; }
   const last = lastIncome(ctx.incomes(), ctx.me());
   form = x ? { id, kind: x.kind, amount: (x.amountSen / 100).toFixed(2), date: x.date, from: x.from ?? "", note: x.note ?? "" }
     : { id: null, kind: last?.kind ?? "salary", amount: "", date: today(), from: last?.from ?? "", note: "" };
-  form.edited = new Set();
+  for (const [key] of PAYROLL) form[key] = inputAmount(x?.payroll?.[key]);
+  form.period = x?.payroll?.period ?? "";
+  form.payrollOpen = Boolean(x?.payroll);
+  // An import into a saved entry fills gaps without replacing amounts or dates already recorded.
+  form.edited = new Set(x ? Object.keys(FORM_FIELDS).filter((key) => form[key]) : []);
   form.suggested = new Set();
   msg = ""; renderIncome();
   $("ledgerIncome").scrollIntoView({ block: "nearest" });
@@ -304,8 +331,15 @@ async function save() {
   const old = f.id ? ctx.incomes().find((y) => y.id === f.id) : null;
   const r = checkIncome({ person: old?.person ?? ctx.me(), date: f.date, kind: f.kind, from: f.from, note: f.note, amountSen: toSen(f.amount) });
   if (!r.ok) { f.err = r.error; $("lnMsg").textContent = r.error; return; }
+  const { amounts, error } = readAmounts(PAYROLL, f);
+  if (error || (f.period && !periodValid(f.period))) {
+    $("lnPay-period").closest("details").open = true;
+    $("lnMsg").textContent = error || "Enter a valid pay period.";
+    return;
+  }
+  const payroll = Object.keys(amounts).length || f.period ? { ...amounts, ...(f.period ? { period: f.period } : {}) } : null;
   const now = Date.now(), ref = old ? doc(ctx.db(), "ledgerIncome", old.id) : doc(collection(ctx.db(), "ledgerIncome"));
-  const body = { ...r.income, docs: old?.docs ?? [], at: old?.at ?? now, created: old?.created ?? now, updated: now };
+  const body = { ...r.income, ...(payroll ? { payroll } : {}), docs: old?.docs ?? [], at: old?.at ?? now, created: old?.created ?? now, updated: now };
   const what = `${incomeKind(r.income.kind).name} ${rm(r.income.amountSen)}`;
   f.saving = true;
   $("lnFields").disabled = true;
@@ -313,7 +347,7 @@ async function save() {
   const file = f.keep && docsOn() ? f.file : null;
   try {
     await ctx.commit(() => old
-      ? updateDoc(ref, { ...r.income, note: r.income.note ?? "", updated: now })
+      ? updateDoc(ref, { ...r.income, payroll, note: r.income.note ?? "", updated: now })
       : setDoc(ref, body), `${what} ${old ? "saved" : "added"}.`);
     clearDocument(f); form = null; clearDirty(); flash = { id: ref.id, at: Date.now() };
     msg = file || old || !docsOn() ? "" : `Saved. Tap the paperclip on it to add the ${r.income.kind === "salary" || r.income.kind === "parttime" ? "payslip" : "proof"} now or later.`;
@@ -349,11 +383,12 @@ function click(b) {
   if (form?.saving) return;
   if (b.dataset.lnkind && form) { form.kind = b.dataset.lnkind; const dirty = $("ledgerIncome").querySelector("[data-form]")?.dataset.dirty; clearDirty(); renderIncome(); if (dirty) $("ledgerIncome").querySelector("[data-form]")?.setAttribute("data-dirty", "1"); return; }
   const a = b.dataset.ln, id = b.dataset.id; if (!a) return;
-  if (a === "new") open();
+  if (a === "new") openIncome();
+  if (a === "tax") ctx.openTax();
   if (a === "pick-pdf") $("lnPdf")?.click();
   if (a === "scan-pdf" && form?.file) scanPayslip(form);
   if (a === "remove-pdf" && form?.file) removePayslip(form);
-  if (a === "edit") open(id);
+  if (a === "edit") openIncome(id);
   if (a === "cancel") closeForm();
   if (a === "save") save();
   if (a === "del") remove(id);

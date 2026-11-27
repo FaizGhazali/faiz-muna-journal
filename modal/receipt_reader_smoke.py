@@ -25,7 +25,7 @@ def check_payslip():
                   "set to a non-legacy override")
         print(f"Modal gemini secret: {variable} is {status}.")
 
-    scan = Image.new("RGB", (1200, 850), "white")
+    scan = Image.new("RGB", (1200, 1060), "white")
     draw = ImageDraw.Draw(scan)
     font = ImageFont.load_default(size=46)
     for index, line in enumerate((
@@ -33,6 +33,10 @@ def check_payslip():
         "Employer: Example Services Sdn Bhd",
         "PAY PERIOD : ADD-OCTOBER-2026",
         "Gross pay: RM 1500.00",
+        "EE EPF: RM 165.00",
+        "EE SOCSO: RM 7.25",
+        "EE EIS: RM 3.00",
+        "Tax PCB: RM 90.19",
         "Net pay: RM 1234.56",
     )):
         draw.text((60, 65 + index * 92), line, font=font, fill="black")
@@ -50,7 +54,9 @@ def check_payslip():
     assert result.get("pay_period") == "2026-10", "Gemini did not extract the synthetic pay period"
     assert result.get("payment_date") is None, "Gemini guessed a payment date from the period"
     assert "Example Services" in (result.get("employer") or ""), "Gemini did not extract synthetic employer"
-    print("Gemini read net pay, employer and the pay period from a synthetic scanned PDF.")
+    expected = {"gross_sen": 150000, "epf_sen": 16500, "socso_sen": 725, "eis_sen": 300, "pcb_sen": 9019}
+    assert all(result.get(field) == value for field, value in expected.items()), "Gemini did not extract synthetic payroll deductions"
+    print("Gemini read net pay, pay period and payroll deductions from a synthetic scanned PDF.")
 
     receipt = Image.new("RGB", (1050, 520), "white")
     draw = ImageDraw.Draw(receipt)
