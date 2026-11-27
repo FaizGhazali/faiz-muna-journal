@@ -31,7 +31,7 @@ def check_payslip():
     for index, line in enumerate((
         "FICTIONAL PAYSLIP - TEST ONLY",
         "Employer: Example Services Sdn Bhd",
-        "Pay date: 27/11/2026",
+        "PAY PERIOD : ADD-OCTOBER-2026",
         "Gross pay: RM 1500.00",
         "Net pay: RM 1234.56",
     )):
@@ -47,9 +47,10 @@ def check_payslip():
             PAYSLIP_SCHEMA,
         )
     assert result.get("net_pay_sen") == 123456, "Gemini did not extract synthetic net pay"
-    assert result.get("payment_date") == "2026-11-27", "Gemini did not extract synthetic pay date"
+    assert result.get("pay_period") == "2026-10", "Gemini did not extract the synthetic pay period"
+    assert result.get("payment_date") is None, "Gemini guessed a payment date from the period"
     assert "Example Services" in (result.get("employer") or ""), "Gemini did not extract synthetic employer"
-    print("Gemini read all three fields from a synthetic scanned PDF.")
+    print("Gemini read net pay, employer and the pay period from a synthetic scanned PDF.")
 
     receipt = Image.new("RGB", (1050, 520), "white")
     draw = ImageDraw.Draw(receipt)

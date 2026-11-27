@@ -163,7 +163,7 @@ function setPdfValue(f, field, value) {
 function clearDocument(f) {
   f.scan?.abort();
   f.scan = null;
-  f.canScan = false;
+  f.canScan = f.estimatedDate = false;
   if (f.preview) URL.revokeObjectURL(f.preview);
   f.file = f.preview = f.pdfStatus = null;
   f.keep = false;
@@ -185,8 +185,6 @@ async function readPayslip(file) {
   f.beforePdf = { amount: f.amount, date: f.date, from: f.from };
   f.pdfStatus = "Reading payslip on this device…";
   renderDocument(f, '[data-ln="remove-pdf"]');
-  // Require a receipt date when the document only gives a pay period.
-  setPdfValue(f, "date", "");
   try {
     const pdf = await openLocalPdf(file);
     const lines = [];
@@ -199,7 +197,8 @@ async function readPayslip(file) {
     }
     if (form !== f || f.file !== file || f.saving) return;
     const parsed = payslipFields(lines);
-    f.canScan = Boolean(ctx.token && readerReady() && (!parsed.amount || !parsed.from || !lines.length));
+    const needsDate = !parsed.date && !f.edited.has("date");
+    f.canScan = Boolean(ctx.token && readerReady() && (!parsed.amount || !parsed.from || needsDate));
     applyPayslipFields(f, parsed);
     if (!lines.length) f.pdfStatus = f.canScan
       ? "This PDF has no selectable text. Scan it or enter the details below."
@@ -214,13 +213,23 @@ async function readPayslip(file) {
 }
 
 function applyPayslipFields(f, parsed) {
-  const filled = Object.keys(parsed).filter((field) =>
-    parsed[field] && !f.suggested.has(field) &&
+  const filled = Object.keys(PDF_FIELDS).filter((field) =>
+    parsed[field] && (!f.suggested.has(field) || (field === "date" && f.estimatedDate)) &&
     setPdfValue(f, field, field === "from" ? parsed.from.slice(0, FROM_MAX) : parsed[field]));
+  if (filled.includes("date")) f.estimatedDate = false;
+  if (!f.suggested.has("date") && parsed.periodEnd) {
+    f.estimatedDate = setPdfValue(f, "date", parsed.periodEnd);
+  }
   const review = filled.length
     ? `Check suggested ${filled.map((field) => FIELD_NAMES[field]).join(", ")} before saving.`
     : "No new fields filled. Enter any missing details below.";
-  f.pdfStatus = filled.length && !f.date ? `${review} Enter the date you received the payment.` : review;
+  f.pdfStatus = review;
+  if (f.estimatedDate && !f.edited.has("date")) {
+    f.pdfStatus += ` The document gives a pay period. ${shortDate(f.date)} is the period end. Confirm the date you were actually paid.`;
+  } else if (!f.date) f.pdfStatus += " Enter the date you received the payment.";
+  else if (!f.edited.has("date") && !f.suggested.has("date")) {
+    f.pdfStatus += " No payment date found. The form kept its default date. Change it if needed.";
+  }
 }
 
 async function scanPayslip(f) {
