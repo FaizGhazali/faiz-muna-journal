@@ -34,6 +34,7 @@ ORIGINS = [
     "http://localhost:5000",
 ]
 MODEL = "gemini-2.5-flash-lite"  # when the secret doesn't set GEMINI_MODEL
+PAYSLIP_MODEL = "gemini-3.5-flash-lite"
 MODEL_FALLBACK = "gemini-2.5-flash"  # when it doesn't set GEMINI_MODEL_FALLBACK
 PER_HOUR = 20  # reads per hour for the family together
 PER_DAY = 60  # reads per day
@@ -88,11 +89,11 @@ When there are multiple distinct payslips or the values are unclear, leave the a
 Do not extract personal identifiers or any other fields."""
 
 PAYSLIP_SCHEMA = {
-    "type": "OBJECT",
+    "type": "object",
     "properties": {
-        "net_pay_sen": {"type": "INTEGER", "nullable": True},
-        "payment_date": {"type": "STRING", "nullable": True},
-        "employer": {"type": "STRING", "nullable": True},
+        "net_pay_sen": {"type": ["integer", "null"]},
+        "payment_date": {"type": ["string", "null"]},
+        "employer": {"type": ["string", "null"]},
     },
     "required": ["net_pay_sen", "payment_date", "employer"],
 }
@@ -113,21 +114,40 @@ def bump(key: str, cap: int) -> bool:
     return True
 
 
+class GeminiRequestError(Exception):
+    pass
+
+
 def ask_gemini(data: bytes, model: str, key: str, mime="image/jpeg", prompt=PROMPT, schema=SCHEMA) -> dict:
     import requests
 
+    schema_key = "responseJsonSchema" if mime == "application/pdf" else "responseSchema"
     body = {
         "contents": [{"role": "user", "parts": [
             {"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode()}},
             {"text": prompt},
         ]}],
-        "generationConfig": {"temperature": 0, "responseMimeType": "application/json", "responseSchema": schema},
+        "generationConfig": {"temperature": 0, "responseMimeType": "application/json", schema_key: schema},
     }
     r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
                       headers={"x-goog-api-key": key, "Content-Type": "application/json"}, json=body, timeout=90)
     if r.status_code == 429:
         raise RuntimeError("busy")
-    r.raise_for_status()
+    if not r.ok:
+        # Log only HTTP status and a classification. The upstream error can include request data.
+        try:
+            message = str(r.json().get("error", {}).get("message", "")).lower()
+        except (ValueError, AttributeError):
+            message = ""
+        reason = next((label for text, label in (
+            ("leaked", "API key reported leaked"),
+            ("api key", "API key rejected"),
+            ("no pages", "PDF has no readable pages"),
+            ("schema", "schema rejected"),
+            ("not found", "model or resource unavailable"),
+            ("location", "location restriction"),
+        ) if text in message), "upstream rejected request")
+        raise GeminiRequestError(f"Gemini HTTP {r.status_code}: {reason}")
     parts = (r.json().get("candidates") or [{}])[0].get("content", {}).get("parts") or [{}]
     return json.loads(parts[0].get("text") or "{}")
 
@@ -180,11 +200,16 @@ def web():
         if not bump(f"day:{time.strftime('%Y-%m-%d', time.gmtime())}", PER_DAY) or not bump(f"hour:{time.strftime('%Y-%m-%d-%H', time.gmtime())}", PER_HOUR):
             raise HTTPException(429, "too many scans for now")
         model = os.environ.get("GEMINI_MODEL_FALLBACK", MODEL_FALLBACK) if body.get("fallback") is True else os.environ.get("GEMINI_MODEL", MODEL)
+        if is_pdf:
+            model = os.environ.get("GEMINI_PAYSLIP_MODEL", PAYSLIP_MODEL)
         settings = ("application/pdf", PAYSLIP_PROMPT, PAYSLIP_SCHEMA) if is_pdf else ("image/jpeg", PROMPT, SCHEMA)
         try:
             answer = await run_in_threadpool(ask_gemini, data, model, os.environ["GEMINI_API_KEY"], *settings)
         except RuntimeError:
             raise HTTPException(429, "the reader is busy, try again later")
+        except GeminiRequestError as e:
+            print(f"{kind} read failed: {e}")
+            raise HTTPException(502, "document reader upstream error")
         except Exception as e:
             print(f"read failed: {type(e).__name__}")  # never the document or its text
             raise HTTPException(502, "couldn't read it")

@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - 'modal/receipt_reader.py'
+      - 'modal/receipt_reader_smoke.py'
+      - '.github/workflows/deploy-modal-reader.yml'
 
 permissions:
   contents: read
@@ -35,6 +37,11 @@ jobs:
           python-version: '3.12'
       - name: Install Modal CLI
         run: python -m pip install modal==1.6.4
+      - name: Verify Gemini extraction with a synthetic scanned PDF
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: modal run modal/receipt_reader_smoke.py::check_payslip
       - name: Deploy receipt and payslip reader
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
