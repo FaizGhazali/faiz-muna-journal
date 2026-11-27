@@ -1587,6 +1587,24 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 .lpbn small { color: var(--muted); font-size: 13px }
 .lpba { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right }
 .lpbform { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg) }
+.lnform fieldset { display: grid; gap: 14px; min-inline-size: 0; border: 0; padding: 0; margin: 0 }
+.lnform h3 { margin: 0 }
+.lnform .two > label { min-width: 0 }
+.lnimport { padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface) }
+.lnimporthead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px }
+.lnimporthead .lbtnrow { margin-inline-start: auto }
+.lnimporthead :is(button, a) { min-height: 44px; display: inline-flex; align-items: center; gap: 6px }
+.lnfilename { min-width: 0; overflow-wrap: anywhere; font-size: .875rem }
+.lnform .lnkeep { display: flex; align-items: center; gap: 8px; width: fit-content; min-height: 40px; margin: 4px 0 0; cursor: pointer }
+.lnkeep input { width: 18px; height: 18px; margin: 0 }
+.lnimportmsg { margin: 4px 0 0 }
+.lnimportmsg:empty, .lnform > .msg:empty { display: none }
+.lnform input[data-suggested] { border-color: var(--accent); background: var(--accent-soft) }
+.lnnote summary { color: var(--accent); cursor: pointer; min-height: 32px; align-content: center }
+.lnnote input { width: 100% }
+@media (max-width: 440px) {
+  .lnform .two { grid-template-columns: minmax(0, 1fr) }
+}
 .lpbl > .lpbform { margin: 8px 0 } /* editing a bill opens in its own row */
 .lpchart { width: 100%; height: auto; display: block }
 .lpchart .axis { stroke: var(--line); stroke-width: 1 }

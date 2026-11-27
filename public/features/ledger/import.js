@@ -10,9 +10,8 @@ import { SYSTEM_CATEGORIES, rm, shortDate, cycleOf, cycleForTxn, lastStatement, 
 import { pageLines, parseStatement, parsePasted, checkTotals, reconcile, tally, candidates, suggestPattern, parseSheet, sheetDupes } from "../../logic/ledgerimport.js";
 import { ico } from "../../core/icons.js";
 
-// pdf.js, pinned (sw.js keeps cdn.jsdelivr.net files offline once fetched). Loaded only when a PDF is picked.
-const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs";
-const PDF_WORKER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
+import { openLocalPdf } from "./pdf.js";
+
 const BATCH = 400;
 
 const CATS = SYSTEM_CATEGORIES.filter((c) => !c.hidden);
@@ -23,7 +22,7 @@ const HEAD = {
   amount: "Different amount", category: "Different category", new: "On the statement, not logged", missing: "Logged, not on this statement", matched: "Matched",
 };
 
-let ctx, imp = null, pdfLib = null;
+let ctx, imp = null;
 // imp: { account, step: "pick" | "password" | "reading" | "review" | "done", file, msg, parsed, res, pick: [{ on, cat }], spentBy, cycle, done }
 
 export function initImport(c) {
@@ -100,24 +99,22 @@ function render() {
 }
 
 // ---------- reading ----------
-async function loadPdf() {
-  if (!pdfLib) { pdfLib = await import(PDFJS); pdfLib.GlobalWorkerOptions.workerSrc = PDF_WORKER; }
-  return pdfLib;
-}
 async function openPdf(password) {
   const file = imp?.file; if (!file) return;
   const back = imp.step;
   imp.step = "reading"; imp.msg = ""; render();
   let lines = [];
   try {
-    const lib = await loadPdf();
-    const pdf = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), password: password || undefined, isEvalSupported: false }).promise;
-    for (let p = 1; p <= pdf.numPages; p++) lines.push(...pageLines((await (await pdf.getPage(p)).getTextContent()).items));
-    await pdf.destroy();
+    const pdf = await openLocalPdf(file, password);
+    try {
+      for (let p = 1; p <= pdf.numPages; p++) lines.push(...pageLines((await (await pdf.getPage(p)).getTextContent()).items));
+    } finally {
+      await pdf.destroy();
+    }
   } catch (e) {
     if (e?.name === "PasswordException") { imp.step = "password"; imp.msg = password ? "That password didn't open it. Try again." : ""; return render(); }
     imp.step = back === "password" ? "password" : "pick";
-    imp.msg = navigator.onLine === false && !pdfLib ? "The PDF reader needs the internet the first time. Connect and try again." : "This file couldn't be read. Is it the statement PDF? You can also paste the lines below.";
+    imp.msg = navigator.onLine === false ? "Connect to the internet and try again." : "This file couldn't be read. Is it the statement PDF? You can also paste the lines below.";
     return render();
   }
   const parsed = parseStatement(lines, ctx.aliases());

@@ -61,3 +61,20 @@ Ledger/2026/2026-12/Bills/2026-12-01 Car RM520 Muna.pdf
   are uploaded exactly as they are. Files over 4 MB go up in pieces.
 - A name that's already taken gets a number added by OneDrive.
 - Removing a file from an entry only takes the link away; the file stays in OneDrive.
+
+### Income documents
+
+In **Add income**, choose **Fill from document** to read a text-based payslip PDF on your device.
+Review the suggested net pay, employer and payment date. Tick **Keep a copy in OneDrive** to attach
+the PDF after saving. You can also add proof later using the paperclip on the income entry.
+If OneDrive needs you to sign in, choose the file again after connecting.
+
+New income attachments go to:
+
+```
+Ledger/Income/<person>/<year>/<Payslips or Other proof>/<date> - <payer> - <Payslip or Income proof>.<ext>
+Ledger/Income/Faiz/2026/Payslips/2026-11-27 - Company Name - Payslip.pdf
+```
+
+The folder year and filename date come from **Date received**. Existing attachments can still be opened
+from their original entries.

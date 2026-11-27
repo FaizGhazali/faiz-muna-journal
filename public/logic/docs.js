@@ -65,10 +65,15 @@ export function docFolder({ date, kind }) {
 
 // Everything needed to upload one file for an entry: { folder, name, path, type, ext, shrink }.
 // A photo that will be shrunk is saved as .jpg; asIs (shrinking didn't help) keeps the file's own type.
-export function docPlan({ file: { name = "", type: mime = "" } = {}, date, kind, what, amountSen = null, person = "", asIs = false }) {
+export function docPlan({ income, file: { name = "", type: mime = "" } = {}, date, kind, what, amountSen = null, person = "", asIs = false }) {
   const shrink = !asIs && shrinkable(name, mime), ext = shrink ? "jpg" : extOf(name, mime);
-  const folder = docFolder({ date, kind }), file = docName({ date, what, amountSen, person, ext });
-  return { folder, name: file, path: `${folder}/${file}`, type: fileType(name, mime), ext, shrink };
+  const folder = income
+    ? [ROOT, "Income", cleanName(person, 30) || "Unknown", date.slice(0, 4), kind === "salary" ? "Payslips" : "Other proof"].join("/")
+    : docFolder({ date, kind });
+  const title = kind === "salary" ? "Payslip" : "Income proof";
+  const incomeName = [date, cleanName(what), title].filter(Boolean).join(" - ");
+  const filename = income ? incomeName + (ext ? `.${ext}` : "") : docName({ date, what, amountSen, person, ext });
+  return { folder, name: filename, path: `${folder}/${filename}`, type: fileType(name, mime), ext, shrink };
 }
 
 // Icon name (core/icons.js) for a link on an entry.

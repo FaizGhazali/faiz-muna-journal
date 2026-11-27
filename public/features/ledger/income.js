@@ -4,7 +4,7 @@
 // logged; extras on top). Each person adds and changes only their own; the other's show read-only.
 // Small: this month's total. Medium: the total and the latest entries. Large: who's in, extras, every entry this
 // month and last, edit / delete in place. The form shows large (data-force).
-import { collection, doc, setDoc, deleteDoc } from "../../core/fs.js";
+import { collection, doc, setDoc, updateDoc, deleteDoc } from "../../core/fs.js";
 import { $, esc, today } from "../../core/util.js";
 import { confirmDelete } from "../../core/confirm.js";
 import { canEdit } from "../../core/owner.js";
@@ -12,9 +12,14 @@ import { rm, toSen, shortDate } from "../../logic/ledger.js";
 import { monthOf, addMonths, payOf, payLabel } from "../../logic/moneyplan.js";
 import { INCOME_KINDS, incomeKind, checkIncome, monthIncome, lastIncome, sources, FROM_MAX, NOTE_MAX } from "../../logic/income.js";
 import { openDocs, docsOn } from "./docsui.js";
+import { pageLines } from "../../logic/ledgerimport.js";
+import { payslipFields } from "../../logic/payslip.js";
+import { openLocalPdf } from "./pdf.js";
 import { planState } from "./plan.js";
 import { ico } from "../../core/icons.js";
 
+const PDF_FIELDS = { amount: "lnAmt", date: "lnDate", from: "lnFrom" };
+const FIELD_NAMES = { amount: "net pay", date: "payment date", from: "employer" };
 const M_SHOWN = 3; // entries on the medium card
 let ctx, form = null, msg = "", flash = null; // form: { id|null, kind, amount, date, from, note, err }
 
@@ -22,13 +27,22 @@ export function initIncome(c) {
   ctx = c;
   const host = $("ledgerIncome");
   host.addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (b) click(b); });
+  host.addEventListener("change", (ev) => {
+    if (ev.target.id === "lnPdf" && ev.target.files[0]) readPayslip(ev.target.files[0]);
+  });
   host.addEventListener("input", (ev) => {
-    if (!form) return;
-    const t = ev.target; host.querySelector("[data-form]")?.setAttribute("data-dirty", "1");
-    if (t.id === "lnAmt") form.amount = t.value;
-    if (t.id === "lnDate") form.date = t.value;
-    if (t.id === "lnFrom") form.from = t.value;
-    if (t.id === "lnNote") form.note = t.value;
+    if (!form || form.saving) return;
+    const t = ev.target;
+    if (t.id === "lnKeep") { form.keep = t.checked; return; }
+    const field = Object.keys(PDF_FIELDS).find((key) => PDF_FIELDS[key] === t.id);
+    if (!field && t.id !== "lnNote") return;
+    host.querySelector("[data-form]")?.setAttribute("data-dirty", "1");
+    if (field) {
+      form[field] = t.value;
+      form.edited.add(field);
+      form.suggested.delete(field);
+      t.removeAttribute("data-suggested");
+    } else form.note = t.value;
   });
 }
 
@@ -89,20 +103,121 @@ function row(x, names, actions) {
 
 function incomeForm() {
   const f = form, mine = sources(ctx.incomes(), ctx.me());
-  return `<div class="lpbform" data-form="income">
-    <h3>${f.id ? "Edit income" : "Add income"}</h3>
-    <div class="chips" role="group" aria-label="What it is">${INCOME_KINDS.map((k) => `<button type="button" class="chip" data-lnkind="${k.id}" aria-pressed="${k.id === f.kind}">${ico(k.icon)} ${esc(k.name)}</button>`).join("")}</div>
-    ${incomeKind(f.kind).hint ? `<p class="note">${esc(incomeKind(f.kind).hint)}</p>` : ""}
-    <div class="two">
-      <label>Amount, RM<input type="text" id="lnAmt" inputmode="decimal" autocomplete="off" placeholder="2500" value="${esc(f.amount)}"></label>
-      <label>Came in on<input type="date" id="lnDate" value="${esc(f.date)}"></label>
-    </div>
-    <label>From <small>employer, buyer, where</small><input type="text" id="lnFrom" list="lnFromList" maxlength="${FROM_MAX}" autocomplete="off" placeholder="${f.kind === "side" ? "Sold old phone" : "Company name"}" value="${esc(f.from)}"></label>
-    <datalist id="lnFromList">${mine.map((s) => `<option value="${esc(s)}"></option>`).join("")}</datalist>
-    <label>Note <small>optional</small><input type="text" id="lnNote" maxlength="${NOTE_MAX}" autocomplete="off" value="${esc(f.note)}"></label>
-    <div class="actions"><button type="button" class="primary" data-ln="save">Save</button><button type="button" data-ln="cancel">Cancel</button>${f.id ? `<button type="button" class="mini" data-ln="del" data-id="${f.id}">Delete</button>` : ""}</div>
+  return `<div class="lpbform lnform" data-form="income">
+    <fieldset id="lnFields"${f.saving ? " disabled" : ""}>
+      <h3>${f.id ? "Edit income" : "Add income"}</h3>
+      ${f.id ? "" : `<div class="lnimport" id="lnImport">${documentPanel(f)}</div>`}
+      <div class="chips" role="group" aria-label="Income type">${INCOME_KINDS.map((k) => `<button type="button" class="chip" data-lnkind="${k.id}" aria-pressed="${k.id === f.kind}">${ico(k.icon)} ${esc(k.name)}</button>`).join("")}</div>
+      ${incomeKind(f.kind).hint ? `<p class="note">${esc(incomeKind(f.kind).hint)}</p>` : ""}
+      <div class="two">
+        <label>Amount received (RM)<input type="text" id="lnAmt"${f.suggested.has("amount") ? " data-suggested" : ""} inputmode="decimal" autocomplete="off" placeholder="2500.00" value="${esc(f.amount)}"></label>
+        <label>Date received<input type="date" id="lnDate"${f.suggested.has("date") ? " data-suggested" : ""} value="${esc(f.date)}"></label>
+      </div>
+      <label>From<input type="text" id="lnFrom"${f.suggested.has("from") ? " data-suggested" : ""} list="lnFromList" maxlength="${FROM_MAX}" autocomplete="off" placeholder="${f.kind === "side" ? "Buyer or platform" : "Employer or payer"}" value="${esc(f.from)}"></label>
+      <datalist id="lnFromList">${mine.map((s) => `<option value="${esc(s)}"></option>`).join("")}</datalist>
+      <details class="lnnote"${f.note ? " open" : ""}>
+        <summary>${f.note ? "Note" : "Add note"}</summary>
+        <label class="sr" for="lnNote">Note</label><input type="text" id="lnNote" maxlength="${NOTE_MAX}" autocomplete="off" value="${esc(f.note)}">
+      </details>
+      <div class="actions"><button type="button" class="primary" data-ln="save">Save income</button><button type="button" data-ln="cancel">Cancel</button>${f.id ? `<button type="button" class="mini" data-ln="del" data-id="${f.id}">Delete</button>` : ""}</div>
+    </fieldset>
     <p class="msg" id="lnMsg" aria-live="polite">${esc(f.err ?? "")}</p>
   </div>`;
+}
+
+function documentPanel(f) {
+  return `<div class="lnimporthead">
+    ${f.file ? `<b class="lnfilename">${ico("file")} ${esc(f.file.name)}</b>
+      <div class="lbtnrow">${f.preview ? `<a class="btn mini" href="${esc(f.preview)}" target="_blank" rel="noopener">Preview</a>` : ""}
+        <button type="button" class="mini" data-ln="remove-pdf">Remove</button></div>`
+    : `<button type="button" class="mini" data-ln="pick-pdf">${ico("file")} Fill from document</button><span class="note">Optional &middot; Payslip PDF</span>
+        <input type="file" id="lnPdf" accept="application/pdf,.pdf" hidden>`}
+  </div>
+  ${f.file && docsOn() ? `<label class="lnkeep"><input type="checkbox" id="lnKeep"${f.keep ? " checked" : ""}> Keep a copy in OneDrive</label>` : ""}
+  <p class="note lnimportmsg" role="status">${esc(f.pdfStatus ?? "")}</p>`;
+}
+
+function renderDocument(f, focus) {
+  const panel = $("lnImport");
+  if (!panel) return;
+  panel.innerHTML = documentPanel(f);
+  if (focus) panel.querySelector(focus)?.focus({ preventScroll: true });
+}
+
+function setPdfValue(f, field, value) {
+  if (f.edited.has(field)) return false;
+  f[field] = value;
+  const input = $(PDF_FIELDS[field]);
+  input.value = value;
+  if (value) f.suggested.add(field);
+  else f.suggested.delete(field);
+  input.toggleAttribute("data-suggested", Boolean(value));
+  return Boolean(value);
+}
+
+function clearDocument(f) {
+  if (f.preview) URL.revokeObjectURL(f.preview);
+  f.file = f.preview = f.pdfStatus = null;
+  f.keep = false;
+}
+
+async function readPayslip(file) {
+  const f = form;
+  if (!f || f.saving || f.file) return;
+  const header = await file.slice(0, 1024).text().catch(() => "");
+  if (form !== f || f.file || f.saving) return;
+  if (!header.includes("%PDF-")) {
+    f.pdfStatus = "Choose a payslip PDF.";
+    renderDocument(f, '[data-ln="pick-pdf"]');
+    return;
+  }
+  $("ledgerIncome").querySelector("[data-form]")?.setAttribute("data-dirty", "1");
+  f.file = file;
+  f.preview = URL.createObjectURL(new Blob([file], { type: "application/pdf" }));
+  f.beforePdf = { amount: f.amount, date: f.date, from: f.from };
+  f.pdfStatus = "Reading payslip on this device…";
+  renderDocument(f, '[data-ln="remove-pdf"]');
+  // Require a receipt date when the document only gives a pay period.
+  setPdfValue(f, "date", "");
+  try {
+    const pdf = await openLocalPdf(file);
+    const lines = [];
+    try {
+      for (let page = 1; page <= pdf.numPages && f.file === file && form === f; page++) {
+        lines.push(...pageLines((await (await pdf.getPage(page)).getTextContent()).items));
+      }
+    } finally {
+      await pdf.destroy();
+    }
+    if (form !== f || f.file !== file || f.saving) return;
+    const parsed = payslipFields(lines);
+    const filled = Object.keys(parsed).filter((field) =>
+      parsed[field] && setPdfValue(f, field, field === "from" ? parsed.from.slice(0, FROM_MAX) : parsed[field]));
+    const review = filled.length
+      ? `Check suggested ${filled.map((field) => FIELD_NAMES[field]).join(", ")} before saving.`
+      : "No fields filled. Enter the payment details below.";
+    f.pdfStatus = filled.length && !f.date ? `${review} Enter the date you received the payment.` : review;
+  } catch (error) {
+    if (form !== f || f.file !== file || f.saving) return;
+    f.pdfStatus = error?.name === "PasswordException"
+      ? "This PDF is password-protected. Enter the payment details below."
+      : "Couldn't read this PDF. Enter the payment details below.";
+  }
+  const status = $("lnImport")?.querySelector("[role=status]");
+  if (status) status.textContent = f.pdfStatus;
+}
+
+function removePayslip(f) {
+  for (const field of Object.keys(PDF_FIELDS)) {
+    if (!f.edited.has(field)) {
+      f[field] = f.beforePdf[field];
+      $(PDF_FIELDS[field]).value = f[field];
+    }
+    $(PDF_FIELDS[field]).removeAttribute("data-suggested");
+  }
+  f.suggested.clear();
+  clearDocument(f);
+  renderDocument(f, '[data-ln="pick-pdf"]');
 }
 
 function open(id = null) {
@@ -111,26 +226,41 @@ function open(id = null) {
   const last = lastIncome(ctx.incomes(), ctx.me());
   form = x ? { id, kind: x.kind, amount: (x.amountSen / 100).toFixed(2), date: x.date, from: x.from ?? "", note: x.note ?? "" }
     : { id: null, kind: last?.kind ?? "salary", amount: "", date: today(), from: last?.from ?? "", note: "" };
+  form.edited = new Set();
+  form.suggested = new Set();
   msg = ""; renderIncome();
   $("ledgerIncome").scrollIntoView({ block: "nearest" });
   $("lnAmt")?.focus({ preventScroll: true });
 }
 const clearDirty = () => { const d = $("ledgerIncome").querySelector("[data-form]"); if (d) delete d.dataset.dirty; };
-function closeForm() { form = null; clearDirty(); renderIncome(); }
+function closeForm() { if (form) clearDocument(form); form = null; clearDirty(); renderIncome(); }
 
 async function save() {
-  const f = form, old = f.id ? ctx.incomes().find((y) => y.id === f.id) : null;
+  const f = form; if (!f || f.saving) return;
+  const old = f.id ? ctx.incomes().find((y) => y.id === f.id) : null;
   const r = checkIncome({ person: old?.person ?? ctx.me(), date: f.date, kind: f.kind, from: f.from, note: f.note, amountSen: toSen(f.amount) });
   if (!r.ok) { f.err = r.error; $("lnMsg").textContent = r.error; return; }
   const now = Date.now(), ref = old ? doc(ctx.db(), "ledgerIncome", old.id) : doc(collection(ctx.db(), "ledgerIncome"));
   const body = { ...r.income, docs: old?.docs ?? [], at: old?.at ?? now, created: old?.created ?? now, updated: now };
   const what = `${incomeKind(r.income.kind).name} ${rm(r.income.amountSen)}`;
+  f.saving = true;
+  $("lnFields").disabled = true;
+  $("ledgerIncome").querySelector("[data-form]")?.setAttribute("data-dirty", "1");
+  const file = f.keep && docsOn() ? f.file : null;
   try {
-    await ctx.commit(() => setDoc(ref, body), `${what} ${old ? "saved" : "added"}.`);
-    form = null; clearDirty(); flash = { id: ref.id, at: Date.now() };
-    msg = old || !docsOn() ? "" : `Saved. Tap the paperclip on it to add the ${r.income.kind === "salary" || r.income.kind === "parttime" ? "payslip" : "proof"} now or later.`;
+    await ctx.commit(() => old
+      ? updateDoc(ref, { ...r.income, note: r.income.note ?? "", updated: now })
+      : setDoc(ref, body), `${what} ${old ? "saved" : "added"}.`);
+    clearDocument(f); form = null; clearDirty(); flash = { id: ref.id, at: Date.now() };
+    msg = file || old || !docsOn() ? "" : `Saved. Tap the paperclip on it to add the ${r.income.kind === "salary" || r.income.kind === "parttime" ? "payslip" : "proof"} now or later.`;
     renderIncome();
-  } catch (_) { /* commit showed the error; the form stays as typed */ }
+    if (file) openDocs(incomeEntry({ ...body, id: ref.id }), file);
+  } catch (_) {
+    if (form === f) {
+      f.saving = false;
+      $("lnFields").disabled = false;
+    }
+  }
 }
 
 async function remove(id) {
@@ -147,14 +277,17 @@ async function remove(id) {
 // The paperclip sheet's entry for an income (docsui.js): salary and part-time go to Payslips, the rest to Income.
 export function incomeEntry(x) {
   const k = incomeKind(x.kind), names = people();
-  return { coll: "ledgerIncome", id: x.id, kind: k.folder, date: x.date, what: x.from ? `${k.name} ${x.from}` : k.name, amountSen: x.amountSen,
+  return { coll: "ledgerIncome", id: x.id, kind: k.folder, date: x.date, what: x.from || "", amountSen: x.amountSen,
     person: names[x.person] ?? "", docs: x.docs, canEdit: canEdit(x.person), title: `${k.name}${x.from ? ` · ${x.from}` : ""} · ${rm(x.amountSen)} · ${shortDate(x.date)}` };
 }
 
 function click(b) {
+  if (form?.saving) return;
   if (b.dataset.lnkind && form) { form.kind = b.dataset.lnkind; const dirty = $("ledgerIncome").querySelector("[data-form]")?.dataset.dirty; clearDirty(); renderIncome(); if (dirty) $("ledgerIncome").querySelector("[data-form]")?.setAttribute("data-dirty", "1"); return; }
   const a = b.dataset.ln, id = b.dataset.id; if (!a) return;
   if (a === "new") open();
+  if (a === "pick-pdf") $("lnPdf")?.click();
+  if (a === "remove-pdf" && form?.file) removePayslip(form);
   if (a === "edit") open(id);
   if (a === "cancel") closeForm();
   if (a === "save") save();
