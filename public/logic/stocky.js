@@ -94,7 +94,7 @@ export function itemUse(item, meals, sets, from, to) {
 }
 
 // Where an item stands today.
-// { left, base, share, rate, daysLeft, outOn, status: ok|soon|low|out|unknown, why: [lines] }
+// { left, base, share, rate, daysLeft, outOn, status: ok|soon|low|out|unknown|noRestock, why: [lines] }
 // Meals only record what was eaten (not cooking, not guests), so they can only bring the date forward:
 // used = the larger of (buying pace × days) and (what meals used).
 // sets = the meal sets, so plates from a cooked set use up its ingredients.
@@ -110,7 +110,7 @@ export function estimate(item, buys, meals, today, sets = []) {
   if (item.check) events.push({ date: item.check.date, at: item.check.at || 0, set: item.check.level * base });
   events.sort(byTime);
   const why = [];
-  if (!events.length) return { left: null, base, share: null, rate, daysLeft: null, outOn: null, status: "unknown", why: ["Not bought yet."] };
+  if (!events.length) return { left: null, base, share: null, rate, daysLeft: null, outOn: null, status: item.noRestock ? "noRestock" : "unknown", why: ["Not bought yet."] };
   // Walk through buys and checks: use up stock between them, add each buy, a check sets the level.
   let left = 0, prev = null, sinceMeals = 0;
   const useUp = (a, b, last) => {
@@ -127,6 +127,8 @@ export function estimate(item, buys, meals, today, sets = []) {
     prev = e.date;
   }
   useUp(prev, today, true);
+  const share = base ? Math.min(1, left / base) : null;
+  if (item.noRestock) return { left, base, share, rate, daysLeft: null, outOn: null, status: "noRestock", why: [] };
   const anchor = events.at(-1);
   if (bought) why.push(`You buy about ${amount(bought * 7, item.unit)} a week${base ? `, a pack every ${Math.max(1, Math.round(base / bought))} days` : ""}.`);
   else if (mealPace) why.push(`From meals logged lately: about ${amount(mealPace * 7, item.unit)} a week.`);
@@ -134,7 +136,6 @@ export function estimate(item, buys, meals, today, sets = []) {
   if (sinceMeals > 0) why.push(`Meals logged since ${anchor.set != null ? "your check" : "the last buy"} used ${amount(sinceMeals, item.unit)}.`);
   if (anchor.set != null) why.push(`You said it was ${LEVELS.find(([l]) => l === item.check.level)?.[1].toLowerCase() || "checked"} on ${anchor.date}.`);
   const daysLeft = rate ? Math.floor(left / rate) : null;
-  const share = base ? Math.min(1, left / base) : null;
   const status = left <= 0 ? "out"
     : (daysLeft != null && daysLeft <= LOW_DAYS) || (share != null && share <= LOW_SHARE) ? "low"
     : daysLeft != null && daysLeft <= SOON_DAYS ? "soon"
@@ -150,7 +151,7 @@ export function lowItems(pantry, ests) {
 
 // At home as shelves: one per kind that has items (in the kinds' own order), each item sorted out → low →
 // soon → not sure → fine, then fewest days left, then name. `need` counts what wants buying (out / low / soon).
-const STATUS_ORDER = { out: 0, low: 1, soon: 2, unknown: 3, ok: 4 };
+const STATUS_ORDER = { out: 0, low: 1, soon: 2, unknown: 3, ok: 4, noRestock: 5 };
 export function shelves(pantry, ests, kinds) {
   const rank = (p) => STATUS_ORDER[ests[p.id]?.status] ?? STATUS_ORDER.unknown;
   return kinds.map((kind) => {

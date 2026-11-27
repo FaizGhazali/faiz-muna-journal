@@ -76,6 +76,20 @@ test("lowItems sorts out and low first", () => {
   assert.deepEqual(lowItems(p, ests).map((x) => x.id), ["c", "a"]);
 });
 
+test("No auto-restock keeps purchase estimates available without restock prompts", () => {
+  const occasional = { ...rice, noRestock: true, check: { date: T, at: 1, level: 0 } };
+  const buys = [buy(T, 5000)];
+  const result = estimate(occasional, buys, [], T);
+  assert.equal(result.left, 0);
+  assert.equal(result.status, "noRestock");
+  assert.equal(result.daysLeft, null);
+  assert.equal(result.outOn, null);
+  assert.deepEqual(lowItems([occasional], { rice: result }), []);
+  assert.equal(shelves([occasional], { rice: result }, allKinds())[0].need, 0);
+  assert.equal(estimate({ ...occasional, noRestock: false }, buys, [], T).status, "out");
+  assert.equal(estimate({ ...occasional, check: null }, [], [], T).status, "noRestock");
+});
+
 test("priceBoard: cheapest shop now, sales only while on", () => {
   const buys = [
     buy("2026-11-01", 5000, { price: 20, shop: "Lotus's" }),

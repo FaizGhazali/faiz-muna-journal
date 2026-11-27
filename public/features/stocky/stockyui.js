@@ -130,7 +130,7 @@ export function refreshStocky(force) {
 const nav = (on) => `<nav class="chips sk-nav" aria-label="Stocky pages">${[["", `${ico("cart")} List`], ["prices", `${ico("tag")} Price book`], ["plan", `${ico("plate")} Plan meals`], ...(canScan() ? [["receipts", `${ico("receipt")} Scan receipt`]] : [])]
   .map(([k, v]) => `<a class="chip" href="#stocky${k ? "/" + k : ""}" aria-pressed="${on === (k || "home")}">${v}</a>`).join("")}</nav>`;
 const say = () => `<p class="note sk-msg" role="status">${esc(msg)}</p>`;
-const PILL = { out: ["--obese", "Out"], low: ["--over", "Low"], soon: ["--under", "Buy soon"], ok: ["--good", "Fine"], unknown: ["--line", "Not sure"] };
+const PILL = { out: ["--obese", "Out"], low: ["--over", "Low"], soon: ["--under", "Buy soon"], ok: ["--good", "Fine"], unknown: ["--line", "Not sure"], noRestock: ["--line", "No auto-restock"] };
 const pill = (s) => `<span class="pill" style="--c:var(${PILL[s][0]})">${PILL[s][1]}</span>`;
 function leftText(p, e) {
   if (e.status === "unknown" && e.left == null) return "Not bought yet";
@@ -267,6 +267,7 @@ const SHELF_TILES = 9;
 const bar = (e) => `<span class="sk-bar" aria-hidden="true"><i class="is-${e.status}" style="width:${Math.round((e.share ?? 0) * 100)}%"></i></span>`;
 // "3 days", "2 wk", "Out": short enough for a tile.
 function tileLeft(e) {
+  if (e.status === "noRestock") return "No auto-restock";
   if (e.status === "out") return "Out";
   const d = e.daysLeft;
   if (d == null) return e.left == null ? "New" : "Not sure";
@@ -295,7 +296,7 @@ function shelfHtml({ kind, items, need }, searching = false) {
     ${searching ? `<div class="sk-shelfhead">${head}</div>` : `<button type="button" class="sk-shelfhead" data-sk="shelf" data-kind="${esc(kind.id)}" aria-expanded="${open}">
       ${head}<i aria-hidden="true">▾</i></button>`}
     ${open ? `<div class="sk-tiles">${shown.map((p) => { const e = ests[p.id]; return `<button type="button" class="sk-tile is-${e.status}" data-sk="peek" data-id="${esc(p.id)}">
-      <b>${esc(p.name)}</b><small>${esc(tileLeft(e))}</small>${bar(e)}</button>`; }).join("")}${all ? "" : `<button type="button" class="sk-tile more" data-sk="more" data-kind="${esc(kind.id)}">+${items.length - shown.length} more</button>`}</div>` : ""}
+      <b>${esc(p.name)}</b><small>${esc(tileLeft(e))}</small>${p.noRestock ? "" : bar(e)}</button>`; }).join("")}${all ? "" : `<button type="button" class="sk-tile more" data-sk="more" data-kind="${esc(kind.id)}">+${items.length - shown.length} more</button>`}</div>` : ""}
   </div>`;
 }
 // The quick sheet: what a tile tap opens. The everyday jobs (how much is left, bought, add to list);
@@ -312,9 +313,9 @@ function sheetHtml(id) {
   </div>`;
   return `<div class="gsin sk-peek">
     <div class="mhead"><h3 id="skSheetTitle">${esc(p.name)}</h3>${pill(e.status)}<button type="button" class="mini" data-sk="edit" aria-label="Edit ${esc(p.name)}">✎ Edit</button><button type="button" class="mini" data-sk="unpeek" aria-label="Close">✕</button></div>
-    ${bar(e)}
+    ${p.noRestock ? "" : `${bar(e)}
     <p class="note">${esc(leftText(p, e))}${e.outOn && e.status !== "out" ? ` · runs out ${esc(day(e.outOn))}` : ""}</p>
-    ${levelChips(p)}
+    ${levelChips(p)}`}
     <div class="actions">${buying === key ? "" : `<button type="button" class="primary" data-sk="buy" data-key="${key}">Bought some</button>`}${onList(p.id) ? `<span class="note">On the list</span>` : `<button type="button" data-sk="list" data-id="${esc(p.id)}">Add to list</button>`}</div>
     ${buying === key ? buyForm({ key, item: p.id, qty: p.pack }, p) : ""}
     ${bestText(p.id, p.unit)}
@@ -373,9 +374,9 @@ function itemPage(id) {
   <section class="panel sk-detail" aria-labelledby="skItemTitle" data-title="${esc(p.name)}">
     <div class="mhead"><h2 id="skItemTitle">${esc(p.name)}</h2>${pill(e.status)}</div>
     <p class="note">${esc(kindName(p.kind))}${linked.length ? ` · used in <b class="ink">${esc(linked.join(", "))}</b>` : ""} · usually ${amount(p.pack, p.unit)} at a time</p>
-    <div class="tiles"><div class="tile"><b>${e.left == null ? "–" : amount(e.left, p.unit)}</b>left</div><div class="tile"><b>${e.daysLeft ?? "–"}</b>days left</div><div class="tile"><b>${e.outOn ? esc(day(e.outOn)) : "–"}</b>runs out</div></div>
+    ${p.noRestock ? "" : `<div class="tiles"><div class="tile"><b>${e.left == null ? "–" : amount(e.left, p.unit)}</b>left</div><div class="tile"><b>${e.daysLeft ?? "–"}</b>days left</div><div class="tile"><b>${e.outOn ? esc(day(e.outOn)) : "–"}</b>runs out</div></div>
     <ul class="sk-why">${e.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>
-    ${levelChips(p)}
+    ${levelChips(p)}`}
     <div class="actions">${buying === key ? "" : `<button type="button" class="primary" data-sk="buy" data-key="${key}">Bought some</button>`}${onList(p.id) ? `<span class="note">On the list</span>` : `<button type="button" data-sk="list" data-id="${esc(p.id)}">Add to list</button>`}</div>
     ${buying === key ? buyForm({ key, item: p.id, qty: p.pack }, p) : ""}
     ${say()}
@@ -427,6 +428,7 @@ function itemForm(p) {
     <label>Name<input type="text" name="name" maxlength="60" value="${p ? v("name") : esc(newName)}" placeholder="Beras, Telur, Tisu"></label>
     <div class="two">${kindField(p ? kindOf(p.kind, kinds).id : lastKind())}${unitSelect(p ? p.unit : lastUnit())}</div>
     <label>Usually bought at once<input type="number" name="pack" inputmode="decimal" min="0" value="${v("pack")}" placeholder="5000 for a 5 kg bag, 30 for a tray"></label>
+    <label class="sk-check"><input type="checkbox" name="noRestock"${p?.noRestock ? " checked" : ""}> No auto-restock</label>
     <fieldset class="sk-links" data-sk-show="food">
       <legend>Used in meals</legend>
       <small class="note">Each meal food it goes into × how much of it is in 100 g of that food. Logging those meals uses it up.</small>
@@ -627,7 +629,8 @@ async function saveItem(f) {
   if (newFood) await commit(() => setDoc(newFood.ref, newFood.body));
   const ref = id ? doc(cols.pantry, id) : doc(cols.pantry);
   const old = id ? pantry.find((p) => p.id === id) : null;
-  const body = { ...item, created: old?.created || Date.now(), updated: Date.now(), ...(old?.check ? { check: old.check } : {}) };
+  const body = { ...item, created: old?.created || Date.now(), updated: Date.now(), ...(old?.check ? { check: old.check } : {}),
+    ...(el.noRestock.checked ? { noRestock: true } : {}) };
   editing = false; msg = id ? "Saved." : `Added ${item.name}.${newFood ? " It's in your Meals foods too." : ""}`;
   await commit(() => setDoc(ref, body), msg);
   if (buy) await commit(() => setDoc(doc(cols.buys), { item: ref.id, date: today(), ...buy, by: me(), at: Date.now() }));
