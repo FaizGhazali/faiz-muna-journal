@@ -20,7 +20,7 @@ import { payOf, monthOf, monthRange, addMonths, bucketsOf, txnBucket, ownBucket 
 import { initSpend, renderSpend, shopHtml } from "./spend.js";
 import { initAnalytics, renderAnalytics, ANALYTICS } from "./analytics.js";
 import { initDocs, openDocs, refreshDocs, resumeDocs, afterSignIn, docsOn } from "./docsui.js";
-import { initTax, openTax, refreshTax, taxDocEntry } from "./taxui.js";
+import { initTax, TAX, refreshTax, taxDocEntry } from "./taxui.js";
 import { initIncome, renderIncome, incomeEntry, openIncome } from "./income.js";
 import { makeBoard } from "../../shell/board.js";
 import { boardPrefs } from "../../shell/prefs.js";
@@ -45,7 +45,7 @@ const BOARD = {
   ],
   sizes: { people: "l" },
   // Beside "Arrange cards": graphs that don't need a place on the board (analytics.js).
-  extra: `<a class="btn mini" href="${ANALYTICS}">${ico("chart")} Analytics</a>`,
+  extra: `<a class="btn mini" href="${ANALYTICS}">${ico("chart")} Analytics</a><a class="btn mini" href="${TAX}">${ico("file")} Income Tax</a>`,
 };
 const KINDS = { purchase: "Spend", payment: "Card payment", refund: "Refund" };
 const TYPES = { credit_card: "Credit card", debit: "Debit card", ewallet: "E-wallet", cash: "Cash", bank: "Bank account" };
@@ -99,7 +99,7 @@ export function initLedger(opts) {
   initPlan({ ...shared, me, planChanged: () => renderAnalytics(), billsChanged: opts.billsChanged });
   initAnalytics(shared);
   initDocs({ db: () => db, commit, me });
-  initIncome({ ...shared, me, token: opts.token, openTax });
+  initIncome({ ...shared, me, token: opts.token, taxRoute: TAX });
   initTax({ ...shared, me, taxRecords: () => taxRecords, openIncome, incomeEntry });
   afterSignIn();
   initSpend({ ...shared, loadedFrom: () => addDays(today(), -LOAD_DAYS), aliases: () => aliases, shops: () => shopNames, stocky });

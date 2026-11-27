@@ -1507,6 +1507,8 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 /* Analytics (#ledger/analytics): the same, a page of its own */
 #ledger.anpage > :not(#ledgerAnalytics) { display: none }
 #ledger:not(.anpage) #ledgerAnalytics { display: none }
+#ledger.taxpage > :not(#ledgerTax) { display: none }
+#ledger:not(.taxpage) #ledgerTax { display: none }
 .lanalytics { display: grid; gap: 12px; align-content: start }
 .lanalytics .lpb { grid-template-columns: 4.6em minmax(0, 1fr) auto }
 .lspend, .lsbody { display: grid; gap: 12px; align-content: start }
@@ -1607,8 +1609,11 @@ a.lprow { padding: 4px 6px; margin: -4px -6px }
 .lnpayroll summary .note { margin-inline-start: 6px }
 .lnpayfields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px }
 .lnpayfields label { min-width: 0 }
-#ledgerTaxSheet { max-width: min(680px, calc(100vw - 18px)); width: 100% }
-.taxsheet { display: grid; gap: 14px }
+#ledgerTax { grid-column: 1 / -1 }
+.taxsheet { display: grid; gap: 16px; max-width: 860px; margin-inline: auto }
+.taxheading { flex-wrap: wrap }
+.taxfilters, #taxForm { max-width: 580px }
+.taxheading a { text-decoration: none }
 .taxsheet h2, .taxsheet h3, .taxsheet p { margin: 0 }
 .taxsheet h2, .taxsheet h3 { font-family: var(--display, Georgia, serif) }
 .taxfilters, .taxmetrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }

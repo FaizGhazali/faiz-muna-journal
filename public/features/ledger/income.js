@@ -70,7 +70,7 @@ export function renderIncome() {
     return;
   }
   const head = `<div class="lhead"><h2 id="lnTitle">Income</h2><span class="note">${esc(payLabel(m, pay))}</span>
-    <span class="lbtnrow">${form ? "" : `<button type="button" class="mini" data-ln="tax" aria-haspopup="dialog">Income Tax</button><button type="button" class="mini" data-ln="new">＋ Add income</button>`}${ctx.board.less("income")}</span></div>`;
+    <span class="lbtnrow">${form ? "" : `<a class="btn mini" href="${ctx.taxRoute}">Income Tax</a><button type="button" class="mini" data-ln="new">＋ Add income</button>`}${ctx.board.less("income")}</span></div>`;
   const total = `<div class="lpleft"><div><small>came in${inc.fromPlan ? " (your plan, until a salary is logged)" : ""}</small><b>${rm(inc.totalSen, { whole: true })}</b></div>
     ${inc.extrasSen ? `<div><small>extra this month</small><b class="sm">+${rm(inc.extrasSen, { whole: true })}</b></div>` : ""}</div>`;
   if (size === "m") {
@@ -384,7 +384,6 @@ function click(b) {
   if (b.dataset.lnkind && form) { form.kind = b.dataset.lnkind; const dirty = $("ledgerIncome").querySelector("[data-form]")?.dataset.dirty; clearDirty(); renderIncome(); if (dirty) $("ledgerIncome").querySelector("[data-form]")?.setAttribute("data-dirty", "1"); return; }
   const a = b.dataset.ln, id = b.dataset.id; if (!a) return;
   if (a === "new") openIncome();
-  if (a === "tax") ctx.openTax();
   if (a === "pick-pdf") $("lnPdf")?.click();
   if (a === "scan-pdf" && form?.file) scanPayslip(form);
   if (a === "remove-pdf" && form?.file) removePayslip(form);

@@ -6,41 +6,53 @@ import { rm, shortDate } from "../../logic/ledger.js";
 import { EA_FIELDS, RELIEFS, employerKey, inputAmount, readAmounts, taxCsv, taxOverview } from "../../logic/tax.js";
 import { docsOn, openDocs } from "./docsui.js";
 
+export const TAX = "#ledger/tax";
+
 const RELIEF_FIELDS = [["amount", "Recorded amount"]];
-let ctx, person, year, tab, draft, busy = false;
-const sheet = () => $("ledgerTaxSheet");
+let ctx, owner, person, year, tab = "overview", draft, busy = false;
+const page = () => $("ledgerTax");
 const report = () => taxOverview(ctx.incomes(), ctx.taxRecords(), person, year);
 const cash = (item) => item?.count ? rm(item.amount) : "Not entered";
 
 export function initTax(context) {
   ctx = context;
-  sheet().addEventListener("click", (event) => {
+  page().addEventListener("click", (event) => {
     const button = event.target.closest("button[data-tax]");
     if (button && !busy) act(button);
   });
-  sheet().addEventListener("change", (event) => {
+  page().addEventListener("change", (event) => {
     if (event.target.id === "taxPerson") person = event.target.value;
     else if (event.target.id === "taxYear") year = event.target.value;
     else return;
     renderTax();
   });
-  sheet().addEventListener("submit", (event) => {
+  page().addEventListener("submit", (event) => {
     event.preventDefault();
     if (draft && !busy) save(new FormData(event.target), event.target);
   });
-  sheet().addEventListener("cancel", (event) => { if (busy) event.preventDefault(); });
+  addEventListener("hashchange", () => {
+    const entering = location.hash === TAX;
+    if (!entering && !busy) draft = null;
+    refreshTax();
+    if (entering) {
+      scrollTo({ top: 0 });
+      $("ledgerTaxTitle")?.focus({ preventScroll: true });
+    }
+  });
 }
 
-export function openTax() {
-  person = ctx.me() || ctx.people()[0]?.id;
-  year = ctx.today().slice(0, 4);
-  tab = "overview";
-  draft = null;
-  sheet().showModal();
+export function refreshTax() {
+  const active = location.hash === TAX;
+  $("ledger").classList.toggle("taxpage", active);
+  if (!active || !ctx.people().length || draft || busy) return;
+  const signedIn = ctx.me() || ctx.people()[0].id;
+  if (!person || signedIn !== owner) {
+    owner = person = signedIn;
+    year = ctx.today().slice(0, 4);
+    tab = "overview";
+  }
   renderTax();
 }
-
-export function refreshTax() { if (sheet()?.open && !draft && !busy) renderTax(); }
 
 function button(action, label, attrs = "") {
   return `<button type="button" class="mini" data-tax="${action}" ${attrs}>${esc(label)}</button>`;
@@ -54,8 +66,13 @@ function renderTax() {
   const years = [...new Set([year, ...Array.from({ length: 8 }, (_, i) => String(current - i)),
     ...ctx.incomes().map((item) => item.date.slice(0, 4)), ...ctx.taxRecords().map((item) => item.year)])].sort().reverse();
   const data = report();
-  sheet().innerHTML = `<div class="gsin taxsheet">
-    <div class="mhead"><h2 id="ledgerTaxTitle">Income Tax</h2>${button("close", "Close")}</div>
+  if (location.hash !== TAX) return;
+  page().innerHTML = `<div class="taxsheet">
+    <div class="lhead taxheading">
+      <a class="btn mini" href="#ledger">← Ledger</a>
+      <a class="btn mini" href="#ledger/analytics">Analytics</a>
+    </div>
+    <h2 id="ledgerTaxTitle" tabindex="-1">Income Tax</h2>
     ${draft ? editForm(data) : `
       <div class="taxfilters">
         ${select("taxPerson", "Person", ctx.people().map((p) => [p.id, p.name]), person)}
@@ -167,14 +184,16 @@ export function taxDocEntry(item) {
 
 function act(control) {
   const action = control.dataset.tax;
-  if (action === "close") return sheet().close();
   if (action === "export") return exportCsv();
   if (["overview", "ea", "relief", "payroll"].includes(action)) tab = action;
   if (action === "edit-income" || action === "income-docs") {
     const item = report().payroll.find((row) => row.id === control.dataset.id);
     if (!item) return;
     if (action === "income-docs") return openDocs(ctx.incomeEntry(item));
-    if (canEdit(person)) { sheet().close(); ctx.openIncome(item.id); }
+    if (canEdit(person)) {
+      location.hash = "#ledger";
+      requestAnimationFrame(() => ctx.openIncome(item.id));
+    }
     return;
   }
   if (action === "new-ea" && canEdit(person)) draft = { taxType: "ea", name: control.dataset.name };
