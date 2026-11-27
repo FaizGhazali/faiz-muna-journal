@@ -70,7 +70,7 @@ export function renderIncome() {
     return;
   }
   const head = `<div class="lhead"><h2 id="lnTitle">Income</h2><span class="note">${esc(payLabel(m, pay))}</span>
-    <span class="lbtnrow">${form ? "" : `<button type="button" class="mini" data-ln="new">＋ Add income</button>`}${ctx.board.less("income")}</span></div>`;
+    <span class="lbtnrow">${form ? "" : `<button type="button" class="mini" data-ln="tax" aria-haspopup="dialog">Income Tax</button><button type="button" class="mini" data-ln="new">＋ Add income</button>`}${ctx.board.less("income")}</span></div>`;
   const total = `<div class="lpleft"><div><small>came in${inc.fromPlan ? " (your plan, until a salary is logged)" : ""}</small><b>${rm(inc.totalSen, { whole: true })}</b></div>
     ${inc.extrasSen ? `<div><small>extra this month</small><b class="sm">+${rm(inc.extrasSen, { whole: true })}</b></div>` : ""}</div>`;
   if (size === "m") {
