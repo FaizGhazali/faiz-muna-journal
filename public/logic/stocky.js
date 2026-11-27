@@ -163,6 +163,13 @@ export function shelves(pantry, ests, kinds) {
 // ---------- shops and prices ----------
 // Price per unit (per kg, per L or per piece reads better than per gram).
 export const perUnit = (r) => (r.qty > 0 && r.price > 0 ? r.price / r.qty : null);
+export const PRICE_UNITS = { g: { g: 1, kg: 1000 }, ml: { ml: 1, L: 1000 }, pcs: { pcs: 1 } };
+export function priceAtQuantity(record, baseUnit, quantity, unit) {
+  const rate = perUnit(record), scale = PRICE_UNITS[baseUnit]?.[unit];
+  if (rate == null || !Number.isFinite(scale) || !Number.isFinite(quantity) || quantity < 0) return null;
+  const result = rate * (quantity * scale);
+  return Number.isFinite(result * 100) ? result : null;
+}
 export const unitLabel = (unit) => (unit === "pcs" ? "each" : unit === "ml" ? "per L" : "per kg");
 export const shown = (p, unit) => (unit === "pcs" ? p : p * 1000);
 // Same shop however it was typed: "Lotus's", "lotus's ", "LOTUS'S".
@@ -356,17 +363,16 @@ export function readItem({ name, kind, unit, pack, links }, kinds = BUILT_IN_KIN
   return { item };
 }
 // A buy or a price seen. Returns { rec } or { error }.
-export function readPrice({ qty, price, shop, sale, until }, { needPrice = false, maxShopLength = 40, quantityDecimals = 1 } = {}) {
+export function readPrice({ qty, price, shop, sale, until }, { needPrice = false } = {}) {
   const q = Number(qty);
-  const scale = 10 ** quantityDecimals;
-  const amount = Math.round(q * scale) / scale;
+  const amount = Math.round(q * 10) / 10;
   if (!(amount > 0 && q <= 100000)) return { error: "How much? Type a number." };
   const rec = { qty: amount };
   const pr = price === "" || price == null ? null : Number(price);
   if (pr != null && !(pr >= 0 && pr <= 100000)) return { error: "Type the price as a number, like 12.90." };
   const cents = Math.round(pr * 100);
   if (needPrice && !(cents > 0)) return { error: "Type the price you saw." };
-  const sh = String(shop || "").trim().slice(0, maxShopLength);
+  const sh = String(shop || "").trim().slice(0, 40);
   if ((needPrice || cents) && !sh) return { error: "Which shop?" };
   if (cents) rec.price = cents / 100;
   if (sh) rec.shop = sh;

@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buyRate, mealUse, estimate, lowItems, priceBoard, vsUsual, usualPrice, setCost, linkRows, linksOf, linksTo, cookedIn, itemUse, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind, matchKind, kindsLike, shelves } from "../public/logic/stocky.js";
+import { buyRate, mealUse, estimate, lowItems, priceBoard, priceAtQuantity, vsUsual, usualPrice, setCost, linkRows, linksOf, linksTo, cookedIn, itemUse, shopNames, shopTotals, saleOn, planNeeds, shortfall, readItem, readPrice, amount, money, allKinds, kindOf, readKind, matchKind, kindsLike, shelves } from "../public/logic/stocky.js";
 
 const T = "2026-11-22";
 const rice = { id: "rice", name: "Beras", kind: "food", unit: "g", pack: 5000, food: "f-nasi" };
@@ -104,6 +104,19 @@ test("priceBoard groups shop aliases and keeps the pack that produced the displa
   assert.equal(offer.record, regular);
   assert.equal(offer.now, 4 / 500);
   assert.equal(offer.onSale, false);
+});
+
+test("priceAtQuantity uses the saved pack price across compatible units", () => {
+  const drink = { qty: 460, price: 32.90 };
+  assert.equal(money(priceAtQuantity(drink, "ml", 500, "ml")), "RM 35.76");
+  assert.equal(money(priceAtQuantity(drink, "ml", 1, "L")), "RM 71.52");
+  assert.equal(money(priceAtQuantity({ qty: 500, price: 4 }, "g", 1.25, "kg")), "RM 10.00");
+  assert.equal(money(priceAtQuantity({ qty: 5, price: 3 }, "pcs", 10, "pcs")), "RM 6.00");
+  assert.equal(priceAtQuantity(drink, "ml", 0, "ml"), 0);
+  assert.equal(priceAtQuantity(drink, "ml", 5, "kg"), null);
+  assert.equal(priceAtQuantity(drink, "ml", NaN, "ml"), null);
+  assert.equal(priceAtQuantity(drink, "ml", -1, "ml"), null);
+  assert.equal(priceAtQuantity({ qty: 0, price: 32.90 }, "ml", 1, "L"), null);
 });
 
 test("saleOn uses the end date, else SALE_DAYS", () => {

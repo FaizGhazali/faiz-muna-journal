@@ -4,7 +4,7 @@
 // Maths and the data model live in stocky.js. Meals are read, never written: what meals use is worked out.
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "../../core/fs.js";
 import { confirmDelete } from "../../core/confirm.js";
-import { UNITS, LEVELS, allKinds, kindOf, shelves, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice, setCost, linksTo, linkRows, LINKS_MAX } from "../../logic/stocky.js";
+import { UNITS, LEVELS, allKinds, kindOf, shelves, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, priceAtQuantity, PRICE_UNITS, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice, setCost, linksTo, linkRows, LINKS_MAX } from "../../logic/stocky.js";
 import { readFood } from "../../logic/meals.js";
 import { findByName, SEARCH_MIN } from "../../logic/search.js";
 import { shopChoices, stockyAt, renames, firstUsed, ledgerShopOf, shopLabel, shopId } from "../../logic/shops.js";
@@ -21,7 +21,7 @@ let ledgerShops = []; // Ledger's shop names: one shop list for both journals (l
 let buying = null, pricing = false, editing = false, byShop = false, peek = null, msg = "", plan = {}, pending = false;
 let shut = new Set(), opened = new Set(), unfolded = new Set(); // folded shelves (kept per device), shelves showing every tile, open parts of the item page
 let homeQ = "", newName = ""; // the At home search (kept in memory), and the name "+ Add" carries to the add page
-let priceQ = "", priceShop = null, priceEdit = null;
+let priceQ = "", priceShop = null, priceCalc = null;
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (_) { return d; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} },
@@ -123,7 +123,7 @@ export function refreshStocky(force) {
   const r = route();
   const PAGES = { item: () => itemPage(r.id), add: addPage, prices: pricesPage, plan: planPage, receipts: receiptsPage, receipt: () => receiptPage(r.id), scan: scanPage };
   host.innerHTML = (PAGES[r.page] || homePage)();
-  if (sheet.open && (priceEdit || peek)) sheet.innerHTML = priceEdit ? priceEditHtml() : sheetHtml(peek);
+  if (sheet.open && peek) sheet.innerHTML = sheetHtml(peek);
   syncForms();
 }
 
@@ -331,23 +331,35 @@ function openPeek(id) {
 }
 function closePeek() {
   if (peek) editing = false;
-  peek = null; priceEdit = null; buying = null; msg = "";
+  peek = null; priceCalc = null; buying = null; msg = "";
   const s = $("skSheet"); if (s?.open) s.close();
 }
 
-function priceRecord(edit) {
-  return (edit.source === "buys" ? buys : prices).find((r) => r.id === edit.id);
+function openPriceCalculator({ id, shop, pack, price }) {
+  const p = pantry.find((x) => x.id === id);
+  if (!p || !PRICE_UNITS[p.unit]) return;
+  const record = { qty: Number(pack), price: Number(price) };
+  priceCalc = { record, unit: p.unit };
+  const { qty, unit } = displayPack(record.qty, p.unit), sheet = $("skSheet");
+  const options = Object.keys(PRICE_UNITS[p.unit]).map((u) =>
+    `<option value="${u}"${u === unit ? " selected" : ""}>${u === "pcs" ? "pieces" : u}</option>`).join("");
+  sheet.innerHTML = `<div class="gsin sk-peek">
+    <div class="mhead"><h3 id="skSheetTitle">Price calculator · ${esc(p.name)}</h3><button type="button" class="mini" data-sk="unpeek" aria-label="Close">×</button></div>
+    <p class="note">${shopHtml(shop)} · Saved price ${money(record.price)} for ${packNumber.format(qty)} ${unit}</p>
+    <div class="mform">
+      <div class="two"><label>Quantity<input id="skCalcQty" type="number" inputmode="decimal" min="0" step="any" value="${qty}"></label>
+      <label>Unit<select id="skCalcUnit">${options}</select></label></div>
+      <p>Estimated price <strong><output id="skCalcTotal" for="skCalcQty skCalcUnit" aria-live="polite"></output></strong></p>
+    </div>
+  </div>`;
+  updatePriceCalculator();
+  sheet.showModal();
 }
 
-function priceEditHtml() {
-  const record = priceRecord(priceEdit), p = pantry.find((x) => x.id === record?.item);
-  return `<div class="gsin sk-peek">
-    <div class="mhead"><h3 id="skSheetTitle">${p ? `Edit price · ${esc(p.name)}` : "Price unavailable"}</h3><button type="button" class="mini" data-sk="unpeek" aria-label="Close">×</button></div>
-    ${p ? `<p class="note">${priceEdit.source === "buys" ? "Purchase" : "Price seen"} · ${esc(day(record.date))}</p>
-      ${priceForm(p, record)}
-      <a class="sk-all" href="#stocky/item/${esc(p.id)}">View item details</a>`
-    : `<p class="note">This price record is no longer available.</p>`}
-  </div>`;
+function updatePriceCalculator() {
+  const { record, unit } = priceCalc;
+  const result = priceAtQuantity(record, unit, $("skCalcQty").valueAsNumber, $("skCalcUnit").value);
+  $("skCalcTotal").value = result == null ? "—" : money(result);
 }
 
 function itemPage(id) {
@@ -388,15 +400,15 @@ function itemPage(id) {
 // A folded part of the item page: its row says the gist, tapping opens it. What's open survives live redraws.
 const part = (key, title, gist, force, body) => `<details class="sk-part" data-part="${key}"${force || unfolded.has(key) ? " open" : ""}>
   <summary><b>${title}</b>${gist ? `<small>${gist}</small>` : ""}</summary>${body}</details>`;
-function priceForm(p, record) {
+function priceForm(p) {
   return `<form class="mform" data-skform="price" novalidate>
-    <div class="two"><label>${record ? "Pack size" : "Amount"} (${p.unit})<input type="number" name="qty" inputmode="decimal" min="0" step="any" value="${esc(record?.qty ?? p.pack)}"></label>
-      <label>${record ? "Pack price" : "Price"}, RM<input type="number" name="price" inputmode="decimal" min="0" step="0.01" value="${esc(record?.price ?? "")}"></label></div>
-    <label>Shop<input type="text" name="shop" list="skShops" maxlength="${record ? 60 : 40}" value="${esc(record?.shop ?? lastShop())}" placeholder="Like Mydin, Lotus's, pasar"></label>
-    <label class="sk-check"><input type="checkbox" name="sale" data-sk-toggle="until"${record?.sale ? " checked" : ""}> On sale</label>
-    <label data-sk-show="until" hidden>Sale ends (optional)<input type="date" name="until" min="${today()}" value="${esc(record?.until ?? "")}"></label>
+    <div class="two"><label>Amount (${p.unit})<input type="number" name="qty" inputmode="decimal" min="0" step="any" value="${esc(p.pack)}"></label>
+      <label>Price, RM<input type="number" name="price" inputmode="decimal" min="0" step="0.01"></label></div>
+    <label>Shop<input type="text" name="shop" list="skShops" maxlength="40" value="${esc(lastShop())}" placeholder="Like Mydin, Lotus's, pasar"></label>
+    <label class="sk-check"><input type="checkbox" name="sale" data-sk-toggle="until"> On sale</label>
+    <label data-sk-show="until" hidden>Sale ends (optional)<input type="date" name="until" min="${today()}"></label>
     <p class="note" data-sk-hint role="status"></p>
-    <div class="actions"><button type="submit" class="primary">Save price</button><button type="button" data-sk="${record ? "unpeek" : "cancel"}">Cancel</button></div>
+    <div class="actions"><button type="submit" class="primary">Save price</button><button type="button" data-sk="cancel">Cancel</button></div>
     ${datalist()}
   </form>`;
 }
@@ -453,15 +465,15 @@ function pricesPage() {
 }
 
 const packNumber = new Intl.NumberFormat(undefined, { maximumFractionDigits: 5 });
-function priceRow(p, s, source, detail) {
-  const { record } = s, large = p.unit !== "pcs" && record.qty >= 1000;
-  const qty = packNumber.format(large ? record.qty / 1000 : record.qty);
-  const unit = large ? (p.unit === "g" ? "kg" : "L") : p.unit;
+const displayPack = (qty, unit) => qty >= 1000 && unit !== "pcs"
+  ? { qty: qty / 1000, unit: unit === "g" ? "kg" : "L" } : { qty, unit };
+function priceRow(p, s, detail) {
+  const { record } = s, { qty, unit } = displayPack(Number(record.qty), p.unit);
   const standardQty = p.unit === "pcs" ? 1 : 1000;
-  const comparison = record.qty === standardQty ? "" : `<small>${money(shown(s.now, p.unit))} ${unitLabel(p.unit)}</small>`;
-  return `<button type="button" class="mitem sk-link sk-price-row" data-sk="edit-price" data-source="${source}" data-id="${esc(record.id)}" aria-haspopup="dialog">
+  const comparison = Number(record.qty) === standardQty ? "" : `<small>${money(shown(s.now, p.unit))} ${unitLabel(p.unit)}</small>`;
+  return `<button type="button" class="mitem sk-link sk-price-row" data-sk="calculate-price" data-id="${esc(p.id)}" data-shop="${esc(s.shop)}" data-pack="${esc(record.qty)}" data-price="${esc(record.price)}" aria-haspopup="dialog">
     <span><b>${esc(p.name)}</b><small>${shopHtml(s.shop)}${detail}</small></span>
-    <span>${money(record.price)} <small>for ${qty} ${unit}</small>${comparison}</span>
+    <span>${money(record.price)} <small>for ${packNumber.format(qty)} ${unit}</small>${comparison}</span>
   </button>`;
 }
 
@@ -471,10 +483,8 @@ function priceResults() {
   const q = priceQ.trim();
   const withP = q ? findByName(priced, q).hits : priced;
   if ((q || priceShop) && !withP.length) return `<p class="note" role="status">No priced items${q ? ` match “${esc(q)}”` : ""}${priceShop ? ` at ${esc(priceShop.name)}` : ""}.</p>`;
-  const purchases = new Set(buys);
-  const row = (p, s, detail) => priceRow(p, s, purchases.has(s.record) ? "buys" : "prices", detail);
   const sales = withP.flatMap((p) => p.offers.filter((s) => s.onSale).map((s) =>
-    row(p, s, ` · <i class="sk-sale">Sale</i>${s.until ? ` till ${esc(day(s.until))}` : ""}${s.normal ? ` · normal ${money(shown(s.normal, p.unit))} ${unitLabel(p.unit)}` : ""}`)));
+    priceRow(p, s, ` · <i class="sk-sale">Sale</i>${s.until ? ` till ${esc(day(s.until))}` : ""}${s.normal ? ` · normal ${money(shown(s.normal, p.unit))} ${unitLabel(p.unit)}` : ""}`)));
   const title = priceShop ? "Prices at " + priceShop.name : "Cheapest shop for each";
   return `<section class="panel" aria-labelledby="skSaleTitle" data-title="On sale now">
     <h2 id="skSaleTitle">On sale now</h2>
@@ -483,11 +493,12 @@ function priceResults() {
   </section>
   <section class="panel" aria-labelledby="skCheapTitle">
     <h2 id="skCheapTitle">${esc(title)}</h2>
+    ${withP.length ? '<p class="note">Tap an item to calculate the price for another quantity.</p>' : ""}
     ${withP.length ? `<div class="mlist">${withP.map((p) => {
       const [s] = p.offers;
       const sale = s.onSale ? ` · <i class="sk-sale">Sale</i>` : "";
       const compared = priceShop ? "" : p.offers.length > 1 ? ` · ${p.offers.length} shops compared` : " · only one shop so far";
-      return row(p, s, sale + compared);
+      return priceRow(p, s, sale + compared);
     }).join("")}</div>`
       : `<p class="note">Add prices when you buy, or tap an item and add a price you saw. Stocky compares the price per kg, per litre or per piece, so different pack sizes are fair.</p>`}
   </section>`;
@@ -531,8 +542,7 @@ function syncForms() {
 // Under a price being typed: what it is per kg, and how it compares with usual.
 function hint(f) {
   const h = f.querySelector("[data-sk-hint]"); if (!h) return;
-  const el = f.elements, priceId = priceEdit ? priceRecord(priceEdit)?.item : route().id;
-  const p = pantry.find((x) => x.id === (f.dataset.skform === "price" ? priceId : rowByKey(f.dataset.key)?.item));
+  const el = f.elements, p = pantry.find((x) => x.id === (f.dataset.skform === "price" ? route().id : rowByKey(f.dataset.key)?.item));
   const q = Number(el.qty?.value), pr = Number(el.price?.value), unit = p?.unit || el.unit?.value;
   if (!(q > 0 && pr > 0) || !unit) { h.textContent = ""; return; }
   const u = perUnit({ qty: q, price: pr }), vs = p && vsUsual(p.id, u, buys, prices, today());
@@ -580,35 +590,9 @@ async function saveBuy(f) {
   refreshStocky(true);
 }
 async function savePrice(f) {
-  const edit = priceEdit, el = f.elements;
-  const { rec, error } = readPrice({ qty: el.qty.value, price: el.price.value, shop: el.shop.value, sale: el.sale.checked, until: el.until.value },
-    { needPrice: true, maxShopLength: edit ? 60 : 40, quantityDecimals: edit ? 2 : 1 });
+  const el = f.elements;
+  const { rec, error } = readPrice({ qty: el.qty.value, price: el.price.value, shop: el.shop.value, sale: el.sale.checked, until: el.until.value }, { needPrice: true });
   if (error) { setMsg(f, error); return; }
-  if (edit) {
-    if (!priceRecord(edit)) { setMsg(f, "This price record is no longer available."); return; }
-    if (f.dataset.saving) return;
-    f.dataset.dirty = "1";
-    f.dataset.saving = "1";
-    const submit = f.querySelector('[type="submit"]');
-    submit.disabled = true;
-    try {
-      const ref = doc(cols[edit.source], edit.id);
-      await commit(() => updateDoc(ref, { ...rec, sale: rec.sale ?? false, until: rec.until ?? null }), "Price updated.");
-    } catch (_) {
-      setMsg(f, "Could not update this price. Try again.");
-      return;
-    } finally {
-      delete f.dataset.saving;
-      submit.disabled = false;
-    }
-    if (priceEdit === edit) {
-      closePeek();
-      refreshStocky(true);
-      const row = [...$("stocky").querySelectorAll('[data-sk="edit-price"]')].find((b) => b.dataset.id === edit.id && b.dataset.source === edit.source);
-      (row || $("skPriceShop"))?.focus();
-    }
-    return;
-  }
   pricing = false; msg = "";
   await commit(() => setDoc(doc(cols.prices), { item: route().id, date: today(), ...rec, at: Date.now() }), "Price saved.");
   refreshStocky(true);
@@ -705,20 +689,18 @@ function setMsg(f, t) { msg = t; const el = f.querySelector(".sk-msg") || f.quer
 function wire() {
   const host = $("stocky"), sheet = $("skSheet"), both = (type, fn) => { host.addEventListener(type, fn); sheet.addEventListener(type, fn); };
   sheet.addEventListener("click", (ev) => { if (ev.target === sheet && !sheet.querySelector("form[data-dirty]")) sheet.close(); }); // tap outside closes, unless it would lose typing
-  sheet.addEventListener("close", () => { if (!sheet.open && (peek || priceEdit)) { closePeek(); refreshStocky(); } });
+  sheet.addEventListener("close", () => {
+    if (sheet.open) return;
+    if (priceCalc) priceCalc = null;
+    if (peek || pending) { closePeek(); refreshStocky(); }
+  });
   both("click", async (ev) => {
     closeMenus(ev.target.closest(".sk-kindf"));
     const b = ev.target.closest("[data-sk]"); if (!b) return;
     const act = b.dataset.sk, id = b.dataset.id || route().id, here = sheet.open ? sheet : host;
     if (act === "peek") openPeek(b.dataset.id);
     if (act === "unpeek") { closePeek(); if (pending) refreshStocky(); }
-    if (act === "edit-price") {
-      const { source, id } = b.dataset;
-      priceEdit = { source, id };
-      sheet.innerHTML = priceEditHtml();
-      syncForms();
-      sheet.showModal();
-    }
+    if (act === "calculate-price") openPriceCalculator(b.dataset);
     if (act === "shelf") { const k = b.dataset.kind; shut.has(k) ? shut.delete(k) : shut.add(k); store.set("journal-stocky-shut", JSON.stringify([...shut])); refreshStocky(true); }
     if (act === "more") { opened.add(b.dataset.kind); refreshStocky(true); }
     if (act === "findclear") { homeQ = ""; refreshStocky(true); $("skFind")?.focus(); }
@@ -761,6 +743,7 @@ function wire() {
     if (k === "row") addTyped(f);
   });
   both("change", (ev) => {
+    if (ev.target.id === "skCalcUnit") { updatePriceCalculator(); return; }
     if (ev.target.id === "skPriceShop") {
       const select = ev.target;
       priceShop = select.value ? { key: select.value, name: select.selectedOptions[0].textContent } : null;
@@ -772,6 +755,7 @@ function wire() {
   // An item page part opened or shut stays that way through live redraws ("toggle" doesn't bubble).
   host.addEventListener("toggle", (ev) => { const k = ev.target.dataset?.part; if (k) ev.target.open ? unfolded.add(k) : unfolded.delete(k); }, true);
   both("input", (ev) => {
+    if (ev.target.id === "skCalcQty") { updatePriceCalculator(); return; }
     if (ev.target.id === "skFind") { homeQ = ev.target.value; $("skShelves").innerHTML = shelvesHtml(); return; } // only the results redraw
     if (ev.target.id === "skPriceFind") { priceQ = ev.target.value; $("skPriceResults").innerHTML = priceResults(); return; }
     const f = ev.target.closest("form"); if (!f) return;
