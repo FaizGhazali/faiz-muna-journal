@@ -2,7 +2,7 @@
 // Pages by hash: #stocky (list + at home), #stocky/item/<id>, #stocky/add, #stocky/prices ("Price book"), #stocky/plan,
 // and receipt scanning (receipt.js): #stocky/receipts, #stocky/receipt/<id>, #stocky/scan.
 // Maths and the data model live in stocky.js. Meals are read, never written: what meals use is worked out.
-import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "../../core/fs.js";
+import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, writeBatch } from "../../core/fs.js";
 import { confirmDelete } from "../../core/confirm.js";
 import { UNITS, LEVELS, allKinds, kindOf, shelves, matchKind, kindsLike, FALLBACK_KIND, amount, money, estimate, lowItems, priceBoard, priceAtQuantity, PRICE_UNITS, vsUsual, shopNames, shopTotals, perUnit, unitLabel, shown, planNeeds, shortfall, readItem, readPrice, setCost, linksTo, linkRows, LINKS_MAX } from "../../logic/stocky.js";
 import { readFood } from "../../logic/meals.js";
@@ -14,7 +14,7 @@ import { initReceipts, startReceipts, stopReceipts, wireReceipts, receiptsPage, 
 
 const day = (d) => parse(d).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
-let commit, me, people, mealData, cols = {}, unsubs = [];
+let db, commit, me, people, mealData, cols = {}, unsubs = [];
 let pantry = [], buys = [], prices = [], list = [], kinds = allKinds(), ests = {}, boards = {};
 let ledgerShops = []; // Ledger's shop names: one shop list for both journals (logic/shops.js)
 // Page state: which row's "Bought" form is open, the item in the quick sheet, folded shelves, the meal plan, messages.
@@ -30,7 +30,7 @@ const store = {
 let pricesChanged = () => {}; // the meal sets show what they cost from the Price book
 let ledgerNames = () => []; // every shop Ledger has spending at (from app.js), for the shop picker
 export function initStocky(opts) {
-  ({ commit, me, people, mealData } = opts);
+  ({ db, commit, me, people, mealData } = opts);
   if (opts.pricesChanged) pricesChanged = opts.pricesChanged;
   if (opts.ledgerShops) ledgerNames = opts.ledgerShops;
   for (const c of ["pantry", "buys", "prices", "shopList", "foods", "kinds", "ledgerShops"]) cols[c] = collection(opts.db, c);
@@ -218,6 +218,7 @@ function kindNote(f) {
 }
 const isFood = (f) => matchKind(f.elements.kind?.value, kinds).id === "food";
 // The "Bought" form: how much, and (optional) the price, shop and whether it was on sale.
+const restockCheckbox = (p, attrs = "") => `<label class="sk-check"><input type="checkbox" name="noRestock"${p?.noRestock ? " checked" : ""}${attrs}> No auto-restock</label>`;
 function buyForm(r, p) {
   const unit = p?.unit || r.unit || lastUnit(), qty = r.qty || p?.pack || "";
   return `<form class="mform sk-buy" data-skform="buy" data-key="${esc(r.key)}" novalidate>
@@ -226,6 +227,7 @@ function buyForm(r, p) {
       <label>Price paid, ${"RM"}<input type="number" name="price" inputmode="decimal" min="0" step="0.01" placeholder="optional"></label></div>
     <label>Shop<input type="text" name="shop" list="skShops" maxlength="40" value="${esc(lastShop())}" placeholder="Like Mydin, Lotus's, pasar"></label>
     <label class="sk-check"><input type="checkbox" name="sale"> It was on sale</label>
+    ${restockCheckbox(p)}
     <p class="note" data-sk-hint></p>
     <div class="actions"><button type="submit" class="primary">Save</button><button type="button" data-sk="cancel">Cancel</button></div>
     ${datalist()}
@@ -317,7 +319,7 @@ function sheetHtml(id) {
     <p class="note">${esc(leftText(p, e))}${e.outOn && e.status !== "out" ? ` · runs out ${esc(day(e.outOn))}` : ""}</p>
     ${levelChips(p)}`}
     <div class="actions">${buying === key ? "" : `<button type="button" class="primary" data-sk="buy" data-key="${key}">Bought some</button>`}${onList(p.id) ? `<span class="note">On the list</span>` : `<button type="button" data-sk="list" data-id="${esc(p.id)}">Add to list</button>`}</div>
-    ${buying === key ? buyForm({ key, item: p.id, qty: p.pack }, p) : ""}
+    ${buying === key ? buyForm({ key, item: p.id, qty: p.pack }, p) : restockCheckbox(p, ' data-sk-restock')}
     ${bestText(p.id, p.unit)}
     ${say()}
     <a class="sk-all" href="#stocky/item/${esc(p.id)}">See everything →</a>
@@ -428,7 +430,7 @@ function itemForm(p) {
     <label>Name<input type="text" name="name" maxlength="60" value="${p ? v("name") : esc(newName)}" placeholder="Beras, Telur, Tisu"></label>
     <div class="two">${kindField(p ? kindOf(p.kind, kinds).id : lastKind())}${unitSelect(p ? p.unit : lastUnit())}</div>
     <label>Usually bought at once<input type="number" name="pack" inputmode="decimal" min="0" value="${v("pack")}" placeholder="5000 for a 5 kg bag, 30 for a tray"></label>
-    <label class="sk-check"><input type="checkbox" name="noRestock"${p?.noRestock ? " checked" : ""}> No auto-restock</label>
+    ${restockCheckbox(p)}
     <fieldset class="sk-links" data-sk-show="food">
       <legend>Used in meals</legend>
       <small class="note">Each meal food it goes into × how much of it is in 100 g of that food. Logging those meals uses it up.</small>
@@ -567,29 +569,55 @@ async function commitKind(k) {
   await commit(() => setDoc(k.make.ref, k.make.body));
 }
 async function saveBuy(f) {
-  const r = rowByKey(f.dataset.key); if (!r) return;
+  const r = rowByKey(f.dataset.key); if (!r || f.dataset.saving) return;
   const el = f.elements, { rec, error } = readPrice({ qty: el.qty.value, price: el.price.value, shop: el.shop.value, sale: el.sale.checked });
   if (error) { setMsg(f, error); return; }
-  let itemId = r.item;
-  if (!itemId) { // first buy of something new: it becomes a pantry item
-    const known = pantry.find((p) => p.name.toLowerCase() === String(r.name).toLowerCase());
-    if (known) itemId = known.id;
-    else {
-      const k = kindFrom(f);
-      if (k.error) { setMsg(f, k.error); return; }
-      if (!el.unit.value) { setMsg(f, "Pick what it's counted in: grams, ml or pieces."); return; }
-      const { item, error: e2 } = readItem({ name: r.name, kind: k.id, unit: el.unit?.value, pack: rec.qty, links: r.food && el.unit?.value !== "pcs" ? [{ food: r.food, per100: 100 }] : [] }, k.ids); // a planned food bought as it is eaten
-      if (e2) { setMsg(f, e2); return; }
-      await commitKind(k);
-      const ref = doc(cols.pantry); itemId = ref.id;
-      await commit(() => setDoc(ref, { ...item, created: Date.now() }));
-    }
+  const existing = pantry.find((p) => p.id === r.item || (!r.item && p.name.toLowerCase() === String(r.name).toLowerCase()));
+  const ref = existing ? doc(cols.pantry, existing.id) : doc(cols.pantry);
+  const noRestock = el.noRestock.checked, batch = writeBatch(db), at = Date.now();
+  if (!existing) {
+    const k = kindFrom(f);
+    if (k.error) { setMsg(f, k.error); return; }
+    if (!el.unit.value) { setMsg(f, "Pick what it's counted in: grams, ml or pieces."); return; }
+    const { item, error: e2 } = readItem({ name: r.name, kind: k.id, unit: el.unit.value, pack: rec.qty, links: r.food && el.unit.value !== "pcs" ? [{ food: r.food, per100: 100 }] : [] }, k.ids);
+    if (e2) { setMsg(f, e2); return; }
+    if (k.make) batch.set(k.make.ref, k.make.body);
+    batch.set(ref, { ...item, created: at, ...(noRestock ? { noRestock } : {}) });
+  } else if (noRestock !== el.noRestock.defaultChecked) {
+    batch.update(ref, { noRestock });
   }
-  const name = r.name || pantry.find((p) => p.id === itemId)?.name || "";
-  buying = null; msg = `Bought ${name}.`;
-  await commit(() => setDoc(doc(cols.buys), { item: itemId, date: today(), ...rec, by: me(), at: Date.now() }), msg);
-  if (r.doc) await commit(() => deleteDoc(doc(cols.shopList, r.doc)));
-  refreshStocky(true);
+  batch.set(doc(cols.buys), { item: ref.id, date: today(), ...rec, by: me(), at });
+  if (r.doc) batch.delete(doc(cols.shopList, r.doc));
+  const message = `Bought ${r.name || existing?.name || ""}.`, submit = f.querySelector('[type="submit"]');
+  f.dataset.saving = "1"; f.dataset.dirty = "1"; submit.disabled = true;
+  try {
+    await commit(() => batch.commit(), message);
+    if (f.isConnected && buying === r.key) { buying = null; msg = message; refreshStocky(true); }
+  } catch (_) {
+    if (f.isConnected) setMsg(f, "Could not save the purchase. Try again.");
+  } finally {
+    delete f.dataset.saving;
+    submit.disabled = false;
+  }
+}
+async function savePreviewRestock(input) {
+  const id = peek, p = pantry.find((x) => x.id === id);
+  if (!p) return;
+  const noRestock = input.checked;
+  input.disabled = true;
+  try {
+    await commit(() => updateDoc(doc(cols.pantry, id), { noRestock }));
+    const current = pantry.find((item) => item.id === id);
+    if (current) current.noRestock = noRestock;
+    if (peek === id && input.isConnected) {
+      refreshStocky(true);
+      $("skSheet").querySelector("[data-sk-restock]")?.focus();
+    }
+  } catch (_) {
+    input.checked = !!pantry.find((item) => item.id === id)?.noRestock;
+  } finally {
+    input.disabled = false;
+  }
 }
 async function savePrice(f) {
   const el = f.elements;
@@ -746,6 +774,7 @@ function wire() {
     if (k === "row") addTyped(f);
   });
   both("change", (ev) => {
+    if (ev.target.matches("[data-sk-restock]")) { savePreviewRestock(ev.target); return; }
     if (ev.target.id === "skCalcUnit") { updatePriceCalculator(); return; }
     if (ev.target.id === "skPriceShop") {
       const select = ev.target;

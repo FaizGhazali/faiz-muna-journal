@@ -90,8 +90,21 @@ export const getDocs = async (q) => colSnap(q);
 export function writeBatch() {
   const ops = [];
   return {
-    set(ref, body, opts) { noUndefined(body); ops.push(() => write(ref, body, !!opts?.merge)); return this; },
-    delete(ref) { ops.push(() => { if (data[ref.col]) delete data[ref.col][ref.id]; touch(ref.col); }); return this; },
-    async commit() { ops.forEach((f) => f()); },
+    set(ref, body, opts) { noUndefined(body); ops.push({ ref, body, merge: !!opts?.merge }); return this; },
+    update(ref, body) { noUndefined(body); ops.push({ ref, body, merge: true, requireExisting: true }); return this; },
+    delete(ref) { ops.push({ ref }); return this; },
+    async commit() {
+      // Validate updates before applying any writes, including earlier writes to the same document.
+      const exists = new Map();
+      for (const { ref, body, requireExisting } of ops) {
+        const key = JSON.stringify([ref.col, ref.id]);
+        if (requireExisting && !(exists.get(key) ?? !!data[ref.col]?.[ref.id])) throw new Error("not-found");
+        exists.set(key, !!body);
+      }
+      for (const { ref, body, merge } of ops) {
+        if (body) write(ref, body, merge);
+        else { if (data[ref.col]) delete data[ref.col][ref.id]; touch(ref.col); }
+      }
+    },
   };
 }
