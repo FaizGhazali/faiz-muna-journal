@@ -89,8 +89,21 @@ test("priceBoard: cheapest shop now, sales only while on", () => {
   assert.equal(b[0].onSale, true);
   assert.equal(b[0].now, 17 / 5000);
   assert.equal(b[0].normal, 20 / 5000);
+  assert.equal(b[0].record, buys[1]);
+  assert.equal(b[1].record, buys[2]);
   assert.equal(b[2].onSale, false);
+  assert.equal(b[2].record, prices[0]);
   assert.ok(Math.abs(b[2].now - 42 / 10000) < 1e-12);
+});
+
+test("priceBoard groups shop aliases and keeps the pack that produced the displayed price", () => {
+  const regular = buy("2026-11-15", 500, { price: 4, shop: "Lotus's" });
+  const costlierSale = buy("2026-11-19", 1000, { price: 9, shop: "Lotus's Stores", sale: true });
+  const [offer, ...other] = priceBoard("rice", [regular], [costlierSale], T, () => "lotus");
+  assert.deepEqual(other, []);
+  assert.equal(offer.record, regular);
+  assert.equal(offer.now, 4 / 500);
+  assert.equal(offer.onSale, false);
 });
 
 test("saleOn uses the end date, else SALE_DAYS", () => {

@@ -178,20 +178,21 @@ export function priceRecords(itemId, buys, prices, today) {
 }
 
 // One row per shop: its normal price (the latest non-sale one), a sale price if one is on now, and the price to pay now.
-// Cheapest now first. [{ shop, normal, sale, until?, now, onSale, date }]
-export function priceBoard(itemId, buys, prices, today) {
+// Cheapest now first. Each row keeps the original record for its displayed price.
+export function priceBoard(itemId, buys, prices, today, keyOfShop = shopKey) {
   const shops = new Map();
   for (const r of priceRecords(itemId, buys, prices, today)) {
-    const k = shopKey(r.shop);
+    const k = keyOfShop(r.shop);
     const s = shops.get(k) || { shop: String(r.shop).trim(), normal: null, sale: null, until: null, date: r.date };
     const p = perUnit(r);
-    if (!r.sale && s.normal == null) s.normal = p;
-    if (r.sale && s.sale == null && saleOn(r, today)) { s.sale = p; s.until = r.until || null; }
+    if (!r.sale && s.normal == null) { s.normal = p; s.normalRecord = r; }
+    if (r.sale && s.sale == null && saleOn(r, today)) { s.sale = p; s.saleRecord = r; s.until = r.until || null; }
     shops.set(k, s);
   }
   const rows = [...shops.values()].map((s) => {
     const onSale = s.sale != null && (s.normal == null || s.sale < s.normal);
-    return { ...s, onSale, now: onSale ? s.sale : s.normal ?? s.sale };
+    const { normalRecord, saleRecord, ...row } = s;
+    return { ...row, onSale, now: onSale ? s.sale : s.normal, record: onSale ? saleRecord : normalRecord };
   }).filter((s) => s.now != null);
   return rows.sort((a, b) => a.now - b.now || a.shop.localeCompare(b.shop));
 }
@@ -355,17 +356,20 @@ export function readItem({ name, kind, unit, pack, links }, kinds = BUILT_IN_KIN
   return { item };
 }
 // A buy or a price seen. Returns { rec } or { error }.
-export function readPrice({ qty, price, shop, sale, until }, { needPrice = false } = {}) {
+export function readPrice({ qty, price, shop, sale, until }, { needPrice = false, maxShopLength = 40, quantityDecimals = 1 } = {}) {
   const q = Number(qty);
-  if (!(q > 0 && q <= 100000)) return { error: "How much? Type a number." };
-  const rec = { qty: Math.round(q * 10) / 10 };
+  const scale = 10 ** quantityDecimals;
+  const amount = Math.round(q * scale) / scale;
+  if (!(amount > 0 && q <= 100000)) return { error: "How much? Type a number." };
+  const rec = { qty: amount };
   const pr = price === "" || price == null ? null : Number(price);
   if (pr != null && !(pr >= 0 && pr <= 100000)) return { error: "Type the price as a number, like 12.90." };
-  if (needPrice && !(pr > 0)) return { error: "Type the price you saw." };
-  const sh = String(shop || "").trim().slice(0, 40);
-  if ((needPrice || pr) && !sh) return { error: "Which shop?" };
-  if (pr) rec.price = Math.round(pr * 100) / 100;
+  const cents = Math.round(pr * 100);
+  if (needPrice && !(cents > 0)) return { error: "Type the price you saw." };
+  const sh = String(shop || "").trim().slice(0, maxShopLength);
+  if ((needPrice || cents) && !sh) return { error: "Which shop?" };
+  if (cents) rec.price = cents / 100;
   if (sh) rec.shop = sh;
-  if (sale && pr) { rec.sale = true; if (until) rec.until = String(until); }
+  if (sale && cents) { rec.sale = true; if (until) rec.until = String(until); }
   return { rec };
 }

@@ -1252,6 +1252,14 @@ a.btn.mini { font-size: 13px; font-weight: 400; padding: 4px 10px; color: var(--
 /* At home shelves: one per kind, tiles three a row; a tile opens the quick sheet (#skSheet) */
 .sk-shelf + .sk-shelf { margin-top: 6px }
 .sk-find { width: 100%; margin: 4px 0 6px }
+#skPriceResults { display: contents }
+.sk-price-filters { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 8px }
+.sk-price-filters > * { min-width: 0; width: 100% }
+.sk-price-filters select { text-overflow: ellipsis }
+.sk-price-row { width: 100%; text-align: start; background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0 }
+.sk-price-row > span:first-child { min-width: 0; font-weight: 400; white-space: normal; overflow-wrap: anywhere }
+.sk-price-row > span:last-child { text-align: end }
+.sk-price-row:hover { background: var(--accent-soft) }
 .sk-found { margin: 4px 0 0 }
 .sk-none { padding: 8px 0 }
 .sk-none p { margin: 0 0 8px }
