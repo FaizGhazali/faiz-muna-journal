@@ -1264,12 +1264,14 @@ a.btn.mini { font-size: 13px; font-weight: 400; padding: 4px 10px; color: var(--
 .sk-price-filters { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 8px }
 .sk-price-filters > * { min-width: 0; width: 100% }
 .sk-price-filters select { text-overflow: ellipsis }
-.sk-price-row { width: 100%; text-align: start; background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0 }
+.sk-price-row { width: 100%; min-width: 0; text-align: start; background: transparent; border: 0; border-radius: 8px; padding: 8px 4px }
 .sk-price-row > span:first-child { min-width: 0; font-weight: 400; white-space: normal; overflow-wrap: anywhere }
 .sk-price-row > span:last-child { text-align: end }
 .sk-price-row:hover { background: var(--accent-soft) }
-.sk-price-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px }
-.sk-favorite { display: grid; place-items: center; min-width: 36px; min-height: 36px; padding: 6px }
+.sk-price-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 12px }
+.sk-price-entry + .sk-price-entry { margin-top: 6px }
+.sk-price-actions { display: flex; align-items: center; gap: 4px }
+.sk-price-actions button.mini { display: grid; place-items: center; min-width: 38px; min-height: 36px; padding: 6px; border-radius: 99px }
 .sk-favorite[aria-pressed="true"] svg { fill: currentColor }
 .sk-found { margin: 4px 0 0 }
 .sk-none { padding: 8px 0 }

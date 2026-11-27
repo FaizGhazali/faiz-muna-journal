@@ -523,6 +523,17 @@ function analyticsResults(p, shops) {
   return historyChart(p, shops, priceShopName) + shopComparison(p, shops, priceShopName);
 }
 
+function openPriceAnalytics(id) {
+  const p = pantry.find((item) => item.id === id);
+  if (!p) return;
+  const sheet = $("skSheet");
+  sheet.innerHTML = `<div class="gsin sk-peek">
+    <div class="mhead"><h3 id="skSheetTitle">Price history · ${esc(p.name)}</h3><button type="button" class="mini" data-sk="unpeek" aria-label="Close" autofocus>×</button></div>
+    ${analyticsResults(p, historyFor(p))}
+  </div>`;
+  sheet.showModal();
+}
+
 function pricesPage() {
   const shops = new Map();
   for (const board of Object.values(boards)) {
@@ -543,14 +554,19 @@ function pricesPage() {
 const packNumber = new Intl.NumberFormat(undefined, { maximumFractionDigits: 5 });
 const displayPack = (qty, unit) => qty >= 1000 && unit !== "pcs"
   ? { qty: qty / 1000, unit: unit === "g" ? "kg" : "L" } : { qty, unit };
+const priceActions = (p) => `<div class="sk-price-actions">${wishlistButton(p, true)}
+  <button type="button" class="mini sk-price-chart" data-sk="price-analytics" data-id="${esc(p.id)}" aria-label="Price history: ${esc(p.name)}" title="Price history" aria-haspopup="dialog">${ico("chart")}</button>
+</div>`;
+
 function priceRow(p, s, detail) {
   const { record } = s, { qty, unit } = displayPack(Number(record.qty), p.unit);
   const standardQty = p.unit === "pcs" ? 1 : 1000;
-  const comparison = Number(record.qty) === standardQty ? "" : `<small>${money(shown(s.now, p.unit))} ${unitLabel(p.unit)}</small>`;
+  const standardPack = Number(record.qty) === standardQty;
+  const comparison = standardPack ? "" : `<small>${money(shown(s.now, p.unit))} ${unitLabel(p.unit)}</small>`;
   return `<div class="sk-price-entry"><button type="button" class="mitem sk-link sk-price-row" data-sk="calculate-price" data-id="${esc(p.id)}" data-shop="${esc(s.shop)}" data-pack="${esc(record.qty)}" data-price="${esc(record.price)}" aria-haspopup="dialog">
     <span><b>${esc(p.name)}</b><small>${shopHtml(s.shop)}${detail}</small></span>
-    <span>${money(record.price)} <small>for ${packNumber.format(qty)} ${unit}</small>${comparison}</span>
-  </button>${wishlistButton(p, true)}</div>`;
+    <span><b>${money(record.price)}</b><small>${standardPack ? "per" : "for"} ${packNumber.format(qty)} ${unit === "pcs" && qty === 1 ? "piece" : unit}</small>${comparison}</span>
+  </button>${priceActions(p)}</div>`;
 }
 
 function priceResults() {
@@ -581,7 +597,7 @@ function priceResults() {
       : `<p class="note">Add prices when you buy, or tap an item and add a price you saw. Stocky compares the price per kg, per litre or per piece, so different pack sizes are fair.</p>`}
   </section>
   ${unpriced.length ? `<section class="panel"><h2>No recent shop price</h2><div class="mlist">
-    ${unpriced.map((p) => `<div class="sk-price-entry"><a class="mitem sk-link sk-price-row" href="#stocky/item/${esc(p.id)}/price"><span><b>${esc(p.name)}</b></span><span>Record a price →</span></a>${wishlistButton(p, true)}</div>`).join("")}
+    ${unpriced.map((p) => `<div class="sk-price-entry"><a class="mitem sk-link sk-price-row" href="#stocky/item/${esc(p.id)}/price"><span><b>${esc(p.name)}</b></span><span>Record a price →</span></a>${priceActions(p)}</div>`).join("")}
   </div></section>` : ""}`;
 }
 
@@ -850,6 +866,7 @@ function wire() {
       if (p) await setWishlist(id, !p.wishlist, b, route().page === "wishlist" ? "#stocky/wishlist" : "");
     }
     if (act === "calculate-price") openPriceCalculator(b.dataset);
+    if (act === "price-analytics") openPriceAnalytics(id);
     if (act === "shelf") { const k = b.dataset.kind; shut.has(k) ? shut.delete(k) : shut.add(k); store.set("journal-stocky-shut", JSON.stringify([...shut])); refreshStocky(true); }
     if (act === "more") { opened.add(b.dataset.kind); refreshStocky(true); }
     if (act === "findclear") { homeQ = ""; refreshStocky(true); $("skFind")?.focus(); }
