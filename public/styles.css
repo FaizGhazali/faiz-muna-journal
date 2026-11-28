@@ -1343,6 +1343,9 @@ button.mini.primary, a.btn.mini.primary { color: var(--on-accent); font-weight: 
 .sk-opt.new > button { color: var(--accent) }
 .sk-kindnote { color: var(--accent); font-size: 12px; min-height: 0 }
 .sk-kindnote:empty { display: none }
+/* Ledger Add spending: Where's own suggestion list (same look as the Kind list) */
+.lgwhere { position: relative; min-width: 0 }
+.lgsug { left: auto; right: 0 } /* in the medium card Where is the right column: grow leftwards */
 /* Stocky receipt scanning (features/stocky/receipt.js) */
 .rc-pick { cursor: pointer }
 .rc-status { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--r-ctl); background: var(--surface-2); font-weight: 600 }

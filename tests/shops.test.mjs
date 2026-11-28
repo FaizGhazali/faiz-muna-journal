@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { shopId, sameShop, ledgerShopOf, namesOf, shopChoices, stockyAt, renames, whereChoices } from "../public/logic/shops.js";
+import { shopId, sameShop, ledgerShopOf, namesOf, shopChoices, stockyAt, renames, whereChoices, whereMatches } from "../public/logic/shops.js";
 
 const lotus = { id: "s1", key: "LOTUS'S STORES SDN BHD", name: "LOTUS'S STORES SDN BHD", nick: "Lotus's" };
 const mydin = { id: "s2", key: "MYDIN MOHAMED", name: "MYDIN MOHAMED", nick: "" };
@@ -99,4 +99,14 @@ test("whereChoices lists every saved shop, not just the latest few", () => {
   assert.ok(values.includes("MYDIN MOHAMED") && values.includes("GIANT HYPERMARKET")); // saved, no spending
   assert.ok(!values.includes("CIMB PAYMENT"));
   assert.deepEqual(out.filter((o) => o.label === "Stocky").map((o) => o.value), ["Pasar"]); // no repeats
+});
+
+test("whereMatches finds a shop by either name as you type", () => {
+  const choices = whereChoices([{ raw: "LOTUS'S STORES SDN BHD", date: "2026-11-01", type: "spend" }, { raw: "SETEL", date: "2026-11-02", type: "spend" }], [lotus], ["Pasar Lot 5"]);
+  assert.deepEqual(whereMatches("lot", choices).hits.map((o) => o.value), ["Lotus's", "LOTUS'S STORES SDN BHD", "Pasar Lot 5"]);
+  assert.deepEqual(whereMatches("stores", choices).hits.map((o) => o.value), ["Lotus's", "LOTUS'S STORES SDN BHD"]);
+  assert.equal(whereMatches("", choices, 2).hits.length, 2);
+  assert.deepEqual(whereMatches("setel", choices).hits, []); // already typed in full
+  assert.deepEqual(whereMatches("lotsu", choices).close.map((o) => o.value).slice(0, 1), ["Lotus's"]);
+  assert.deepEqual(whereMatches("stocky", choices).hits, []);
 });

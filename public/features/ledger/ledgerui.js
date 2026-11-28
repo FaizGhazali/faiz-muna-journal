@@ -10,7 +10,7 @@ import {
 } from "../../logic/ledger.js";
 import { suggestPattern } from "../../logic/ledgerimport.js";
 import { shopKey, byNick, usualCat } from "../../logic/bucketspend.js";
-import { ledgerShopNames, whereChoices } from "../../logic/shops.js";
+import { ledgerShopNames, whereChoices, whereMatches } from "../../logic/shops.js";
 import { initImport, startImport, renderImport } from "./import.js";
 import { initTrends, renderTrends } from "./trends.js";
 import { initRules, startRules, renderRules } from "./rules.js";
@@ -171,8 +171,9 @@ function renderAdd() {
     const pay = f.type === "payment", tid = small ? "lgSheetTitle" : "ledgerAddTitle";
     const title = pay ? "Log a card payment" : f.type === "refund" ? "Log a refund" : "Add spending";
     const amount = `<label>Amount, RM<input type="text" id="lgAmt" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${esc(f.amount)}"></label>`;
-    const where = pay ? "" : `<label>Where<input type="text" id="lgRaw" list="lgShops" autocomplete="off" placeholder="Shop, e.g. Setel or Econsave" value="${esc(f.raw)}"></label>
-      <datalist id="lgShops"></datalist>`;
+    // Our own suggestion list, not a <datalist>: on phones a datalist often showed nothing while typing.
+    const where = pay ? "" : `<div class="lgwhere"><label>Where<input type="text" id="lgRaw" autocomplete="off" autocapitalize="words" enterkeyhint="done" role="combobox" aria-autocomplete="list" aria-controls="lgSug" aria-expanded="false" placeholder="Shop, e.g. Setel or Econsave" value="${esc(f.raw)}"></label>
+      <div class="sk-menu lgsug" id="lgSug" role="listbox" aria-label="Shops" hidden></div></div>`;
     const close = small ? `<button type="button" class="mini lsx" id="lgFew" data-to="" aria-label="Close">✕</button>` : "";
     const fewer = !small && card.dataset.force ? "" : null; // the pop-out is always the full form
     const html = view === "m" ? `
@@ -198,7 +199,7 @@ function renderAdd() {
       <p class="msg" id="lgMsg" aria-live="polite"></p>`;
     host.innerHTML = small ? `<div class="gsin ladd">${html}</div>` : html;
   }
-  paintShops();
+  paintSug();
   paintWhy(); paintWarn(); paintQuick();
   if ($("lgMsg")) $("lgMsg").textContent = msg;
 }
@@ -237,18 +238,22 @@ function closeSheet() {
   if (d.open) d.close();
   d.innerHTML = "";
 }
-// The "Where" suggestions (whereChoices() in logic/shops.js): your shop names, every shop with
-// spending, saved shops, then Stocky's.
-function shopOptions() {
-  return whereChoices(txns, shopNames, stocky.shops())
-    .map((o) => `<option value="${esc(o.value)}"${o.label ? ` label="${esc(o.label)}"` : ""}></option>`).join("");
+// The "Where" suggestions under the field while it's focused: whereMatches() over whereChoices() (your
+// shop names, every shop with spending, saved shops, then Stocky's). Tapping one fills Where.
+function paintSug(open = !$("lgSug")?.hidden) {
+  const box = $("lgSug"), input = $("lgRaw"); if (!box || !input) return;
+  const { hits, close } = open ? whereMatches(input.value, whereChoices(txns, shopNames, stocky.shops())) : { hits: [], close: [] };
+  const row = (o) => `<div class="sk-opt" role="option"><button type="button" data-lgshop="${esc(o.value)}">${esc(o.value)}${o.label ? ` <small>${o.label === "Stocky" ? "Stocky" : `🏷 ${esc(o.label)}`}</small>` : ""}</button></div>`;
+  const html = hits.length ? hits.map(row).join("") : close.length ? `<p class="note">Did you mean</p>${close.map(row).join("")}` : "";
+  if (box.innerHTML !== html) box.innerHTML = html;
+  box.hidden = !html;
+  input.setAttribute("aria-expanded", String(!!html));
 }
-// Only rewritten when it changed: rewriting the list closes the suggestions on some phones mid-typing.
-const painted = new WeakMap();
-function paintShops() {
-  const list = $("lgShops"); if (!list) return;
-  const html = shopOptions();
-  if (painted.get(list) !== html) { list.innerHTML = html; painted.set(list, html); }
+// What's typed (or picked) in Where: the category follows it while it's still the guessed one.
+function setWhere(v) {
+  f.raw = v;
+  if (f.catAuto) { const r = autoCat(); f.cat = r.cat === "payment" ? "other" : r.cat; if ($("lgCat")) $("lgCat").value = f.cat; }
+  paintWhy(); paintQuick();
 }
 // The shop name to save: a typed nickname gives its shop's statement name, so it groups with the rest.
 const whereRaw = () => byNick(f.raw, shopNames)?.name ?? f.raw;
@@ -672,14 +677,20 @@ function wire() {
   wireRest();
 }
 function wireAdd(add) {
+  // Where's suggestions: open on focus, shut on leaving it, Escape or Enter. A tap on one keeps the focus
+  // (pointerdown), so the list isn't shut before the tap lands.
+  add.addEventListener("focusin", (ev) => { if (ev.target.id === "lgRaw") paintSug(true); });
+  add.addEventListener("focusout", (ev) => { if (ev.target.id === "lgRaw") paintSug(false); });
+  add.addEventListener("pointerdown", (ev) => { if (ev.target.closest("[data-lgshop]")) ev.preventDefault(); });
+  add.addEventListener("keydown", (ev) => {
+    if (ev.target.id !== "lgRaw" || $("lgSug")?.hidden) return;
+    if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); paintSug(false); }
+    if (ev.key === "Enter") { ev.preventDefault(); paintSug(false); }
+  });
   add.addEventListener("input", (ev) => {
     const id = ev.target.id;
     if (id === "lgAmt") { f.amount = ev.target.value; paintWarn(); }
-    if (id === "lgRaw") {
-      f.raw = ev.target.value;
-      if (f.catAuto) { const r = autoCat(); f.cat = r.cat === "payment" ? "other" : r.cat; if ($("lgCat")) $("lgCat").value = f.cat; }
-      paintWhy(); paintQuick();
-    }
+    if (id === "lgRaw") { setWhere(ev.target.value); paintSug(true); }
     if (id === "lcStmt") paintCardForm();
   });
   add.addEventListener("change", (ev) => {
@@ -693,6 +704,7 @@ function wireAdd(add) {
   });
   add.addEventListener("click", (ev) => {
     const b = ev.target.closest("button"); if (!b) return;
+    if (b.dataset.lgshop != null) { $("lgRaw").value = b.dataset.lgshop; setWhere(b.dataset.lgshop); paintSug(false); return; }
     if (b.dataset.ltype) { f.type = b.dataset.ltype; msg = ""; formKey = ""; renderAdd(); }
     if (b.dataset.lgbucket) { f.bucket = b.dataset.lgbucket; f.bucketPicked = true; paintAddBucket(); }
     if (b.id === "lgSave") save();

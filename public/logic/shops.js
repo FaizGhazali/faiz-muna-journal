@@ -6,6 +6,7 @@
 // worked out when drawing, and renaming a shop in Ledger renames the Stocky rows that used the old name.
 
 import { shopName, shopKey } from "./moneyplan.js";
+import { findByName } from "./search.js";
 
 // "Lotus's", "LOTUS'S " and "lotuss" are one shop.
 export const shopId = (s) => String(s ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
@@ -65,6 +66,18 @@ export function whereChoices(txns = [], ledgerShops = [], stocky = []) {
   for (const s of ledgerShops) add(s.name || s.nick, s.name && nickOf.get(shopId(s.name)));
   stocky.forEach((s) => add(s, "Stocky"));
   return out;
+}
+
+// What the Where box offers for what's typed: { hits, close } from whereChoices(), at most `max`.
+// Nothing typed = the first few (your names, then the latest shops). Either name finds a shop ("lot" →
+// Lotus's, and its statement name); the label "Stocky" isn't searched. Nothing matching = "Did you mean"
+// (close). When the only match is exactly what's typed, there's nothing left to offer.
+export const WHERE_MAX = 6;
+export function whereMatches(text, choices = [], max = WHERE_MAX) {
+  if (!shopId(text)) return { hits: choices.slice(0, max), close: [] };
+  const { hits, close } = findByName(choices, text, (o) => `${o.value} ${o.label === "Stocky" ? "" : o.label}`);
+  if (hits.length === 1 && sameShop(hits[0].value, text)) return { hits: [], close: [] };
+  return { hits: hits.slice(0, max), close: close.slice(0, max) };
 }
 
 // What Stocky has from a shop (any of `names`): buys newest first, what was spent (RM, buys with a price),
