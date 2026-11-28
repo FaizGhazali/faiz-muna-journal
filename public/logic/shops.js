@@ -45,6 +45,28 @@ export function ledgerShopNames(txns = [], ledgerShops = []) {
   return out;
 }
 
+// Ledger's "Where" suggestions in Add spending: [{ value, label }], each shop name once (by shopId).
+// Your names for shops first (A–Z, the statement name as label), then every shop with spending, most
+// recent first (a named shop's statement name too, labelled with your name, so typing either finds it),
+// then saved shops with no spending loaded, then Stocky's shops (label "Stocky"). No cap: the list
+// filters as you type, and a cut-off hid saved shops once a statement import brought in many names.
+export function whereChoices(txns = [], ledgerShops = [], stocky = []) {
+  const out = [], seen = new Set();
+  const add = (value, label = "") => {
+    const v = String(value ?? "").trim(), k = shopId(v);
+    if (!k || seen.has(k)) return;
+    seen.add(k); out.push({ value: v, label: String(label ?? "").trim() });
+  };
+  const named = ledgerShops.filter((s) => s.nick && s.name && !sameShop(s.nick, s.name));
+  const nickOf = new Map(named.map((s) => [shopId(s.name), s.nick]));
+  [...named].sort((a, b) => a.nick.localeCompare(b.nick)).forEach((s) => add(s.nick, s.name));
+  const spent = txns.filter((t) => t.type !== "payment" && (t.merchant || t.raw)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  for (const t of spent) { const s = t.merchant || t.raw; add(s, nickOf.get(shopId(s))); }
+  for (const s of ledgerShops) add(s.name || s.nick, s.name && nickOf.get(shopId(s.name)));
+  stocky.forEach((s) => add(s, "Stocky"));
+  return out;
+}
+
 // What Stocky has from a shop (any of `names`): buys newest first, what was spent (RM, buys with a price),
 // and the items bought most often. { n, spent, last, items: [{ id, name, n, last }] }
 export function stockyAt(names, buys = [], pantry = []) {

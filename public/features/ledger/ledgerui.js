@@ -10,7 +10,7 @@ import {
 } from "../../logic/ledger.js";
 import { suggestPattern } from "../../logic/ledgerimport.js";
 import { shopKey, byNick, usualCat } from "../../logic/bucketspend.js";
-import { shopId, ledgerShopNames } from "../../logic/shops.js";
+import { ledgerShopNames, whereChoices } from "../../logic/shops.js";
 import { initImport, startImport, renderImport } from "./import.js";
 import { initTrends, renderTrends } from "./trends.js";
 import { initRules, startRules, renderRules } from "./rules.js";
@@ -198,7 +198,7 @@ function renderAdd() {
       <p class="msg" id="lgMsg" aria-live="polite"></p>`;
     host.innerHTML = small ? `<div class="gsin ladd">${html}</div>` : html;
   }
-  if ($("lgShops")) $("lgShops").innerHTML = shopOptions(); // refreshed every time: it never disturbs typing
+  paintShops();
   paintWhy(); paintWarn(); paintQuick();
   if ($("lgMsg")) $("lgMsg").textContent = msg;
 }
@@ -237,15 +237,18 @@ function closeSheet() {
   if (d.open) d.close();
   d.innerHTML = "";
 }
-// The "Where" suggestions: your own shop names first (the statement name beside), then past shops,
-// most recent first, no repeats, leaving out shops you named.
+// The "Where" suggestions (whereChoices() in logic/shops.js): your shop names, every shop with
+// spending, saved shops, then Stocky's.
 function shopOptions() {
-  const named = shopNames.filter((s) => s.nick && s.name).sort((a, b) => a.nick.localeCompare(b.nick));
-  const past = shops(new Set(named.map((s) => s.key)));
-  // Then the shops Stocky knows (one shop list for both journals), unless they're already here.
-  const seen = new Set([...named.flatMap((s) => [s.nick, s.name]), ...past].map(shopId));
-  const fromStocky = stocky.shops().filter((s) => { const k = shopId(s); return k && !seen.has(k) && seen.add(k); });
-  return [...named.map((s) => `<option value="${esc(s.nick)}" label="${esc(s.name)}"></option>`), ...past.map((s) => `<option value="${esc(s)}"></option>`), ...fromStocky.map((s) => `<option value="${esc(s)}" label="Stocky"></option>`)].join("");
+  return whereChoices(txns, shopNames, stocky.shops())
+    .map((o) => `<option value="${esc(o.value)}"${o.label ? ` label="${esc(o.label)}"` : ""}></option>`).join("");
+}
+// Only rewritten when it changed: rewriting the list closes the suggestions on some phones mid-typing.
+const painted = new WeakMap();
+function paintShops() {
+  const list = $("lgShops"); if (!list) return;
+  const html = shopOptions();
+  if (painted.get(list) !== html) { list.innerHTML = html; painted.set(list, html); }
 }
 // The shop name to save: a typed nickname gives its shop's statement name, so it groups with the rest.
 const whereRaw = () => byNick(f.raw, shopNames)?.name ?? f.raw;
@@ -256,14 +259,6 @@ function autoCat() {
   if (r.rule || !named) return r;
   const mine = txns.filter((t) => t.type !== "payment" && shopKey(t) === named.key);
   return mine.length ? { cat: usualCat(mine), usual: true } : r;
-}
-function shops(skip = new Set()) {
-  const seen = new Set(skip), out = [];
-  for (const t of [...txns].sort((x, y) => y.date.localeCompare(x.date))) {
-    const s = t.merchant || t.raw; if (!s || t.type === "payment" || seen.has(norm(s))) continue;
-    seen.add(norm(s)); out.push(s); if (out.length >= 60) break;
-  }
-  return out;
 }
 function paintWhy() {
   paintAddBucket();

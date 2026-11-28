@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { shopId, sameShop, ledgerShopOf, namesOf, shopChoices, stockyAt, renames } from "../public/logic/shops.js";
+import { shopId, sameShop, ledgerShopOf, namesOf, shopChoices, stockyAt, renames, whereChoices } from "../public/logic/shops.js";
 
 const lotus = { id: "s1", key: "LOTUS'S STORES SDN BHD", name: "LOTUS'S STORES SDN BHD", nick: "Lotus's" };
 const mydin = { id: "s2", key: "MYDIN MOHAMED", name: "MYDIN MOHAMED", nick: "" };
@@ -85,4 +85,18 @@ test("ledgerShopNames lists every Ledger shop once, newest first, by its first n
   assert.deepEqual(ledgerShopNames(txns, []), ["SETEL", "NakNak", "LOTUS'S STORES SDN BHD"]);
   assert.deepEqual(ledgerShopNames(txns, [{ ...lotus, first: "nick" }]), ["SETEL", "NakNak", "Lotus's"]);
   assert.deepEqual(ledgerShopNames([], []), []);
+});
+
+test("whereChoices lists every saved shop, not just the latest few", () => {
+  const txns = Array.from({ length: 80 }, (_, i) => ({ raw: `SHOP ${i}`, date: `2026-${String(1 + (i % 11)).padStart(2, "0")}-01`, type: "spend" }));
+  txns.push({ raw: "LOTUS'S STORES SDN BHD", date: "2025-12-01", type: "spend" }, { raw: "CIMB PAYMENT", date: "2026-11-20", type: "payment" });
+  const giant = { key: "GIANT", name: "GIANT HYPERMARKET", nick: "" };
+  const out = whereChoices(txns, [lotus, mydin, giant], ["Pasar", "lotus's", "Giant Hypermarket"]);
+  const values = out.map((o) => o.value);
+  assert.equal(out[0].value, "Lotus's"); assert.equal(out[0].label, lotus.name); // your names first
+  assert.ok(values.includes("SHOP 0") && values.includes("SHOP 79"));            // no cut-off
+  assert.equal(out.find((o) => o.value === lotus.name).label, "Lotus's");        // statement name finds it too
+  assert.ok(values.includes("MYDIN MOHAMED") && values.includes("GIANT HYPERMARKET")); // saved, no spending
+  assert.ok(!values.includes("CIMB PAYMENT"));
+  assert.deepEqual(out.filter((o) => o.label === "Stocky").map((o) => o.value), ["Pasar"]); // no repeats
 });
