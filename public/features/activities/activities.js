@@ -130,6 +130,7 @@ const billItems = (p) => (bills?.due() ?? []).filter((r) => !r.who || r.who === 
 }));
 const moveList = (p = me) => [...mine(p), ...billItems(p)];
 const BILL_TAG = { label: "Bill", color: "--s8" };
+const DONE_LABEL = { skill: "Did it", habit: "Done", explore: "Been there", cook: "Cooked it", task: "Done" };
 // "Paid" on a bill row in the list: ticks it in Ledger, and it leaves the list and the card.
 async function payFromList(id) {
   const a = billItems(me).find((x) => x.id === id); if (!a || ro()) return;
@@ -139,7 +140,7 @@ async function payFromList(id) {
 }
 const logs = (p = me) => Object.fromEntries(dayDocs.filter((d) => d.owner === p).map((d) => [d.date, d]));
 const strip = ({ id, ...rest }) => rest;
-const update = (id, patch) => commit(() => updateDoc(doc(actsCol, id), { ...patch, updated: Date.now() }));
+const update = (id, patch, ok) => commit(() => updateDoc(doc(actsCol, id), { ...patch, updated: Date.now() }), ok);
 const replace = (id, body) => commit(() => setDoc(doc(actsCol, id), { ...body, updated: Date.now() }));
 // Note what was done or passed over. Returns a function that takes the note back (for Undo).
 function logMove(a, act) {
@@ -148,11 +149,34 @@ function logMove(a, act) {
   commit(() => setDoc(ref, { owner: me, item: a.id, type: a.bill ? "bill" : a.type, act, date: iso(now), hour: now.getHours(), at: now.getTime() }));
   return () => commit(() => deleteDoc(ref));
 }
-function markHabit(id, state, date = today()) {
+function markHabit(id, state, date = today(), ok) {
   if (ro()) return Promise.resolve();
   const ref = doc(daysCol, `${me}_${date}`);
   const body = { owner: me, date, done: state === "done" ? arrayUnion(id) : arrayRemove(id), skipped: state === "skipped" ? arrayUnion(id) : arrayRemove(id), updated: Date.now() };
-  return commit(() => setDoc(ref, body, { merge: true }));
+  return commit(() => setDoc(ref, body, { merge: true }), ok);
+}
+// Done on an item, from the Next Move card or a row in the Active list (ok = the toast, for the list).
+// A skill stays active ("worked on it" ticks its next step) unless finish is set. Returns the line to show and an undo.
+async function markDone(a, { finish = false, ok } = {}) {
+  const before = strip(a), worked = a.type === "skill" && !finish;
+  const msg = a.bill ? `${a.bill.c.name} is paid for this month.` : worked ? `Good work on "${a.title}".` : finish ? `"${a.title}" is finished.` : `"${a.title}" is done.`;
+  let undo;
+  if (a.type === "habit") { await markHabit(a.id, "done", today(), ok && msg); undo = () => markHabit(a.id, null); }
+  else if (a.bill) {
+    const { c, month } = a.bill;
+    await bills.pay(c.id, month, `${c.name} ticked as paid.`);
+    undo = () => bills.undo(c.id, month);
+  } else {
+    const patch = worked ? { lastDone: today() } : { status: "done", doneOn: today(), lastDone: today() };
+    const step = worked && firstOpenStep(a);
+    if (step) patch.steps = a.steps.map((s) => s === step ? { ...s, done: true } : s);
+    await update(a.id, patch, ok && msg);
+    undo = () => replace(a.id, before);
+  }
+  const unlog = logMove(a, "done");
+  // Done from the list on what the card is showing: the card moves on, as if Done was pressed there.
+  if (store.get(`journal-current-${me}`, null)?.id === a.id) clearCurrent();
+  return { msg, undo: async () => { await unlog(); await undo(); } };
 }
 
 // ---------- Your Next Move ----------
@@ -233,7 +257,7 @@ function renderMove() {
     return;
   }
   const { a, why } = m, t = a.bill ? BILL_TAG : TYPES[a.type], { detail, minutes } = describe(a), url = safeUrl(a.url);
-  const doneLabel = a.bill ? "Paid" : { skill: "Did it", habit: "Done", explore: "Been there", cook: "Cooked it", task: "Done" }[a.type];
+  const doneLabel = a.bill ? "Paid" : DONE_LABEL[a.type];
   el.innerHTML = `<p class="eyebrow">${eyebrow}</p>
     <span class="tag" style="--c:var(${t.color})">${t.label}</span>
     <h2>${esc(a.title)}</h2>
@@ -255,22 +279,8 @@ async function moveAction(act) {
   const { a } = m, before = strip(a);
   moveMsg = ""; undoFn = null; undoId = a.id;
   if (act === "done") {
-    if (a.type === "habit") { await markHabit(a.id, "done"); undoFn = () => markHabit(a.id, null); }
-    else if (a.bill) {
-      const { c, month } = a.bill;
-      await bills.pay(c.id, month, `${c.name} ticked as paid.`);
-      undoFn = () => bills.undo(c.id, month);
-    } else {
-      const patch = a.type === "skill" ? { lastDone: today() } : { status: "done", doneOn: today() };
-      const step = a.type === "skill" && firstOpenStep(a);
-      if (step) patch.steps = a.steps.map((s) => s === step ? { ...s, done: true } : s);
-      if (a.type !== "skill") patch.lastDone = today();
-      await update(a.id, patch);
-      undoFn = () => replace(a.id, before);
-    }
-    const unlog = logMove(a, "done"), undoDone = undoFn;
-    undoFn = async () => { await unlog(); await undoDone(); };
-    moveMsg = a.type === "skill" ? `Good work on "${a.title}".` : a.bill ? `${a.bill.c.name} is paid for this month.` : `"${a.title}" is done.`;
+    const r = await markDone(a);
+    undoFn = r.undo; moveMsg = r.msg;
     clearCurrent();
   }
   if (act === "later") {
@@ -364,13 +374,25 @@ function metaOf(a) {
   return out.join(" · ");
 }
 
+// Finish it right here on the Active list, without going back to the Next Move card.
+// A habit is ticked for today (or skipped); a skill can be worked on today or finished for good.
+function doneBtns(a, b) {
+  if (a.type === "habit") {
+    if (!isScheduled(a, today())) return "";
+    const s = habitState(a, logs(), today());
+    return s === "done" ? b("undone", "Untick today") : s === "skipped" ? b("unskip", "Unskip") : b("done", "Done today", "go") + b("skip", "Skip today");
+  }
+  if (a.type === "skill") return b("done", "Worked on it", "go") + b("finish", "Finished");
+  return b("done", DONE_LABEL[a.type], "go");
+}
+
 function rowHtml(a) {
   const t = a.bill ? BILL_TAG : TYPES[a.type], id = esc(a.id), b = (act, label, cls = "") => `<button type="button" class="mini ${cls}" data-act="${act}" data-id="${id}">${label}</button>`;
   let btns = ""; // the other person's: nothing to press
   if (!canEdit(a.owner)) btns = "";
   else if (a.bill) btns = b("bill-paid", "Paid", "go"); // a due bill: only paying it makes sense here
   else if (a.status === "inbox") btns = b("start", "Start", "go") + b("edit", "Edit") + b("archive", "Archive");
-  else if (a.status === "active") btns = (a.type === "habit" && isScheduled(a, today()) ? (habitState(a, logs(), today()) === "skipped" ? b("unskip", "Unskip") : b("skip", "Skip today")) : "") + b("edit", "Edit") + b("pause", "Pause");
+  else if (a.status === "active") btns = doneBtns(a, b) + b("edit", "Edit") + b("pause", "Pause");
   else if (a.status === "paused") btns = b("resume", "Resume", "go") + b("edit", "Edit");
   else btns = b(a.status === "archived" ? "restore-idea" : "resume", a.status === "archived" ? "Back to ideas" : "Do again") + b("del", "Delete");
   const url = safeUrl(a.url), meta = metaOf(a);
@@ -497,6 +519,8 @@ async function listAction(act, id) {
   if (act === "pause") await update(id, { status: "paused" });
   if (act === "archive") await update(id, { status: "archived" });
   if (act === "restore-idea") await update(id, { status: "inbox" });
+  if (act === "done" || act === "finish") { await markDone(a, { finish: act === "finish", ok: true }); refresh(); }
+  if (act === "undone") await markHabit(id, null, today(), `"${a.title}" is unticked for today.`);
   if (act === "skip") await markHabit(id, "skipped");
   if (act === "unskip") await markHabit(id, null);
 }
